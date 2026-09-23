@@ -1,6 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <!-- Framework packages, IsTestProject and OutputType all come from tests/Directory.Build.props. -->
   <ItemGroup>
-    <ProjectReference Include="..\..\src\ScopedEditors\ScopedEditors.csproj" />
+    <ProjectReference Include="..\..\src\ScopedEditors.Abstractions\ScopedEditors.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\ScopedEditors.ViewModels\ScopedEditors.ViewModels.csproj" />
+    <ProjectReference Include="..\..\src\ScopedEditors.Avalonia\ScopedEditors.Avalonia.csproj" />
   </ItemGroup>
 </Project>

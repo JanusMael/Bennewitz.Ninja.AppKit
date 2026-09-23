@@ -9,4 +9,10 @@
 # mints one API key per token exchange scoped to one matching policy, so a policy per id does not
 # work: the first id publishes permanently and the rest are rejected 403 in the same command.
 
-Bennewitz.Ninja.ScopedEditors
+# ⛔ THERE IS NO BARE `Bennewitz.Ninja.ScopedEditors` PACKAGE, and there must not be. The generated
+# skeleton produced one; it was deleted rather than kept. The policy pattern for this repository is
+# `Bennewitz.Ninja.ScopedEditors.*` — note the DOT before the wildcard, which is what makes it
+# unable to authorise a bare-stem id even if one were reintroduced by accident.
+Bennewitz.Ninja.ScopedEditors.Abstractions
+Bennewitz.Ninja.ScopedEditors.ViewModels
+Bennewitz.Ninja.ScopedEditors.Avalonia
