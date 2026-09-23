@@ -1,6 +1,6 @@
 using System.Xml.Linq;
 
-namespace PkgStem.Tests.Packaging;
+namespace ScopedEditors.Tests.Packaging;
 
 /// <summary>
 /// Guards what this repository publishes: that every packable project is deliberately classified,

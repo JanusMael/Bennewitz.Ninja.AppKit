@@ -1,6 +1,6 @@
-using Bennewitz.Ninja.PkgStem;
+using Bennewitz.Ninja.ScopedEditors;
 
-namespace PkgStem.Tests;
+namespace ScopedEditors.Tests;
 
 /// <summary>
 /// A real passing test from the first run, so a red build after generating means you broke

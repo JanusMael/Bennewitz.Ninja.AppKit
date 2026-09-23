@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ScopedEditors/ScopedEditors.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ScopedEditors.Tests/ScopedEditors.Tests.csproj" />
+  </Folder>
+</Solution>
