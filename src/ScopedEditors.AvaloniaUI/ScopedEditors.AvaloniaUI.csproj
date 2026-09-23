@@ -23,8 +23,10 @@
 
     ⚠ ~1.2 MB embedded in a published package. Consumers reach the face by
     avares://ScopedEditors.AvaloniaUI/Assets/Fonts#JetBrains Mono NL. Note that the assembly name
-    changed with the rename, so a consumer's URI must change with it. The failure is silent: a
-    bad avares path falls back to a default face rather than throwing.
+    changed with the rename, so a consumer's URI must change with it. A stale URI naming one
+    family is NOT silent: it throws InvalidOperationException, "Could not create glyphTypeface",
+    the first time text in it is laid out. Only a fallback list is silent, and it draws the next
+    face instead. BundledFontTests lays out text by exactly these URIs.
 
     ⚠ OFL 1.1 requires the licence to travel with the font, so OFL.txt is embedded beside it.
   -->
