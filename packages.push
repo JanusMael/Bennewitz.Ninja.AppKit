@@ -15,4 +15,4 @@
 # unable to authorise a bare-stem id even if one were reintroduced by accident.
 Bennewitz.Ninja.ScopedEditors.Abstractions
 Bennewitz.Ninja.ScopedEditors.ViewModels
-Bennewitz.Ninja.ScopedEditors.AvaloniaUI
+Bennewitz.Ninja.ScopedEditors.Avalonia

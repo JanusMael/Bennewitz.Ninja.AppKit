@@ -9,12 +9,12 @@ package draws it.
 |---|---|
 | `Bennewitz.Ninja.ScopedEditors.Abstractions` | The scope and override model: editor schemas, scopes, values, workspaces, and the severity model that annotates them. Framework-free. |
 | `Bennewitz.Ninja.ScopedEditors.ViewModels` | Presentation logic with no UI-framework reference at all, so an editor can be built off the UI thread. |
-| `Bennewitz.Ninja.ScopedEditors.AvaloniaUI` | Avalonia views, converters and behaviours, two bundled monospace fonts, and an opt-in Semi.Avalonia theme bundle. |
+| `Bennewitz.Ninja.ScopedEditors.Avalonia` | Avalonia views, converters and behaviours, two bundled monospace fonts, and an opt-in Semi.Avalonia theme bundle. |
 
 ## Install
 
 ```bash
-dotnet add package Bennewitz.Ninja.ScopedEditors.AvaloniaUI
+dotnet add package Bennewitz.Ninja.ScopedEditors.Avalonia
 ```
 
 That brings the other two with it. Reference `.Abstractions` or `.ViewModels` on their own from code
@@ -25,8 +25,12 @@ theme. It is the only package in the family that does.
 
 ## Using the Avalonia package
 
-Everything is reached by `avares://` URIs, and an `avares://` URI names the **assembly**,
-`ScopedEditors.AvaloniaUI`, not the package id and not a namespace.
+Everything is reached by `avares://` URIs, and an `avares://` URI names the **assembly**.
+
+⚠ **The package and the assembly inside it are named differently.** The package is
+`Bennewitz.Ninja.ScopedEditors.Avalonia`; the assembly is `ScopedEditors.AvaloniaUI`, and so are the
+namespaces, `Bennewitz.Ninja.ScopedEditors.AvaloniaUI.*`. A URI written from the package name,
+`avares://ScopedEditors.Avalonia/…`, names an assembly the package no longer contains.
 
 **With Semi.Avalonia**, merge the one bundle. It carries the Semi theme, the editors' colour tokens,
 and screen-reader names for control-template parts that ship without one:
@@ -67,11 +71,10 @@ licence travels in the assembly beside them.
 
 ## Upgrading from 2026.3.923
 
-`2026.3.924` renames the Avalonia package, its assembly and its namespaces from `.Avalonia` to
-`.AvaloniaUI`, because a namespace segment named `Avalonia` shadows Avalonia's own root namespace.
-For a consumer, three things change:
+The package keeps its id. Inside it, `2026.3.924` renames the assembly and its namespaces from
+`.Avalonia` to `.AvaloniaUI`, because a namespace segment named `Avalonia` shadows Avalonia's own
+root namespace. For a consumer, two things change:
 
-- the package id: `Bennewitz.Ninja.ScopedEditors.Avalonia` → `Bennewitz.Ninja.ScopedEditors.AvaloniaUI`;
 - the namespaces: `Bennewitz.Ninja.ScopedEditors.Avalonia.*` → `Bennewitz.Ninja.ScopedEditors.AvaloniaUI.*`,
   in C# `using` directives and XAML `xmlns` declarations alike;
 - every `avares://ScopedEditors.Avalonia/…` URI → `avares://ScopedEditors.AvaloniaUI/…`.
