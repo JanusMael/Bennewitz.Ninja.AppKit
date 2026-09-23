@@ -4,9 +4,9 @@ using Bennewitz.Ninja.ScopedEditors.AvaloniaUI.Tests;
 namespace ScopedEditors.Tests.Architecture;
 
 /// <summary>
-/// Every <c>LE.*</c> theme resource this package's markup asks for is declared, and every one it
-/// declares is resolved by its own markup or code, or listed as kept for hosts. Carried across from
-/// ClaudeForge's <c>ThemeResourceIntegrityTests</c>.
+/// Every <c>LE.*</c> theme resource this package's markup or code asks for is declared, and every
+/// one it declares is resolved by its own markup or code, or listed as kept for hosts. Carried across
+/// from ClaudeForge's <c>ThemeResourceIntegrityTests</c>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -25,9 +25,9 @@ namespace ScopedEditors.Tests.Architecture;
 /// </para>
 /// <para>
 /// ⭐ <b>C# is read as well as markup</b>, because six of the tokens are resolved from code and
-/// never from markup. That is also what earns the reverse check its keep: a mistyped key in
-/// <c>BrushHelper.Resolve</c> falls back to its hard-coded hex without a sound, and the only
-/// symptom anywhere is that the correctly spelled declaration goes unused.
+/// never from markup. A mistyped key in <c>BrushHelper.Resolve</c> falls back to its hard-coded hex
+/// without a sound, so both directions look at code: the typo is a key resolved but never declared,
+/// and the key it was meant to be is declared but never used.
 /// </para>
 /// </remarks>
 public sealed class ThemeResourceIntegrityTests
@@ -120,6 +120,46 @@ public sealed class ThemeResourceIntegrityTests
     }
 
     /// <summary>
+    /// The same question for keys resolved from C#: every <c>"LE.Foo"</c> literal names a declared key.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⚠ <b>Quieter than the markup case, not louder.</b> <c>BrushHelper.Resolve</c> falls back to its
+    /// hard-coded hex, so the control still gets a colour, just never the declared default or a host's
+    /// override of the key that was meant. A key that exists only in code is also missing from
+    /// <c>EditorColors.axaml</c>, the token list a host reads to learn what it can override.
+    /// </para>
+    /// <para>
+    /// Not in the original, which checked markup alone. There a typo in code surfaced only when it
+    /// left a declared key unused, and a key new to code did not surface at all.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void Every_LE_key_resolved_from_code_is_declared()
+    {
+        TokenScan scan = Scan();
+
+        string[] undeclared =
+        [
+            .. scan.ReferencedFromCode.Keys
+                .Where(k => !scan.Declared.Contains(k))
+                .Order(StringComparer.Ordinal),
+        ];
+
+        IEnumerable<string> lines = undeclared.Select(k =>
+            $"  {k}  (in {string.Join(", ", scan.ReferencedFromCode[k])})");
+
+        Assert.True(
+            undeclared.Length == 0,
+            $"{undeclared.Length} LE.* key(s) are resolved from C# but never declared:\n"
+            + string.Join('\n', lines)
+            + "\n\nBrushHelper.Resolve falls back to its hard-coded hex without a sound. If the literal is "
+            + "a typo, the declared default and any host override of the intended key are ignored; if it "
+            + "is a new key, EditorColors.axaml, the list hosts read, does not mention it. Declare it in "
+            + "src/ScopedEditors.AvaloniaUI/Themes/EditorColors.axaml, or correct the literal.");
+    }
+
+    /// <summary>
     /// The inverse direction: a declared token nothing uses is dead theme surface, or the correct
     /// spelling of a key something asks for under a typo.
     /// </summary>
@@ -142,9 +182,10 @@ public sealed class ThemeResourceIntegrityTests
             $"{unused.Length} LE.* theme resource(s) are declared but resolved by neither the markup nor "
             + $"the C# of {PackageSources.Project}: {string.Join(", ", unused)}.\n\n"
             + "Wire each one up or delete it, and check first whether one is the correct spelling of a key "
-            + "some code asks for under a typo: a mistyped key in BrushHelper.Resolve falls back to its "
-            + "hard-coded hex without a sound, and this is the check that notices. A key that exists for "
-            + "hosts to resolve goes in KeysKeptForHosts, with its reason.");
+            + "that markup or code asks for under a typo, which "
+            + $"{nameof(Every_referenced_LE_key_is_declared)} or "
+            + $"{nameof(Every_LE_key_resolved_from_code_is_declared)} would then be naming. A key that "
+            + "exists for hosts to resolve goes in KeysKeptForHosts, with its reason.");
     }
 
     [Fact]
@@ -174,21 +215,23 @@ public sealed class ThemeResourceIntegrityTests
             "KeysKeptForHosts has outlived its reasons:\n  " + string.Join("\n  ", problems));
     }
 
-    /// <summary>What the package declares, and what its markup and its code ask for.</summary>
+    /// <summary>
+    /// What the package declares, and what its markup and its code ask for: each key with the files
+    /// that ask for it, so a failure says where to look.
+    /// </summary>
     private sealed record TokenScan(
         IReadOnlySet<string> Declared,
         IReadOnlyDictionary<string, SortedSet<string>> ReferencedFromMarkup,
-        IReadOnlySet<string> ReferencedFromCode)
+        IReadOnlyDictionary<string, SortedSet<string>> ReferencedFromCode)
     {
-        public bool IsUsed(string key) => ReferencedFromMarkup.ContainsKey(key) || ReferencedFromCode.Contains(key);
+        public bool IsUsed(string key) => ReferencedFromMarkup.ContainsKey(key) || ReferencedFromCode.ContainsKey(key);
     }
 
     private static TokenScan Scan()
     {
         HashSet<string> declared = new(StringComparer.Ordinal);
-        // key -> the files that ask for it, so a failure says where to look.
         Dictionary<string, SortedSet<string>> fromMarkup = new(StringComparer.Ordinal);
-        HashSet<string> fromCode = new(StringComparer.Ordinal);
+        Dictionary<string, SortedSet<string>> fromCode = new(StringComparer.Ordinal);
 
         foreach (PackageSources.SourceText file in PackageSources.MarkupText())
         {
@@ -199,14 +242,7 @@ public sealed class ThemeResourceIntegrityTests
 
             foreach (Match m in ReferencePattern.Matches(file.Text))
             {
-                string key = m.Groups[1].Value;
-                if (!fromMarkup.TryGetValue(key, out SortedSet<string>? files))
-                {
-                    files = new SortedSet<string>(StringComparer.Ordinal);
-                    fromMarkup[key] = files;
-                }
-
-                files.Add(file.Path);
+                AddReference(fromMarkup, m.Groups[1].Value, file.Path);
             }
         }
 
@@ -214,7 +250,7 @@ public sealed class ThemeResourceIntegrityTests
         {
             foreach (Match m in CodeReferencePattern.Matches(file.Text))
             {
-                fromCode.Add(m.Groups[1].Value);
+                AddReference(fromCode, m.Groups[1].Value, file.Path);
             }
         }
 
@@ -236,5 +272,16 @@ public sealed class ThemeResourceIntegrityTests
             + "which would make every code-only token look dead.");
 
         return new TokenScan(declared, fromMarkup, fromCode);
+    }
+
+    private static void AddReference(Dictionary<string, SortedSet<string>> references, string key, string path)
+    {
+        if (!references.TryGetValue(key, out SortedSet<string>? files))
+        {
+            files = new SortedSet<string>(StringComparer.Ordinal);
+            references[key] = files;
+        }
+
+        files.Add(path);
     }
 }
