@@ -1,5 +1,5 @@
 using Bennewitz.Ninja.ScopedEditors.Abstractions;
-using Bennewitz.Ninja.ScopedEditors.Avalonia.Converters;
+using Bennewitz.Ninja.ScopedEditors.AvaloniaUI.Converters;
 
 namespace ScopedEditors.Tests;
 

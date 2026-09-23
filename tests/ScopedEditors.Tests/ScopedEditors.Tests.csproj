@@ -3,6 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\ScopedEditors.Abstractions\ScopedEditors.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\ScopedEditors.ViewModels\ScopedEditors.ViewModels.csproj" />
-    <ProjectReference Include="..\..\src\ScopedEditors.Avalonia\ScopedEditors.Avalonia.csproj" />
+    <ProjectReference Include="..\..\src\ScopedEditors.AvaloniaUI\ScopedEditors.AvaloniaUI.csproj" />
   </ItemGroup>
 </Project>

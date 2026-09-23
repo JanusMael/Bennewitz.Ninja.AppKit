@@ -2,7 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/ScopedEditors.Abstractions/ScopedEditors.Abstractions.csproj" />
     <Project Path="src/ScopedEditors.ViewModels/ScopedEditors.ViewModels.csproj" />
-    <Project Path="src/ScopedEditors.Avalonia/ScopedEditors.Avalonia.csproj" />
+    <Project Path="src/ScopedEditors.AvaloniaUI/ScopedEditors.AvaloniaUI.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/ScopedEditors.Tests/ScopedEditors.Tests.csproj" />

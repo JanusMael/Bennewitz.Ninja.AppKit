@@ -135,7 +135,7 @@ public abstract partial class PropertyEditorViewModel : ObservableObject, IDange
     /// <para>
     /// ⚠ <b>The severity word is an unlocalised English literal, and there is currently nowhere
     /// better to put it.</b> This assembly has no string surface at all: the library's
-    /// resolver-based <c>WrapperStrings</c> lives in <c>ScopedEditors.Avalonia</c>, which sits
+    /// resolver-based <c>WrapperStrings</c> lives in <c>ScopedEditors.AvaloniaUI</c>, which sits
     /// ABOVE this one, so referencing it would invert the dependency. The consequence sentence
     /// itself comes from the product's danger table and is localisable there.
     /// </para>

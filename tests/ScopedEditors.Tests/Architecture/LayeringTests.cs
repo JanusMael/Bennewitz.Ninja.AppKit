@@ -43,7 +43,7 @@ public sealed class LayeringTests
         new("ScopedEditors.ViewModels", ["ScopedEditors.Abstractions"], ["Avalonia", "Semi", "Serilog"]),
 
         // The only tier allowed to see Avalonia, and the only id binding a consumer to Semi.
-        new("ScopedEditors.Avalonia",
+        new("ScopedEditors.AvaloniaUI",
             ["ScopedEditors.Abstractions", "ScopedEditors.ViewModels"],
             ["Serilog"]),
     ];
@@ -225,7 +225,7 @@ public sealed class LayeringTests
             ui.Length == 0,
             "ScopedEditors.ViewModels has grown a UI-framework reference:\n  " + string.Join("\n  ", ui)
             + "\n\nA control reference here is supposed to be a BUILD error, which is what keeps "
-            + "editors constructible off the UI thread. Move the code into ScopedEditors.Avalonia.");
+            + "editors constructible off the UI thread. Move the code into ScopedEditors.AvaloniaUI.");
     }
 
     // ── reading the outputs and the project files ────────────────────────────
