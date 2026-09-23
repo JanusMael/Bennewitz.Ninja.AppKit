@@ -44,17 +44,19 @@
                         host product's danger table. Rendered BEFORE the name so a user scanning
                         a page reads the weight before the label.
 
-                        ⭐ DUAL-CODED, per UI-STYLE-GUIDE's status-pill principle: the GLYPH
-                        differs per severity (⊗ ⚠ ● ○) as well as the colour, because colour
+                        ⭐ DUAL-CODED, per OpenForge2k's UI-STYLE-GUIDE status-pill principle: the
+                        GLYPH differs per severity (⊗ ⚠ ● ○) as well as the colour, because colour
                         alone excludes colour-blind users and Critical-vs-Caution sits exactly on
                         the red-green axis. Geometric shapes rather than emoji — emoji need a
-                        system emoji font and render as tofu without one (see AVALONIA-GOTCHAS).
+                        system emoji font and render as tofu without one (see avalonia-gotchas.md
+                        in Bennewitz.Ninja.XamlQuality).
 
                         ⛔ AutomationProperties.HelpText is NOT decoration here. A coloured shape
                         conveys nothing to a screen reader, so DangerAccessibleText names the tier
                         AND the consequence; without it this whole surface would be sighted-only.
                         HelpText and not Name: on a TextBlock the Text ALWAYS wins and an explicit
-                        Name is ignored outright (measured via UIA - see AVALONIA-GOTCHAS).
+                        Name is ignored outright (measured via UIA - see avalonia-gotchas.md in
+                        Bennewitz.Ninja.XamlQuality).
 
                         Hidden entirely when the product says nothing about this path, so a
                         product with no danger table renders exactly as before.
@@ -158,9 +160,9 @@
                 LE.DangerBorder. Two reasons, both measured on screen:
 
                   * CONTRAST. LE.DangerText is a single flat #C62828 — an LE.* token is
-                    theme-neutral by design — which lands at roughly 3:1 on this app's dark
-                    surface, under the 4.5:1 that UI-STYLE-GUIDE requires for text. The
-                    AppSeverity*Brush family is a themed light/dark PAIR whose values are the
+                    theme-neutral by design — which lands at roughly 3:1 on the host app's dark
+                    surface, under the 4.5:1 that OpenForge2k's UI-STYLE-GUIDE requires for text.
+                    The AppSeverity*Brush family is a themed light/dark PAIR whose values are the
                     app's already-vetted status foregrounds (#A8071A / #F99090 for Critical), so
                     it clears the budget in both themes.
                   * TRUTHFULNESS. A hardcoded red says "critical" for every unsafe value,

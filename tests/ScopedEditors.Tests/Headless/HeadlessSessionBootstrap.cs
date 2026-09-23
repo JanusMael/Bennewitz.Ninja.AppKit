@@ -62,7 +62,7 @@ public sealed class HeadlessSessionBootstrap : IAsyncLifetime
     /// <c>HeadlessSessionBootstrapTests</c>; it is the only way to prove from inside the suite that
     /// set-up happened before the first test rather than in it.
     /// </summary>
-    internal static bool ApplicationBuiltDuringAssemblyInitialize { get; private set; }
+    internal static bool ApplicationBuiltBeforeAnyTest { get; private set; }
 
     /// <inheritdoc/>
     public async ValueTask InitializeAsync()
@@ -76,7 +76,7 @@ public sealed class HeadlessSessionBootstrap : IAsyncLifetime
         // Without it the session exists but Avalonia does not, and the first test to dispatch pays
         // for SetupUnsafe() while a wrongly-bound Dispatcher.UIThread makes it throw. The result is
         // captured rather than discarded so the guard test can assert it.
-        ApplicationBuiltDuringAssemblyInitialize =
+        ApplicationBuiltBeforeAnyTest =
             await session.Dispatch(() => Application.Current is not null, CancellationToken.None);
     }
 

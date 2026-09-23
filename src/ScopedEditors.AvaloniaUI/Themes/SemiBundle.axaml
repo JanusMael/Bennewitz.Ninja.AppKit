@@ -31,7 +31,7 @@
          spinner buttons). Nothing in it is Semi-specific — Avalonia's own Fluent theme
          leaves the same buttons unnamed — so a consumer that skips this bundle should
          still include AccessibilityNames.axaml on its own. It is included here because
-         that is the one line every host in this repo already has. -->
+         that is the one line every host already has. -->
     <StyleInclude Source="avares://ScopedEditors.AvaloniaUI/Themes/AccessibilityNames.axaml" />
 
 </Styles>

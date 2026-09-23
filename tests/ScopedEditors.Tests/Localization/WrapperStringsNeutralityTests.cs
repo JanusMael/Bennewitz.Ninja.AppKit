@@ -24,8 +24,8 @@ public sealed class WrapperStringsNeutralityTests
 {
     /// <summary>
     /// Brand names that must never appear in a shared library's default strings. Deliberately
-    /// includes this repo's own first product: the point is that the <i>library</i> stays
-    /// neutral, not that it avoids some other vendor.
+    /// includes this library's own hosts, ClaudeForge and OpenCodeForge: the point is that the
+    /// <i>library</i> stays neutral, not that it avoids some other vendor.
     /// </summary>
     private static readonly string[] ProductBrands =
         ["Claude", "Anthropic", "OpenCode", "ClaudeForge", "OpenCodeForge"];

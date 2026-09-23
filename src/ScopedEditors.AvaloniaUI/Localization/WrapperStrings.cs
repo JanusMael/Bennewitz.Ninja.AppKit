@@ -133,7 +133,7 @@ public static class WrapperStrings
     /// Restore <see cref="Resolver"/> to the default-English implementation.
     /// Required test-cleanup hook so a per-test resolver override doesn't
     /// bleed into sibling tests — same convention as
-    /// <c>DebugFlags.ResetForTesting()</c> documented in CLAUDE.md.
+    /// <c>BrushHelper.ResetForTesting()</c>.
     /// </summary>
     internal static void ResetForTesting()
     {

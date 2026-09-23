@@ -7,39 +7,39 @@ namespace Bennewitz.Ninja.ScopedEditors.AvaloniaUI.Tests.Headless;
 
 /// <summary>
 /// Guards that <see cref="HeadlessSessionBootstrap"/> still does the thing it exists to do:
-/// build the Avalonia application during <c>[AssemblyInitialize]</c>, not in whichever test
-/// dispatches first.
+/// build the Avalonia application before any test runs, not in whichever test dispatches first.
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⭐ <b>LINKED alongside the bootstrap</b>, so every project that takes the fix also takes its
-/// guard. A project could otherwise link the bootstrap and never notice it had stopped working.
+/// ⭐ <b>Kept beside the bootstrap</b>, so whatever copies the fix copies its guard with it. A
+/// project could otherwise copy the bootstrap and never notice it had stopped working.
 /// </para>
 /// <para>
 /// ⛔ <b>The regression this catches is INVISIBLE without it.</b> Deleting the warm-up dispatch
 /// leaves every test passing on most runs — application set-up simply moves back into the first
 /// test to dispatch, and only fails when a non-headless test has already bound
-/// <c>Dispatcher.UIThread</c> to the MSTest thread. That is a rare, order-dependent failure
-/// reported against an arbitrary unrelated assertion, which is precisely what cost this
+/// <c>Dispatcher.UIThread</c> to a runner thread. That is a rare, order-dependent failure
+/// reported against an arbitrary unrelated assertion, which is precisely what cost the original
 /// repository three separate CI investigations (2026-09-19 ×2, 2026-09-22).
 /// </para>
 /// <para>
 /// ⭐ <b>Why asserting a flag is the honest form here.</b> The property under test is a <i>timing</i>
 /// one — "set-up had already happened before any test body ran" — and by the time any test can
-/// observe the world, set-up has happened either way. Only <c>[AssemblyInitialize]</c> can witness
-/// the difference, so it records what it saw and this asserts the record. A test that merely
-/// checked <c>Application.Current is not null</c> from here would pass in both worlds and guard
-/// nothing. ⚠ Canaried on 2026-09-22: with the warm-up removed the flag is <c>false</c> and this
-/// fails; with it, true.
+/// observe the world, set-up has happened either way. Only the bootstrap, running as xunit's
+/// assembly fixture before the first test, can witness the difference, so it records what it saw
+/// and this asserts the record. A test that merely checked <c>Application.Current is not null</c>
+/// from here would pass in both worlds and guard nothing. ⚠ Canaried in the original repository on
+/// 2026-09-22, under MSTest: with the warm-up removed the flag is <c>false</c> and this fails; with
+/// it, true.
 /// </para>
 /// </remarks>
 public sealed class HeadlessSessionBootstrapTests
 {
     [Fact]
-    public void TheApplicationIsBuiltDuringAssemblyInitialize_NotByTheFirstTestToDispatch()
+    public void TheApplicationIsBuiltBeforeAnyTest_NotByTheFirstTestToDispatch()
     {
-        Assert.True(HeadlessSessionBootstrap.ApplicationBuiltDuringAssemblyInitialize, "HeadlessSessionBootstrap did not observe a built Avalonia application during "
-            + "[AssemblyInitialize]. Its warm-up Dispatch has been removed or reordered, so "
+        Assert.True(HeadlessSessionBootstrap.ApplicationBuiltBeforeAnyTest, "HeadlessSessionBootstrap did not observe a built Avalonia application before the "
+            + "first test. Its warm-up Dispatch has been removed or reordered, so "
             + "AppBuilder.SetupUnsafe() is once again the first-scheduled test's responsibility "
             + "— which reintroduces the intermittent 'The calling thread cannot access this "
             + "object because a different thread owns it' failure, attributed to an arbitrary "

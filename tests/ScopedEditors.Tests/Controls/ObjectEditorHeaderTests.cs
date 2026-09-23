@@ -13,8 +13,8 @@ namespace Bennewitz.Ninja.ScopedEditors.AvaloniaUI.Tests.Controls;
 /// </para>
 /// <para>
 /// ⚠ Parsed as XML and asserted over ATTRIBUTE VALUES rather than searched as text, which is the
-/// idiom this repo settled on after an earlier version of a similar test failed on a comment
-/// describing what the markup used to bind to.
+/// idiom the original repository settled on after an earlier version of a similar test failed on
+/// a comment describing what the markup used to bind to.
 /// </para>
 /// </remarks>
 public sealed class ObjectEditorHeaderTests

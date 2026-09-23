@@ -41,8 +41,9 @@ public sealed class AppSeverityToGlyphConverterTests
 
     /// <remarks>
     /// ⚠ Emoji need a system emoji font and render as tofu without one — a documented Linux
-    /// problem in <c>AVALONIA-GOTCHAS.md</c>. Every glyph must stay in the Basic Multilingual
-    /// Plane, which is what rules emoji out: they live above U+FFFF and arrive as surrogate pairs.
+    /// problem in Bennewitz.Ninja.XamlQuality's <c>docs/avalonia-gotchas.md</c>. Every glyph must
+    /// stay in the Basic Multilingual Plane, which is what rules emoji out: they live above U+FFFF
+    /// and arrive as surrogate pairs.
     /// </remarks>
     [Fact]
     public void EveryGlyphIsASingleBmpCharacterNotAnEmoji()

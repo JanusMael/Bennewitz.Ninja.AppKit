@@ -12,15 +12,16 @@ namespace Bennewitz.Ninja.ScopedEditors.AvaloniaUI.Converters;
 /// <remarks>
 /// <para>
 /// ⭐ <b>The companion to <see cref="AppSeverityToBrushConverter"/>, and the reason the pair
-/// exists.</b> <c>UI-STYLE-GUIDE.md</c>'s status-pill principle is that every indicator is
-/// dual-coded: colour alone excludes colour-blind users, and roughly 8% of men have some form of
-/// red-green deficiency — exactly the axis Critical-vs-Caution sits on. The SHAPE carries the
-/// same information the colour does.
+/// exists.</b> The status-pill principle in OpenForge2k's <c>docs/UI-STYLE-GUIDE.md</c> is that
+/// every indicator is dual-coded: colour alone excludes colour-blind users, and roughly 8% of men
+/// have some form of red-green deficiency — exactly the axis Critical-vs-Caution sits on. The
+/// SHAPE carries the same information the colour does.
 /// </para>
 /// <para>
 /// ⚠ <b>Geometric shapes, deliberately not emoji.</b> Emoji glyphs need a system emoji font to
 /// fall back to and silently render as tofu without one — a documented problem on Linux in
-/// <c>AVALONIA-GOTCHAS.md</c>. <c>⊗ ⚠ ● ○</c> live in ordinary text fonts.
+/// Bennewitz.Ninja.XamlQuality's <c>docs/avalonia-gotchas.md</c>. <c>⊗ ⚠ ● ○</c> live in
+/// ordinary text fonts.
 /// </para>
 /// <para>
 /// ⛔ <b>The shapes do NOT escalate in drawn size, and assuming they did was defect F1.</b>
