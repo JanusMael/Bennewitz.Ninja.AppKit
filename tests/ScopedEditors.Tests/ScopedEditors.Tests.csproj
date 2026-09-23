@@ -14,5 +14,6 @@
 
   <ItemGroup>
     <PackageReference Include="Bennewitz.Ninja.AssemblyQuality" />
+    <PackageReference Include="Bennewitz.Ninja.XamlQuality" />
   </ItemGroup>
 </Project>
