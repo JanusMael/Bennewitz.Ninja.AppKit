@@ -11,4 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Bennewitz.Ninja.AssemblyQuality" />
+  </ItemGroup>
 </Project>

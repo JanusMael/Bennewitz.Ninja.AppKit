@@ -32,9 +32,11 @@ namespace ScopedEditors.Tests.Architecture;
 public sealed class LayeringTests
 {
     /// <summary>What one project in this family is allowed to reach.</summary>
-    private sealed record Tier(string Project, string[] MayReferenceProjects, string[] ForbiddenPackages);
+    // Internal, not private: AssemblyQualityTests reads this same table for AQ1003, so the tiers
+    // have ONE home. A second copy would be the list that silently rots.
+    internal sealed record Tier(string Project, string[] MayReferenceProjects, string[] ForbiddenPackages);
 
-    private static readonly Tier[] Tiers =
+    internal static readonly Tier[] Tiers =
     [
         // Zero outgoing edges, deliberately. Not "few" — none.
         new("ScopedEditors.Abstractions", [], ["Avalonia", "Semi", "Serilog", "CommunityToolkit"]),
@@ -52,7 +54,7 @@ public sealed class LayeringTests
     /// Name fragments belonging to another repository. ⚠ The two families share no edge — measured,
     /// not assumed — so either could be versioned or abandoned without touching the other.
     /// </summary>
-    private static readonly string[] ForeignFamilies = ["AppServices", "LayeredEditors", "ClaudeForge", "AgentForge"];
+    internal static readonly string[] ForeignFamilies = ["AppServices", "LayeredEditors", "ClaudeForge", "AgentForge"];
 
     [Fact]
     public void Every_tier_named_here_actually_exists()
