@@ -25,6 +25,10 @@
     <!-- xunit.v3 on Microsoft.Testing.Platform — see global.json. The VSTest bridge packages are
          deliberately absent; TrxReport is what gives CI its .trx files. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <!-- The headless platform for the ported Avalonia tests. ⚠ Pinned to the SAME version as Avalonia
+         above: the original suite used 12.1.2, which would pull Avalonia 12.1.2 transitively against
+         the libraries' 12.1.0 and trip central transitive pinning. -->
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.0" />
     <!-- ⚠ Same Microsoft.Testing.Platform line as xunit.v3 3.2.2 (1.9.1). A NEWER TrxReport pins
          the platform above what xunit's bundled MSBuild extension can load, and the failure reads
          as an unrelated loader error. -->

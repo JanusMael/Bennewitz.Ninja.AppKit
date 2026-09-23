@@ -5,4 +5,10 @@
     <ProjectReference Include="..\..\src\ScopedEditors.ViewModels\ScopedEditors.ViewModels.csproj" />
     <ProjectReference Include="..\..\src\ScopedEditors.AvaloniaUI\ScopedEditors.AvaloniaUI.csproj" />
   </ItemGroup>
+
+  <!-- The ported Avalonia tests run against a real, headless Avalonia application; see
+       Headless/HeadlessSessionBootstrap.cs for how and when it is started. -->
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless" />
+  </ItemGroup>
 </Project>
