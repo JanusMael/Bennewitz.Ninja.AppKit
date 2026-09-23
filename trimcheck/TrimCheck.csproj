@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    A trimmed publish of every shipped assembly, run by CI's `trim` job and compared against
+    expected-warnings.txt by scripts/check-trim-warnings.cs.
+
+    ⭐ This is the only check that sees COMPILED XAML. Avalonia's XAML compiler weaves IL into
+    ScopedEditors.AvaloniaUI after Roslyn has finished, so the Roslyn trim analyser, which runs on
+    every build here, never analyses it. ILLink reads the finished assembly, woven IL included.
+
+    ⛔ Every assembly is ROOTED. Without that, ILLink removes whatever this empty program does not
+    call, and code that has been removed cannot warn, so a clean result would mean nothing.
+
+    Not part of ScopedEditors.slnx: it is a publish, not a test, and nothing ships from it.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>full</TrimMode>
+    <!-- Report each warning on its own line, not one IL2104 per assembly, so they can be compared. -->
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <!-- Measuring, not gating: third-party warnings exist, and the baseline comparison decides. -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../src/ScopedEditors.Abstractions/ScopedEditors.Abstractions.csproj" />
+    <ProjectReference Include="../src/ScopedEditors.ViewModels/ScopedEditors.ViewModels.csproj" />
+    <ProjectReference Include="../src/ScopedEditors.AvaloniaUI/ScopedEditors.AvaloniaUI.csproj" />
+  </ItemGroup>
+
+  <!-- Assembly names, not package ids. -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="ScopedEditors.Abstractions" />
+    <TrimmerRootAssembly Include="ScopedEditors.ViewModels" />
+    <TrimmerRootAssembly Include="ScopedEditors.AvaloniaUI" />
+  </ItemGroup>
+</Project>

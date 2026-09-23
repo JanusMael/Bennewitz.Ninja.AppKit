@@ -55,3 +55,30 @@ jobs:
       # The same guard the release runs, against the same artifacts, at no cost.
       - name: Assert packed matches declared
         run: dotnet run scripts/assert-packages.cs -- ./packages/Release
+
+  # ⭐ The only check that reads COMPILED XAML. Avalonia's XAML compiler weaves IL into
+  # ScopedEditors.AvaloniaUI after Roslyn has finished, so the trim analyser that runs in `build`
+  # never sees it. ILLink reads the finished assemblies, woven IL included. TrimCheck.csproj roots
+  # every shipped assembly, and the warnings ILLink reports must match
+  # trimcheck/expected-warnings.txt exactly, in both directions.
+  trim:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      # ⚠ `shell: bash` is what turns on pipefail. Left unspecified, the shell runs as `bash -e`,
+      # so a publish that failed would pass this step through tee and leave the comparison an
+      # empty log, which it fails too, but with the wrong message.
+      - name: Publish trimmed
+        shell: bash
+        run: dotnet publish trimcheck/TrimCheck.csproj -c Release -r linux-x64 --nologo | tee trim-publish.log
+
+      - name: Compare warnings with the baseline
+        run: dotnet run scripts/check-trim-warnings.cs -- trim-publish.log trimcheck/expected-warnings.txt
