@@ -6,8 +6,9 @@
     <ProjectReference Include="..\..\src\ScopedEditors.AvaloniaUI\ScopedEditors.AvaloniaUI.csproj" />
   </ItemGroup>
 
-  <!-- The ported Avalonia tests run against a real, headless Avalonia application; see
-       Headless/HeadlessSessionBootstrap.cs for how and when it is started. -->
+  <!-- The ported Avalonia tests run against a real, headless Avalonia application. Each fixture
+       reaches it through HeadlessUnitTestSession.GetOrStartForAssembly, and with no isolation
+       attribute every dispatch builds a fresh one; see Headless/HeadlessSessionTests.cs. -->
   <ItemGroup>
     <PackageReference Include="Avalonia.Headless" />
   </ItemGroup>
