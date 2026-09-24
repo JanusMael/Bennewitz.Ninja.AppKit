@@ -1,0 +1,19 @@
+{
+  "description": "Schema-driven property editors for structured data set at more than one scope, where one scope overrides another: a framework-free model, UI-free view-models and Avalonia views. Ships as Bennewitz.Ninja.ScopedEditors.Abstractions, .ViewModels and .Avalonia.",
+  "homepage": "",
+  "topics": [
+    "csharp",
+    "dotnet",
+    "nuget",
+    "avalonia",
+    "property-editor",
+    "mvvm"
+  ],
+  "requiredChecks": [
+    "build",
+    "pack",
+    "trim"
+  ],
+  "content": [],
+  "undocumented": {}
+}
