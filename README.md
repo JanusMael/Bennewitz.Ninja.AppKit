@@ -88,10 +88,11 @@ rather than waiting for one of those.
 `2026.3.924` is also the first release whose assemblies are marked trimmable. CI publishes all three
 trimmed, and the only trim warnings are `Avalonia.Controls.DataGrid`'s own.
 
-`2026.3.924` requires **Avalonia 12.1.3 or later**. That release fixes UI Automation selection never
-reaching the client on Windows ([AvaloniaUI/Avalonia#22151](https://github.com/AvaloniaUI/Avalonia/pull/22151)).
-A host that references Avalonia directly at an earlier version fails restore with `NU1605`, a package
-downgrade, until it raises that reference.
+`2026.3.924` requires **Avalonia 12.1.3 or later** and **Avalonia.Controls.DataGrid 12.1.2 or later**.
+Avalonia 12.1.3 fixes UI Automation selection never reaching the client on Windows
+([AvaloniaUI/Avalonia#22151](https://github.com/AvaloniaUI/Avalonia/pull/22151)); DataGrid has no
+12.1.3, and 12.1.2 is its newest. A host that references either directly at an earlier version fails
+restore with `NU1605`, a package downgrade, until it raises that reference.
 
 ## Releasing
 
