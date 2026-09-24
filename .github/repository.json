@@ -12,7 +12,8 @@
   "requiredChecks": [
     "build",
     "pack",
-    "trim"
+    "trim",
+    "conventions"
   ],
   "content": [],
   "undocumented": {}
