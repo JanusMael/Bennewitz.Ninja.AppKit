@@ -20,7 +20,7 @@ dotnet add package Bennewitz.Ninja.ScopedEditors.Avalonia
 That brings the other two with it. Reference `.Abstractions` or `.ViewModels` on their own from code
 that must not see a UI framework.
 
-⚠ `.AvaloniaUI` depends on Semi.Avalonia and Semi.Avalonia.DataGrid whether or not you use the Semi
+⚠ `Bennewitz.Ninja.ScopedEditors.Avalonia` depends on Semi.Avalonia and Semi.Avalonia.DataGrid whether or not you use the Semi
 theme. It is the only package in the family that does.
 
 ## Using the Avalonia package

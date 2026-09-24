@@ -48,6 +48,11 @@ Nothing here changes a package, so none of it needs a release.
   `release.yml` gained the `check --release` preflight, and its comments that called `NUGET_USER`
   a secret were corrected.
 
+- **The README names the package where it means the package.** Its Semi warning said
+  `.AvaloniaUI`, the assembly; the dependency belongs to the package
+  `Bennewitz.Ninja.ScopedEditors.Avalonia`. The README is packed, so this reaches nuget.org with
+  the next release.
+
 ## Next
 
 1. **Consumer stage two is OpenForge2k's**, in its `plans/00005`: its last step was waiting for
