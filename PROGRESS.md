@@ -53,6 +53,12 @@ Nothing here changes a package, so none of it needs a release.
   `Bennewitz.Ninja.ScopedEditors.Avalonia`. The README is packed, so this reaches nuget.org with
   the next release.
 
+- **The family's standard build properties** (`plans/00004` in Bennewitz.Ninja.Templates):
+  `IsContinuousIntegration` is gone and AutoVersioning is `2026.3.916` (`3f44048`);
+  `scripts/repo-conventions.cs` evaluates every project against the family's build properties
+  (`c0c331c`, `a01aa2a`); and `.github/repository.json` requires trimming, so the check fails if a
+  library loses `IsTrimmable` or turns `EnableTrimAnalyzer` off (`3a20d6a`). Build and CI only.
+
 ## Next
 
 1. **Consumer stage two is OpenForge2k's**, in its `plans/00005`: its last step was waiting for
