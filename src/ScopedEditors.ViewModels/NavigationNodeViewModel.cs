@@ -136,9 +136,10 @@ public partial class NavigationNodeViewModel : ObservableObject
     /// schema is this, exactly?"). Overloading one tooltip would mean the badge's detail
     /// replaced the section's purpose, or the other way round.
     /// <para>
-    /// ⚠ The template must put this on the badge's own <c>TextBlock</c>: Avalonia tooltips do
-    /// not propagate child → parent, so a hover landing on the badge glyphs sees nothing if only
-    /// the row's Border carries one. Same reason the icon and title each repeat the row tooltip.
+    /// ⚠ The template must put this on the badge's own <c>TextBlock</c>, because it says
+    /// something different from the row's tooltip. Since Avalonia 11.1 a tooltip covers its
+    /// host's children, so with no tip of its own the badge would show the row's; a tip set on
+    /// the badge replaces the row's while the pointer is over the badge.
     /// </para>
     /// </remarks>
     [ObservableProperty] private string? _badgeTooltip;

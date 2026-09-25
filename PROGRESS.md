@@ -39,7 +39,8 @@ README; `.924` supersedes it.
 
 ## On `main`, not yet released
 
-Nothing here changes a package, so none of it needs a release.
+Two entries change what a package carries, the README's wording and the tooltip correction, and
+reach consumers with the next release. Nothing else here changes a package.
 
 - **The headless warm-up is gone** (`33f7d3d`, PR #3). With no `[AvaloniaTestIsolation]` the
   session isolates per test, so the warm-up's application was discarded at once and the tests that
@@ -84,18 +85,22 @@ Nothing here changes a package, so none of it needs a release.
   markup writes an empty `<AutomationProperties.Name>` element. Clean build, 264 pass, and an
   unnamed `TextBox` and an unnamed `Expander` still fail, under the new ids.
 
+- **A tooltip covers its host's children, so the property-name pill sets its tip once.** Since
+  Avalonia 11.1, `ToolTipService` walks up from the element under the pointer to the nearest
+  control with `ToolTip.Tip` set, as XamlQuality's `avalonia-gotchas.md` now says. The
+  `PropertyNameLabel` `TextBlock` in `PropertyEditorWrapper.axaml` repeated its `Border`'s tip on
+  the belief that tooltips don't propagate child→parent; the copy is gone and the comment is
+  corrected. `NavigationNodeViewModel`'s remarks on `BadgeTooltip` keep the badge's own tooltip,
+  now because it says something different from the row's, and no longer advise repeating the
+  row's tooltip on the icon and title. Headless, on the built markup, the pointer over the label
+  opens the `Border`'s tip; the label was given a transparent background so that it hit-tests
+  without real text rendering. The copy did do one thing: a control's automation help text falls
+  back to its own tip, so a property with no `Description` no longer gives a screen reader its
+  path. Ships in `.Avalonia` and `.ViewModels` with the next release.
+
 ## Next
 
-1. **Two comments restate a tooltip gotcha XamlQuality has corrected.** Its `avalonia-gotchas.md`
-   now says, measured on Avalonia 12.1.3, that since 11.1 a `ToolTip.Tip` covers its host's
-   children, so "tooltips don't propagate child→parent" is wrong in both places:
-   - `PropertyEditorWrapper.axaml`, the property-name pill: the `TextBlock`'s copy of its
-     `Border`'s tip does nothing, so it goes, and the comment is corrected.
-   - `NavigationNodeViewModel`'s remarks on `BadgeTooltip`: the badge keeps its own tooltip,
-     because it says something different from the row's, but the stated reason is wrong, and so
-     is the advice that the icon and title repeat the row's tooltip.
-   Both ship in packages, so they reach consumers with the next release.
-2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
+1. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
    on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k
    has not reproduced the failure since its xUnit move (measured 2026-09-25) and parked its own

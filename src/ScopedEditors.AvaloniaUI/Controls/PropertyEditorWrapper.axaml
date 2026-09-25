@@ -78,13 +78,16 @@
                          (consumer didn't define them), the Border/TextBlock fall
                          back to transparent bg + default foreground, which is the
                          same visual as the pre-pill behaviour. -->
-                    <!-- 2026-05-16 — ToolTip.Tip on Border + inner TextBlock per I9
-                         (Avalonia tooltips don't propagate child→parent), and
-                         explicit AutomationProperties on the TextBlock so screen
-                         readers in object-navigation mode announce the property
-                         name + description without relying on auto-derivation.
-                         Tooltip shows the schema path which disambiguates nested
-                         properties whose DisplayName is generic. -->
+                    <!-- ToolTip.Tip on the Border alone: since Avalonia 11.1 a tooltip
+                         covers its host's children, so hovering the TextBlock opens
+                         the Border's tip ("A tooltip covers its host's children, so
+                         set it once, on the parent" in avalonia-gotchas.md in
+                         Bennewitz.Ninja.XamlQuality). The tip shows the schema path,
+                         which disambiguates nested properties whose DisplayName is
+                         generic. Explicit AutomationProperties on the TextBlock so
+                         screen readers in object-navigation mode announce the
+                         property name + description without relying on
+                         auto-derivation. -->
                     <Border Background="{DynamicResource AppPropertyHeadingBackgroundBrush}"
                             CornerRadius="3" Padding="8,2"
                             VerticalAlignment="Center"
@@ -94,7 +97,6 @@
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource AppPropertyHeadingBrush}"
                                    VerticalAlignment="Center"
-                                   ToolTip.Tip="{Binding Path}"
                                    AutomationProperties.Name="{Binding DisplayName}"
                                    AutomationProperties.HelpText="{Binding Description}" />
                     </Border>
