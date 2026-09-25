@@ -23,8 +23,13 @@ What has stopped changing moves out rather than piling up.
   (`507b308`); the AssemblyQuality rules run as tests (`56042b1`); the rooted trimmed publish
   against an ILLink baseline (`5b08b46`); every bundled font laid out by its URI (`ab442f7`); the
   markup guards ported from ClaudeForge, with XamlQuality's XQ1001 and XQ1002 and a C# half for the
-  `LE.*` check (`3ee1593`, `14bd2a9`).
-- Verified: the nuget.org flat-container lists `2026.3.924` for all three ids (checked 2026-09-24).
+  `LE.*` check (`3ee1593`, `14bd2a9`). Issue #5, filed 2026-09-25 from OpenForge2k's drift 12,
+  asked for three of these guards again; it was closed that day with a planted-defect re-proof on
+  `c1a26bd`, and ClaudeForge's session was told so it can close the drift.
+- Verified: the nuget.org flat-container lists `2026.3.924` for all three ids (checked 2026-09-24,
+  again 2026-09-25).
+- Consumed: OpenForge2k pins `2026.3.924` from nuget.org since its `plans/00005` merged on
+  2026-09-24 as ClaudeForge #77, the consumer stage two that waited for this release.
 
 **`2026.3.923`** was the first publish: the three ids moved out of OpenForge2k's `LayeredEditors`
 projects and renamed (`582a68e`), with the layering guards (`b5f3c2a`). Verified from the
@@ -64,10 +69,30 @@ Nothing here changes a package, so none of it needs a release.
 
 ## Next
 
-1. **Consumer stage two is OpenForge2k's**, in its `plans/00005`: its last step was waiting for
-   `.924` on nuget.org, which is now there. Nothing in this repository blocks it.
-2. **`Bennewitz.Ninja.AutoVersioning` is pinned at `2026.3.914` here**; the template has moved to
-   `2026.3.916`. Raise it with the next change that touches `Directory.Packages.props`.
-3. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
+1. **The family's rule ids take the prefix BN plus the product's initials, in each product's next
+   release** (the owner's scheme, confirmed 2026-09-25: BNXQ, BNAQ, and BNCQ for the planned
+   CodeQuality). Nothing here keys on an id, so each rename is a text change made with the pin that
+   brings it, never before:
+   - XamlQuality: `XQ1001` to `XQ1005` become `BNXQ1001` to `BNXQ1005`, numbers unchanged
+     (Bennewitz.Ninja.XamlQuality #29, merged 2026-09-25). The pinned `2026.3.922` and the newest
+     published, `2026.3.924`, still report `XQ`. With the first pin past `2026.3.924`, update
+     `AxamlAccessibilityCoverageTests` (comments and one assertion message),
+     `ExpanderAutomationNameTests`, `src/AGENTS.md` and `tests/AGENTS.md`.
+   - AssemblyQuality: `AQ1001` to `AQ1004` become `BNAQ1001` to `BNAQ1004` in `2026.3.925`,
+     published 2026-09-25; `2026.3.922` is pinned. Trial-bumped here the same day and reverted:
+     the build stays clean under `-warnaserror`, and one test fails, correctly.
+     `AQ1002_no_leak_prone_type_appears_in_the_public_surface` asserts `Inspected > 0`, and `.925`
+     counts only what could have fired: no shipped assembly references `System.Text.Json.Nodes` or
+     `Newtonsoft.Json.Linq`, so `BNAQ1002` has nothing to check here and reports 0. The assertion
+     was passing on a check that could never fire. The bump needs a decision on that test: accept
+     the zero and say why, as the `AQ1001` test already does, or give `SurfaceLeakRule.Only([...])`
+     namespaces these assemblies really reference. With the bump, rename the mentions
+     (`AssemblyQualityTests`: four test names, comments and messages; the `LayeringTests` comment
+     that names AQ1003; `AGENTS.md`, `src/AGENTS.md` and `tests/AGENTS.md`), and consider
+     asserting `AssemblyRuleResult.Skipped` is empty beside each `Inspected` check, new in `.925`.
+   The mentions in this file are history and stay as written.
+2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
-   on OpenForge2k's CI, and waits for evidence before it changes what every test shares.
+   on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k
+   has not reproduced the failure since its xUnit move (measured 2026-09-25) and parked its own
+   `PerAssembly` attempt on a local branch because it broke a seam, so the evidence has not arrived.
