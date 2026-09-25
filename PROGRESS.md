@@ -76,15 +76,19 @@ Nothing here changes a package, so none of it needs a release.
   test output. Hiding `CommunityToolkit.Mvvm.dll` instead made three rules throw rather than skip,
   which is AssemblyQuality's to fix and was reported to its session; a throw still fails here.
 
+- **XamlQuality `2026.3.925`, whose rule ids are `BNXQ1001` to `BNXQ1004`**, formerly `XQ*`;
+  `BNXQ1005` and `BNXQ1006` are new rules, not run here. Test-only. Only `BNXQ1001` and `BNXQ1002`
+  run here, and their mentions are renamed. The tightening since `2026.3.922` changes nothing: no
+  markup writes an empty `<AutomationProperties.Name>` element. Clean build, 264 pass, and an
+  unnamed `TextBox` and an unnamed `Expander` still fail, under the new ids.
+
 ## Next
 
-1. **XamlQuality's rule ids take the family prefix in its next release**: `XQ1001` to `XQ1005`
-   become `BNXQ1001` to `BNXQ1005`, numbers unchanged (Bennewitz.Ninja.XamlQuality #29, merged
-   2026-09-25). Nothing here keys on an id. The pinned `2026.3.922` and the newest published,
-   `2026.3.924`, still report `XQ`. With the first pin past `2026.3.924`, update
-   `AxamlAccessibilityCoverageTests` (comments and one assertion message),
-   `ExpanderAutomationNameTests`, `src/AGENTS.md` and `tests/AGENTS.md`, as the AssemblyQuality
-   bump did for its ids. The mentions in this file are history and stay as written.
+1. **`PropertyEditorWrapper`'s tooltip comment restates a gotcha XamlQuality has corrected.** Its
+   `avalonia-gotchas.md` now says, measured on Avalonia 12.1.3, that since 11.1 a `ToolTip.Tip`
+   covers its host's children. So the property-name `TextBlock`'s copy of its `Border`'s tip does
+   nothing, and the comment's "tooltips don't propagate child→parent" is wrong. A markup change in
+   the package, so it ships with the next release.
 2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
    on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k

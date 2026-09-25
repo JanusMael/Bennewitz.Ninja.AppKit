@@ -7,7 +7,7 @@ xUnit v3 test executable that is never packed. It references all of `src/`, `Ava
 | Folder | What it covers |
 |---|---|
 | `Architecture/` | `LayeringTests`, `AssemblyQualityTests` (BNAQ1001–BNAQ1004 over every shipped assembly), `PackageMetadataTests`, and the markup guards `ThemeResourceIntegrityTests`, `DangerSurfaceMarkupTests`, `SeverityGlyphFontSizeMarkupTests` |
-| `Accessibility/` | XamlQuality's `XQ1002` (`AxamlAccessibilityCoverageTests`) and `XQ1001` (`ExpanderAutomationNameTests`) over the package's markup |
+| `Accessibility/` | XamlQuality's `BNXQ1002` (`AxamlAccessibilityCoverageTests`) and `BNXQ1001` (`ExpanderAutomationNameTests`) over the package's markup |
 | `Packaging/` | `PackagingTests`: the package lists and the release workflow |
 | `Assets/` | `BundledFontTests`: text laid out in every bundled face by its documented `avares://` URI |
 | `Themes/`, `Controls/`, `Converters/`, `Behaviors/`, `Helpers/`, `Localization/`, `ViewModels/` | The suite ported with the code, organised by what it tests |

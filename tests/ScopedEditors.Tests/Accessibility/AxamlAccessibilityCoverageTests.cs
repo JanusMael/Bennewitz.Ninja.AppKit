@@ -12,16 +12,18 @@ namespace ScopedEditors.Tests.Accessibility;
 /// </summary>
 /// <remarks>
 /// <para>
-/// ⭐ <b>The check is XamlQuality's <c>XQ1002</c>, not a copy of the original scan.</b> OpenForge2k
+/// ⭐ <b>The check is XamlQuality's <c>BNXQ1002</c>, not a copy of the original scan.</b> OpenForge2k
 /// had already moved its Expander guard onto that library, for the reason that applies here too: a
 /// second implementation of a rule another repository maintains is the copy that learns a different
 /// subset of the cases. It also accepts a name written as a property ELEMENT, which the original
-/// reported as missing.
+/// reported as missing; an empty one fails, from 2026.3.924. The ids carry the family prefix from
+/// XamlQuality 2026.3.925; earlier releases, and the history in <c>PROGRESS.md</c>, call them XQ1001
+/// and XQ1002.
 /// </para>
 /// <para>
 /// ⚠ <b>Coverage did not narrow in the move.</b> The original counted four elements that
-/// <c>XQ1002</c>'s framework list does not, so they are passed in. The fifth, <c>Expander</c>, is
-/// <c>XQ1001</c>'s, in <see cref="ExpanderAutomationNameTests"/>: XQ1002 leaves it out so that one
+/// <c>BNXQ1002</c>'s framework list does not, so they are passed in. The fifth, <c>Expander</c>, is
+/// <c>BNXQ1001</c>'s, in <see cref="ExpanderAutomationNameTests"/>: BNXQ1002 leaves it out so that one
 /// defect is not reported twice.
 /// </para>
 /// <para>
@@ -36,7 +38,7 @@ namespace ScopedEditors.Tests.Accessibility;
 /// </remarks>
 public sealed class AxamlAccessibilityCoverageTests
 {
-    /// <summary>The elements the original counted as interactive that <c>XQ1002</c> does not.</summary>
+    /// <summary>The elements the original counted as interactive that <c>BNXQ1002</c> does not.</summary>
     /// <remarks>
     /// Added to the original on 2026-08-27, after UI Automation found a navigation tree with an empty
     /// name in a file the scan had scored as fully named. None occurs in this markup today; listing
@@ -53,7 +55,7 @@ public sealed class AxamlAccessibilityCoverageTests
 
     /// <summary>
     /// The premise: at least this many controls are examined. <c>PropertyEditorWrapper.axaml</c> holds
-    /// twelve that <c>XQ1002</c> covers, so ordinary churn does not trip it and a scan gone blind does.
+    /// twelve that <c>BNXQ1002</c> covers, so ordinary churn does not trip it and a scan gone blind does.
     /// </summary>
     private const int MinimumInteractiveControls = 10;
 
@@ -64,7 +66,7 @@ public sealed class AxamlAccessibilityCoverageTests
 
         Assert.True(
             result.Inspected >= MinimumInteractiveControls,
-            $"XQ1002 examined {result.Inspected} interactive control(s) under {PackageSources.Project}, "
+            $"BNXQ1002 examined {result.Inspected} interactive control(s) under {PackageSources.Project}, "
             + $"expected at least {MinimumInteractiveControls}. The scan has stopped seeing the controls, "
             + "so a clean result would mean nothing.");
 

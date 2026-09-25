@@ -21,7 +21,7 @@ namespace ScopedEditors.Tests.Accessibility;
 /// </para>
 /// <para>
 /// ⚠ <b>Kept apart from <see cref="AxamlAccessibilityCoverageTests"/></b>, as XamlQuality keeps
-/// <c>XQ1001</c> apart from <c>XQ1002</c>: an unnamed Expander has a failure mode beyond being
+/// <c>BNXQ1001</c> apart from <c>BNXQ1002</c>: an unnamed Expander has a failure mode beyond being
 /// unnamed, so it gets the exact question on its own.
 /// </para>
 /// </remarks>
