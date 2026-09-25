@@ -86,11 +86,15 @@ Nothing here changes a package, so none of it needs a release.
 
 ## Next
 
-1. **`PropertyEditorWrapper`'s tooltip comment restates a gotcha XamlQuality has corrected.** Its
-   `avalonia-gotchas.md` now says, measured on Avalonia 12.1.3, that since 11.1 a `ToolTip.Tip`
-   covers its host's children. So the property-name `TextBlock`'s copy of its `Border`'s tip does
-   nothing, and the comment's "tooltips don't propagate child→parent" is wrong. A markup change in
-   the package, so it ships with the next release.
+1. **Two comments restate a tooltip gotcha XamlQuality has corrected.** Its `avalonia-gotchas.md`
+   now says, measured on Avalonia 12.1.3, that since 11.1 a `ToolTip.Tip` covers its host's
+   children, so "tooltips don't propagate child→parent" is wrong in both places:
+   - `PropertyEditorWrapper.axaml`, the property-name pill: the `TextBlock`'s copy of its
+     `Border`'s tip does nothing, so it goes, and the comment is corrected.
+   - `NavigationNodeViewModel`'s remarks on `BadgeTooltip`: the badge keeps its own tooltip,
+     because it says something different from the row's, but the stated reason is wrong, and so
+     is the advice that the icon and title repeat the row's tooltip.
+   Both ship in packages, so they reach consumers with the next release.
 2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
    on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k
