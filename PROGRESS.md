@@ -59,6 +59,9 @@ Nothing here changes a package, so none of it needs a release.
   (`c0c331c`, `a01aa2a`); and `.github/repository.json` requires trimming, so the check fails if a
   library loses `IsTrimmable` or turns `EnableTrimAnalyzer` off (`3a20d6a`). Build and CI only.
 
+- **The `nuget` topic is required only where `packages.push` names an id** (Templates `fb6961a`):
+  `scripts/repo-conventions.cs` is the template's current copy. CI only.
+
 ## Next
 
 1. **Consumer stage two is OpenForge2k's**, in its `plans/00005`: its last step was waiting for
