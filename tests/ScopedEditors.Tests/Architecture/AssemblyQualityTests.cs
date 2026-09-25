@@ -21,9 +21,10 @@ namespace ScopedEditors.Tests.Architecture;
 /// ⚠ <b>Zero findings means nothing unless something was inspected.</b> The vacuity guard here is
 /// that the scan contains EVERY shipped assembly, checked against the project list. After that,
 /// <c>Inspected</c> counts only candidates that could have produced a finding, so a zero is accepted
-/// only where zero is true, and each such case says why. <c>Skipped</c> must be empty everywhere: a
-/// rule that could not load part of an assembly still counts the rest, so only that list says the
-/// answer is partial.
+/// only where zero is true, and each such case says why. <c>Skipped</c> must be empty wherever a rule
+/// loads anything: a rule that could not load part of an assembly still counts the rest, so only that
+/// list says the answer is partial. BNAQ1003 reads reference names and loads nothing, so it has
+/// nothing to skip.
 /// </para>
 /// <para>
 /// BNAQ1003's forbidden references come from <see cref="LayeringTests.Tiers"/> and
@@ -72,7 +73,6 @@ public sealed class AssemblyQualityTests
     public void BNAQ1003_no_assembly_references_what_its_tier_forbids()
     {
         List<string> findings = [];
-        List<string> skipped = [];
 
         foreach (LayeringTests.Tier tier in LayeringTests.Tiers)
         {
@@ -84,11 +84,12 @@ public sealed class AssemblyQualityTests
 
             Assert.True(result.Inspected > 0, $"BNAQ1003 inspected no references of {tier.Project}.");
             findings.AddRange(result.Findings.Select(f => f.ToString()));
-            skipped.AddRange(result.Skipped.Select(s => $"{tier.Project}: {s}"));
         }
 
         Assert.Empty(findings);
-        Assert.Empty(skipped);
+        // ⓘ No Skipped check here: this rule reads each assembly's reference names from metadata and
+        // loads nothing, so it has nothing to skip. With Semi.Avalonia or CommunityToolkit.Mvvm hidden
+        // from the test output it stayed green, while the rules that load references skipped or threw.
     }
 
     [Fact]

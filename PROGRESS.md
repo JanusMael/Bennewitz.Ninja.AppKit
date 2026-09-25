@@ -72,9 +72,11 @@ Nothing here changes a package, so none of it needs a release.
   four tests and every mention are renamed. `BNAQ1002` now counts only what could fire, and no
   shipped assembly references a covered JSON namespace, so its zero is accepted with the reason
   beside it, as `BNAQ1001`'s already was; a planted public method returning `JsonNode` still fails
-  it. Every rule also asserts `Skipped` is empty, proven by hiding `Semi.Avalonia.dll` from the
-  test output. Hiding `CommunityToolkit.Mvvm.dll` instead made three rules throw rather than skip,
-  which is AssemblyQuality's to fix and was reported to its session; a throw still fails here.
+  it. Every rule that loads assemblies also asserts `Skipped` is empty, proven by hiding
+  `Semi.Avalonia.dll` from the test output; `BNAQ1003` reads reference names and loads nothing, so
+  it asserts none. Hiding `CommunityToolkit.Mvvm.dll` instead made three rules throw rather than
+  skip. AssemblyQuality fixed that on its `main` (`0500123`), shipping in `2026.3.926` at the
+  earliest; until then a throw still fails here.
 
 - **XamlQuality `2026.3.925`, whose rule ids are `BNXQ1001` to `BNXQ1004`**, formerly `XQ*`;
   `BNXQ1005` and `BNXQ1006` are new rules, not run here. Test-only. Only `BNXQ1001` and `BNXQ1002`
