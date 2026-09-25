@@ -67,30 +67,24 @@ Nothing here changes a package, so none of it needs a release.
 - **The `nuget` topic is required only where `packages.push` names an id** (Templates `fb6961a`):
   `scripts/repo-conventions.cs` is the template's current copy. CI only.
 
+- **AssemblyQuality `2026.3.925`, whose rule ids are `BNAQ1001` to `BNAQ1004`**, formerly `AQ*`:
+  the family's rule ids are BN plus the product's initials. Test-only, so no package changes. The
+  four tests and every mention are renamed. `BNAQ1002` now counts only what could fire, and no
+  shipped assembly references a covered JSON namespace, so its zero is accepted with the reason
+  beside it, as `BNAQ1001`'s already was; a planted public method returning `JsonNode` still fails
+  it. Every rule also asserts `Skipped` is empty, proven by hiding `Semi.Avalonia.dll` from the
+  test output. Hiding `CommunityToolkit.Mvvm.dll` instead made three rules throw rather than skip,
+  which is AssemblyQuality's to fix and was reported to its session; a throw still fails here.
+
 ## Next
 
-1. **The family's rule ids take the prefix BN plus the product's initials, in each product's next
-   release** (the owner's scheme, confirmed 2026-09-25: BNXQ, BNAQ, and BNCQ for the planned
-   CodeQuality). Nothing here keys on an id, so each rename is a text change made with the pin that
-   brings it, never before:
-   - XamlQuality: `XQ1001` to `XQ1005` become `BNXQ1001` to `BNXQ1005`, numbers unchanged
-     (Bennewitz.Ninja.XamlQuality #29, merged 2026-09-25). The pinned `2026.3.922` and the newest
-     published, `2026.3.924`, still report `XQ`. With the first pin past `2026.3.924`, update
-     `AxamlAccessibilityCoverageTests` (comments and one assertion message),
-     `ExpanderAutomationNameTests`, `src/AGENTS.md` and `tests/AGENTS.md`.
-   - AssemblyQuality: `AQ1001` to `AQ1004` become `BNAQ1001` to `BNAQ1004` in `2026.3.925`,
-     published 2026-09-25; `2026.3.922` is pinned. Trial-bumped here the same day and reverted:
-     the build stays clean under `-warnaserror`, and one test fails, correctly.
-     `AQ1002_no_leak_prone_type_appears_in_the_public_surface` asserts `Inspected > 0`, and `.925`
-     counts only what could have fired: no shipped assembly references `System.Text.Json.Nodes` or
-     `Newtonsoft.Json.Linq`, so `BNAQ1002` has nothing to check here and reports 0. The assertion
-     was passing on a check that could never fire. The bump needs a decision on that test: accept
-     the zero and say why, as the `AQ1001` test already does, or give `SurfaceLeakRule.Only([...])`
-     namespaces these assemblies really reference. With the bump, rename the mentions
-     (`AssemblyQualityTests`: four test names, comments and messages; the `LayeringTests` comment
-     that names AQ1003; `AGENTS.md`, `src/AGENTS.md` and `tests/AGENTS.md`), and consider
-     asserting `AssemblyRuleResult.Skipped` is empty beside each `Inspected` check, new in `.925`.
-   The mentions in this file are history and stay as written.
+1. **XamlQuality's rule ids take the family prefix in its next release**: `XQ1001` to `XQ1005`
+   become `BNXQ1001` to `BNXQ1005`, numbers unchanged (Bennewitz.Ninja.XamlQuality #29, merged
+   2026-09-25). Nothing here keys on an id. The pinned `2026.3.922` and the newest published,
+   `2026.3.924`, still report `XQ`. With the first pin past `2026.3.924`, update
+   `AxamlAccessibilityCoverageTests` (comments and one assertion message),
+   `ExpanderAutomationNameTests`, `src/AGENTS.md` and `tests/AGENTS.md`, as the AssemblyQuality
+   bump did for its ids. The mentions in this file are history and stay as written.
 2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
    on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k

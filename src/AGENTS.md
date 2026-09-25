@@ -13,7 +13,7 @@ released.
 
 | Rule | Why | Guarded by |
 |---|---|---|
-| The Avalonia project's `PackageId` keeps `.Avalonia`; its `AssemblyName`, folder and namespaces stay `.AvaloniaUI` | A namespace segment `Avalonia` shadows Avalonia's root namespace; the id is what consumers already reference | `AssemblyQualityTests.AQ1004_no_namespace_segment_shadows_a_referenced_root`; `PackageMetadataTests.Every_assembly_name_matches_its_project_file` |
+| The Avalonia project's `PackageId` keeps `.Avalonia`; its `AssemblyName`, folder and namespaces stay `.AvaloniaUI` | A namespace segment `Avalonia` shadows Avalonia's root namespace; the id is what consumers already reference | `AssemblyQualityTests.BNAQ1004_no_namespace_segment_shadows_a_referenced_root`; `PackageMetadataTests.Every_assembly_name_matches_its_project_file` |
 | Namespaces are `Bennewitz.Ninja.<AssemblyName>`; assembly names are unprefixed | The family's naming convention | the root `Directory.Build.props`, `RootNamespace` |
 | `ScopedEditors.ViewModels` takes no Avalonia or Semi reference, not even for a `Dispatcher` | A control reference being a build error is what makes an editor safe to build off the UI thread | `LayeringTests.ViewModels_compiles_without_any_UI_framework`, `No_project_declares_a_package_its_tier_forbids` |
 | Semi.Avalonia is referenced only by `ScopedEditors.AvaloniaUI`, with `PrivateAssets=""` | Its package, `Bennewitz.Ninja.ScopedEditors.Avalonia`, is the one id in the family that binds a consumer to Semi, by design | `LayeringTests.Tiers`; the csproj comment |

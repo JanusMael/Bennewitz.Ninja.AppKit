@@ -32,7 +32,7 @@
          deliberately absent; TrxReport is what gives CI its .trx files. -->
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <!-- The family's own assembly rules, run as tests over what this repository ships. -->
-    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.3.922" />
+    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.3.925" />
     <!-- The family's own markup rules, run as tests over the markup this repository ships. -->
     <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.3.922" />
     <!-- The headless platform for the ported Avalonia tests. ⚠ Pinned to the SAME version as Avalonia

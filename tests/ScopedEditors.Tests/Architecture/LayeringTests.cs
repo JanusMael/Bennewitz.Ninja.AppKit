@@ -32,7 +32,7 @@ namespace ScopedEditors.Tests.Architecture;
 public sealed class LayeringTests
 {
     /// <summary>What one project in this family is allowed to reach.</summary>
-    // Internal, not private: AssemblyQualityTests reads this same table for AQ1003, so the tiers
+    // Internal, not private: AssemblyQualityTests reads this same table for BNAQ1003, so the tiers
     // have ONE home. A second copy would be the list that silently rots.
     internal sealed record Tier(string Project, string[] MayReferenceProjects, string[] ForbiddenPackages);
 
