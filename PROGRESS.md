@@ -80,11 +80,12 @@ reach consumers with the next release. Nothing else here changes a package.
   changes nothing else: with that DLL hidden, `BNAQ1001`, `BNAQ1002` and `BNAQ1004` each name
   "ScopedEditors.ViewModels: 9 type(s) would not load" in `Skipped`, and the same assertions fail.
 
-- **XamlQuality `2026.3.925`, whose rule ids are `BNXQ1001` to `BNXQ1004`**, formerly `XQ*`;
-  `BNXQ1005` and `BNXQ1006` are new rules, not run here. Test-only. Only `BNXQ1001` and `BNXQ1002`
-  run here, and their mentions are renamed. The tightening since `2026.3.922` changes nothing: no
-  markup writes an empty `<AutomationProperties.Name>` element. Clean build, 264 pass, and an
-  unnamed `TextBox` and an unnamed `Expander` still fail, under the new ids.
+- **XamlQuality `2026.3.928`, whose rule ids are `BNXQ1001` to `BNXQ1004`**, formerly `XQ*`;
+  the later rules, `BNXQ1005` to `BNXQ1009`, are not run here. Test-only. Only `BNXQ1001` and
+  `BNXQ1002` run here, and their mentions are renamed. The renames came with `2026.3.925`, and
+  `2026.3.928` adds only opt-in rules. The tightening since `2026.3.922` changes nothing: no markup
+  writes an empty `<AutomationProperties.Name>` element. Clean build, 264 pass. An unnamed
+  `TextBox` still fails on `2026.3.928`, and an unnamed `Expander` did on `2026.3.925`.
 
 - **A tooltip covers its host's children, so the property-name pill sets its tip once.** Since
   Avalonia 11.1, `ToolTipService` walks up from the element under the pointer to the nearest
@@ -101,7 +102,14 @@ reach consumers with the next release. Nothing else here changes a package.
 
 ## Next
 
-1. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
+1. **Whether to adopt XamlQuality's opt-in rules is the owner's call.** None reports anything
+   until constructed. `BNXQ1007` (`2026.3.928`) wants an explicit `AutomationId` on every
+   interactive control, the id a test or an agent searches by. XamlQuality's session measured it
+   over this markup at `4fbca95`: all 13 controls it inspects lack one. So adopting it means adding
+   ids to shipped markup, which reaches hosts with the next release. `BNXQ1008` inspects nothing
+   here. `BNXQ1009` (item containers named by what they show), and `BNXQ1005` and `BNXQ1006` from
+   `2026.3.925`, read compiled assemblies (`WithAssemblies`) and are unmeasured here.
+2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
    on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k
    has not reproduced the failure since its xUnit move (measured 2026-09-25) and parked its own
