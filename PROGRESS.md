@@ -68,16 +68,17 @@ reach consumers with the next release. Nothing else here changes a package.
 - **The `nuget` topic is required only where `packages.push` names an id** (Templates `fb6961a`):
   `scripts/repo-conventions.cs` is the template's current copy. CI only.
 
-- **AssemblyQuality `2026.3.925`, whose rule ids are `BNAQ1001` to `BNAQ1004`**, formerly `AQ*`:
+- **AssemblyQuality `2026.3.928`, whose rule ids are `BNAQ1001` to `BNAQ1004`**, formerly `AQ*`:
   the family's rule ids are BN plus the product's initials. Test-only, so no package changes. The
   four tests and every mention are renamed. `BNAQ1002` now counts only what could fire, and no
   shipped assembly references a covered JSON namespace, so its zero is accepted with the reason
   beside it, as `BNAQ1001`'s already was; a planted public method returning `JsonNode` still fails
   it. Every rule that loads assemblies also asserts `Skipped` is empty, proven by hiding
   `Semi.Avalonia.dll` from the test output; `BNAQ1003` reads reference names and loads nothing, so
-  it asserts none. Hiding `CommunityToolkit.Mvvm.dll` instead made three rules throw rather than
-  skip. AssemblyQuality fixed that on its `main` (`0500123`), shipping in `2026.3.926` at the
-  earliest; until then a throw still fails here.
+  it asserts none. The renames came with `2026.3.925`, on which hiding `CommunityToolkit.Mvvm.dll`
+  made three rules throw rather than skip. `2026.3.928` is AssemblyQuality's fix for that and
+  changes nothing else: with that DLL hidden, `BNAQ1001`, `BNAQ1002` and `BNAQ1004` each name
+  "ScopedEditors.ViewModels: 9 type(s) would not load" in `Skipped`, and the same assertions fail.
 
 - **XamlQuality `2026.3.925`, whose rule ids are `BNXQ1001` to `BNXQ1004`**, formerly `XQ*`;
   `BNXQ1005` and `BNXQ1006` are new rules, not run here. Test-only. Only `BNXQ1001` and `BNXQ1002`
