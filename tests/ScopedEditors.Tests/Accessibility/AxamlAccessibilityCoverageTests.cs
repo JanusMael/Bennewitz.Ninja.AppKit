@@ -44,7 +44,7 @@ public sealed class AxamlAccessibilityCoverageTests
     /// name in a file the scan had scored as fully named. None occurs in this markup today; listing
     /// them holds the next one to the same rule.
     /// </remarks>
-    private static readonly string[] BeyondTheFrameworkList = ["TreeView", "TabControl", "TabItem", "HyperlinkButton"];
+    internal static readonly string[] BeyondTheFrameworkList = ["TreeView", "TabControl", "TabItem", "HyperlinkButton"];
 
     /// <summary>
     /// The directories that hold this package's markup, relative to the project. A scan that stops

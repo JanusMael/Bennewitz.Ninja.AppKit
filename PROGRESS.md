@@ -100,15 +100,23 @@ reach consumers with the next release. Nothing else here changes a package.
   back to its own tip, so a property with no `Description` no longer gives a screen reader its
   path. Ships in `.Avalonia` and `.ViewModels` with the next release.
 
+- **Every interactive control a property row draws declares an automation id**, XamlQuality's
+  `BNXQ1007`, adopted on the owner's call on 2026-09-28. The ids are bound to the property's schema
+  path, because the wrapper renders once per property and a fixed id would repeat on every row:
+  the value input takes the path, and each other control takes the path, `#` and its role, from
+  `#reset` to `#remove:<item>`. `AxamlAutomationIdCoverageTests` holds the markup to the rule, and
+  `PropertyEditorWrapperAutomationIdTests` reads the ids off a rendered row, since the rule cannot
+  see a binding that resolves to nothing or repeats. Planted and restored: a remove button's format
+  repeating the path failed only the rendered-row test, and the reset button's id removed failed
+  all three. The trim comparison still matches its baseline. The README documents the scheme.
+  Ships in `.Avalonia` with the next release; the owner holds that release for now.
+
 ## Next
 
-1. **Whether to adopt XamlQuality's opt-in rules is the owner's call.** None reports anything
-   until constructed. `BNXQ1007` (`2026.3.928`) wants an explicit `AutomationId` on every
-   interactive control, the id a test or an agent searches by. XamlQuality's session measured it
-   over this markup at `4fbca95`: all 13 controls it inspects lack one. So adopting it means adding
-   ids to shipped markup, which reaches hosts with the next release. `BNXQ1008` inspects nothing
-   here. `BNXQ1009` (item containers named by what they show), and `BNXQ1005` and `BNXQ1006` from
-   `2026.3.925`, read compiled assemblies (`WithAssemblies`) and are unmeasured here.
+1. **Whether to adopt XamlQuality's other opt-in rules is the owner's call.** None reports
+   anything until constructed. `BNXQ1008` inspects nothing here. `BNXQ1009` (item containers named
+   by what they show), and `BNXQ1005` and `BNXQ1006` from `2026.3.925`, read compiled assemblies
+   (`WithAssemblies`) and are unmeasured here.
 2. **Per-assembly headless isolation is unverified.** `[assembly: AvaloniaTestIsolation(
    AvaloniaTestIsolationLevel.PerAssembly)]` is the candidate fix for the cross-thread failure seen
    on OpenForge2k's CI, and waits for evidence before it changes what every test shares. OpenForge2k

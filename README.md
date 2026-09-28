@@ -69,6 +69,20 @@ ligature draws `!=` or `->` as one glyph, so what the user reads stops matching 
 the weights listed: any other resolves silently to the nearest one. Both families are OFL 1.1, and the
 licence travels in the assembly beside them.
 
+**Automation ids.** Every interactive control a property row draws declares an
+`AutomationProperties.AutomationId` built from the property's schema path, so a UI test or an agent
+finds it by a string it can predict. The value input takes the path itself, such as
+`permissions.defaultMode`, and the row's other controls add a `#` and what they do:
+
+| Control | Id |
+|---|---|
+| The value input: a check box, text box, combo box, auto-complete box, number box, or an object's expander | `<path>` |
+| Reset to the inherited value | `<path>#reset` |
+| A path editor's browse button | `<path>#browse` |
+| A free-form enum's suggestions button | `<path>#suggestions` |
+| A string array's new-item box, and its add button | `<path>#new-item`, `<path>#add` |
+| A string array item's remove button | `<path>#remove:<item>` |
+
 ## Upgrading from 2026.3.923
 
 The package keeps its id. Inside it, `2026.3.924` renames the assembly and its namespaces from

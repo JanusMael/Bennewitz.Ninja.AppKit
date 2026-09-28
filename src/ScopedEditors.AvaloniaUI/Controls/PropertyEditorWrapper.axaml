@@ -31,6 +31,7 @@
             <DockPanel>
                 <Button DockPanel.Dock="Right"
                         AutomationProperties.Name="{x:Static loc:WrapperStrings.LabelReset}"
+                        AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#reset'}"
                         Command="{Binding ResetToInheritedCommand}"
                         IsVisible="{Binding CanReset}"
                         Content="{x:Static loc:WrapperStrings.LabelReset}"
@@ -227,6 +228,16 @@
                          own context-specific announcements; only the PRIMARY
                          input carries the property name. -->
 
+                    <!-- 2026-09-28 — AutomationId, the key a test or an agent searches by, is
+                         declared on every interactive control (XamlQuality BNXQ1007) and bound
+                         to the property's schema Path, because this wrapper renders once per
+                         property and a fixed id would repeat on every row. The value input takes
+                         Path itself. Every other control on the row takes Path, a '#', and what
+                         it does: #reset, #browse, #suggestions, #new-item, #add, #remove:<item>.
+                         The enum's ComboBox and AutoCompleteBox share Path: only one is ever
+                         visible, and Avalonia leaves an invisible control out of the automation
+                         tree (ControlAutomationPeer.GetChildrenCore, 12.1.3). -->
+
                     <!-- Boolean: tri-state CheckBox with coloured status label
                          (null=Unset/gray, true=Enabled/green, false=Disabled/red) -->
                     <DataTemplate x:DataType="vm:BooleanPropertyEditorViewModel">
@@ -234,6 +245,7 @@
                             <CheckBox IsChecked="{Binding Value}"
                                       IsThreeState="True"
                                       VerticalAlignment="Center"
+                                      AutomationProperties.AutomationId="{Binding Path}"
                                       AutomationProperties.Name="{Binding DisplayName}"
                                       AutomationProperties.HelpText="{Binding Description}" />
                             <TextBlock Text="{Binding Value, Converter={StaticResource BoolToStatusText}}"
@@ -251,6 +263,7 @@
                                  MinWidth="200"
                                  MaxWidth="500"
                                  HorizontalAlignment="Left"
+                                 AutomationProperties.AutomationId="{Binding Path}"
                                  AutomationProperties.Name="{Binding DisplayName}"
                                  AutomationProperties.HelpText="{Binding Description}" />
                     </DataTemplate>
@@ -261,9 +274,11 @@
                             <TextBox Text="{Binding Value}"
                                      PlaceholderText="{Binding Watermark}"
                                      Width="360"
+                                     AutomationProperties.AutomationId="{Binding Path}"
                                      AutomationProperties.Name="{Binding DisplayName}"
                                      AutomationProperties.HelpText="{Binding Description}" />
                             <Button Content="{x:Static loc:WrapperStrings.LabelBrowse}"
+                                    AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#browse'}"
                                     AutomationProperties.Name="{x:Static loc:WrapperStrings.LabelBrowse}"
                                     Command="{Binding BrowseCommand}" />
                         </StackPanel>
@@ -282,6 +297,7 @@
                                       SelectedValue="{Binding SelectedValue, Mode=TwoWay}"
                                       PlaceholderText="{Binding Watermark}"
                                       MinWidth="200"
+                                      AutomationProperties.AutomationId="{Binding Path}"
                                       AutomationProperties.Name="{Binding DisplayName}"
                                       AutomationProperties.HelpText="{Binding Description}">
                                 <ComboBox.ItemTemplate>
@@ -300,6 +316,7 @@
                                                  FilterMode="Contains"
                                                  MinimumPrefixLength="0"
                                                  MinWidth="200"
+                                                 AutomationProperties.AutomationId="{Binding Path}"
                                                  AutomationProperties.Name="{Binding DisplayName}"
                                                  AutomationProperties.HelpText="{Binding Description}">
                                     <AutoCompleteBox.ItemTemplate>
@@ -309,6 +326,7 @@
                                     </AutoCompleteBox.ItemTemplate>
                                 </AutoCompleteBox>
                                 <Button Content="▾" Padding="8,4"
+                                        AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#suggestions'}"
                                         AutomationProperties.Name="{x:Static loc:WrapperStrings.TipShowSuggestions}"
                                         ToolTip.Tip="{x:Static loc:WrapperStrings.TipShowSuggestions}"
                                         Click="OnEnumDropdownToggleClick" />
@@ -331,6 +349,7 @@
                                        Increment="1"
                                        HorizontalAlignment="Left"
                                        Width="200"
+                                       AutomationProperties.AutomationId="{Binding Path}"
                                        AutomationProperties.Name="{Binding DisplayName}"
                                        AutomationProperties.HelpText="{Binding Description}" />
                     </DataTemplate>
@@ -350,17 +369,29 @@
                                                     AutomationProperties.HelpText="{Binding}"
                                                     Padding="6,2"
                                                     FontSize="12"
-                                                    Click="OnRemoveItem" />
+                                                    Click="OnRemoveItem">
+                                                <!-- The row's Path is on the array's view-model, one
+                                                     ItemsControl up; this template's own context is the
+                                                     item string. -->
+                                                <AutomationProperties.AutomationId>
+                                                    <MultiBinding StringFormat="{}{0}#remove:{1}">
+                                                        <Binding Path="$parent[ItemsControl].((vm:StringArrayPropertyEditorViewModel)DataContext).Path" />
+                                                        <Binding />
+                                                    </MultiBinding>
+                                                </AutomationProperties.AutomationId>
+                                            </Button>
                                         </StackPanel>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
                             <StackPanel Orientation="Horizontal" Spacing="6">
                                 <TextBox Text="{Binding NewItemText}"
+                                         AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#new-item'}"
                                          AutomationProperties.Name="{Binding AddItemWatermark}"
                                          PlaceholderText="{Binding AddItemWatermark}"
                                          Width="300" />
                                 <Button Content="{x:Static loc:WrapperStrings.LabelAdd}"
+                                        AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#add'}"
                                         AutomationProperties.Name="{x:Static loc:WrapperStrings.LabelAdd}"
                                         Command="{Binding AddItemCommand}" />
                             </StackPanel>
@@ -383,6 +414,7 @@
                              collapsible ones by CATEGORY, never by property name. -->
                         <Expander IsExpanded="{Binding IsExpanded}"
                                   Header="{Binding Children.Count, StringFormat='{}{0} settings'}"
+                                  AutomationProperties.AutomationId="{Binding Path}"
                                   AutomationProperties.Name="{Binding Children.Count}">
                             <ItemsControl ItemsSource="{Binding Children}">
                                 <ItemsControl.ItemTemplate>
