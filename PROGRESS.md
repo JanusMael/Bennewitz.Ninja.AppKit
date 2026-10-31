@@ -110,6 +110,23 @@ reach consumers with the next release. Nothing else here changes a package.
   repeating the path failed only the rendered-row test, and the reset button's id removed failed
   all three. The trim comparison still matches its baseline. The README documents the scheme.
   Ships in `.Avalonia` with the next release; the owner holds that release for now.
+- **Synced to Bennewitz.Ninja.Templates `2026.4.1031`** (#12, #13), on 2026-10-31.
+  `scripts/repo-conventions.cs` and `scripts/assert-packages.cs` are that release's, and the retired
+  `"trimming"` key is gone from `repository.json`; `src/Directory.Build.props` still makes every
+  shipped assembly trimmable. The family's friend grants: `AssemblyInfo.InternalsVisibleTo.cs`,
+  written by `grants` for the four assemblies, an empty `.External.cs`, and the template's root
+  `Directory.Build.targets` linking both into every project. `src/ScopedEditors.AvaloniaUI/AssemblyInfo.cs`
+  and its grant to `ScopedEditors.Tests` are gone, and `src/AGENTS.md` no longer says grants go to
+  tests only: `internal` means solution-internal. `PublicVersion` moved to that targets file, as the
+  template's is: in `Directory.Build.props` `Version` has no value yet, so a local build recorded
+  it empty. The packed README drops its *Releasing* section and links the licence absolutely, which
+  `assert-packages` now requires; `docs/publishing.md` keeps the runbook. The tests move to xunit.v3
+  `4.0.2`, Templates' xunit part 2: `Parallelization.cs` declares `[assembly:
+  Xunit.v3.Parallelization(Mode = ParallelMode.None)]`, since 4.x made `CollectionBehavior`'s
+  `DisableTestParallelization` obsolete as an error, and TrxReport is gone. `check` conforms;
+  build, 267 of 267 tests, pack, `assert-packages`, and the trim check's 3 expected warnings and
+  none new pass on Windows. The packages' README changes, so a release follows on the maintainer's
+  word.
 
 ## Next
 

@@ -29,8 +29,9 @@
 
   <ItemGroup Label="Testing">
     <!-- xunit.v3 on Microsoft.Testing.Platform — see global.json. The VSTest bridge packages are
-         deliberately absent; TrxReport is what gives CI its .trx files. -->
-    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+         deliberately absent, and so is TrxReport: nothing asks for a .trx, and it would have to
+         match the platform version xunit takes on every bump. -->
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
     <!-- The family's own assembly rules, run as tests over what this repository ships. -->
     <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.3.928" />
     <!-- The family's own markup rules, run as tests over the markup this repository ships. -->
@@ -40,9 +41,5 @@
          transitively, against the libraries' pin, and trips central transitive pinning. The
          original suite's 12.1.2 did exactly that against 12.1.0. -->
     <PackageVersion Include="Avalonia.Headless" Version="12.1.3" />
-    <!-- ⚠ Same Microsoft.Testing.Platform line as xunit.v3 3.2.2 (1.9.1). A NEWER TrxReport pins
-         the platform above what xunit's bundled MSBuild extension can load, and the failure reads
-         as an unrelated loader error. -->
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
   </ItemGroup>
 </Project>

@@ -108,23 +108,6 @@ Avalonia 12.1.3 fixes UI Automation selection never reaching the client on Windo
 12.1.3, and 12.1.2 is its newest. A host that references either directly at an earlier version fails
 restore with `NU1605`, a package downgrade, until it raises that reference.
 
-## Releasing
-
-See [docs/publishing.md](docs/publishing.md). The short version:
-
-1. Set the `NUGET_USER` repository **variable** to your nuget.org **profile name**, not an email. A
-   variable, not a secret: GitHub masks a secret in the log, which hides the one value that explains
-   a 401.
-2. Create **one** trusted-publishing policy whose glob patterns cover every id in
-   [`packages.push`](packages.push) and match nothing in [`packages.local`](packages.local).
-3. Run **Release** → *Run workflow* with the version **blank**. That logs in and stops, proving the
-   credentials without publishing.
-4. Tag `vYYYY.Q.MMDD` and push.
-
-⛔ **One policy, never one per package id.** nuget.org mints one API key per token exchange, scoped
-to one matching policy — so a second policy is never consulted and its package is rejected `403`
-after the first has already published permanently.
-
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](https://github.com/JanusMael/Bennewitz.Ninja.ScopedEditors/blob/main/LICENSE).
