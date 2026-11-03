@@ -7,8 +7,24 @@ What has stopped changing moves out rather than piling up.
 
 | Version | Tagged | Ids |
 |---|---|---|
-| `2026.3.924` | 2026-09-24, `v2026.3.924` on `4e44d8b` | `.Abstractions`, `.ViewModels`, `.Avalonia` |
+| `2026.4.1031` | 2026-10-31, `v2026.4.1031` on `b8c6f69` | `.Abstractions`, `.ViewModels`, `.Avalonia` |
+| `2026.3.924` | 2026-09-24, `v2026.3.924` on `4e44d8b` | the same three |
 | `2026.3.923` | 2026-09-23, `v2026.3.923` on `b5f3c2a` | the same three |
+
+**`2026.4.1031`** carries everything `main` gathered since `.924`; nothing is deprecated.
+
+- In `.Avalonia`: the property-name pill sets its tooltip once, on its `Border`, so a property with
+  no `Description` no longer gives a screen reader its path. Every interactive control a property
+  row draws declares an automation id bound to the property's schema path, XamlQuality's
+  `BNXQ1007`; the README documents the scheme.
+- In every package: the README names the package where it meant the package, drops its
+  *Releasing* section and links the licence absolutely. The family's friend grants replace
+  `.AvaloniaUI`'s own, and a local build records `PublicVersion` too.
+- In the repository: the family's conventions, AI-facing documents and standard build properties;
+  AssemblyQuality and XamlQuality `2026.3.928`, with the `BN*` rule ids; the headless warm-up gone;
+  xunit.v3 `4.0.2`.
+- Verified: the nuget.org flat-container lists `2026.4.1031` for all three ids, release run
+  `41231920267` succeeded, and the GitHub release carries the three packages (checked 2026-11-03).
 
 **`2026.3.924`** is the next version of the same three ids; nothing is deprecated.
 
@@ -39,94 +55,18 @@ README; `.924` supersedes it.
 
 ## On `main`, not yet released
 
-Two entries change what a package carries, the README's wording and the tooltip correction, and
-reach consumers with the next release. Nothing else here changes a package.
-
-- **The headless warm-up is gone** (`33f7d3d`, PR #3). With no `[AvaloniaTestIsolation]` the
-  session isolates per test, so the warm-up's application was discarded at once and the tests that
-  guarded it could not fail. `HeadlessSessionTests` keeps the one that can.
-- **The family conventions are checked** (`87bfbcf`, step 6 of `plans/00003` in
-  Bennewitz.Ninja.Templates): `scripts/repo-conventions.cs`, `.github/repository.json`, and the
-  `conventions` CI job.
-- **The AI-facing documents and this file** land, step 7 of the same plan: `AGENTS.md` at the root
-  and in every top-level directory, each with its `CLAUDE.md` pointer, and
-  `.github/copilot-instructions.md`. In the same change, `conventions` became a required check,
-  `release.yml` gained the `check --release` preflight, and its comments that called `NUGET_USER`
-  a secret were corrected.
-
-- **The README names the package where it means the package.** Its Semi warning said
-  `.AvaloniaUI`, the assembly; the dependency belongs to the package
-  `Bennewitz.Ninja.ScopedEditors.Avalonia`. The README is packed, so this reaches nuget.org with
-  the next release.
-
-- **The family's standard build properties** (`plans/00004` in Bennewitz.Ninja.Templates):
-  `IsContinuousIntegration` is gone and AutoVersioning is `2026.3.916` (`3f44048`);
-  `scripts/repo-conventions.cs` evaluates every project against the family's build properties
-  (`c0c331c`, `a01aa2a`); and `.github/repository.json` requires trimming, so the check fails if a
-  library loses `IsTrimmable` or turns `EnableTrimAnalyzer` off (`3a20d6a`). Build and CI only.
-
-- **The `nuget` topic is required only where `packages.push` names an id** (Templates `fb6961a`):
-  `scripts/repo-conventions.cs` is the template's current copy. CI only.
-
-- **AssemblyQuality `2026.3.928`, whose rule ids are `BNAQ1001` to `BNAQ1004`**, formerly `AQ*`:
-  the family's rule ids are BN plus the product's initials. Test-only, so no package changes. The
-  four tests and every mention are renamed. `BNAQ1002` now counts only what could fire, and no
-  shipped assembly references a covered JSON namespace, so its zero is accepted with the reason
-  beside it, as `BNAQ1001`'s already was; a planted public method returning `JsonNode` still fails
-  it. Every rule that loads assemblies also asserts `Skipped` is empty, proven by hiding
-  `Semi.Avalonia.dll` from the test output; `BNAQ1003` reads reference names and loads nothing, so
-  it asserts none. The renames came with `2026.3.925`, on which hiding `CommunityToolkit.Mvvm.dll`
-  made three rules throw rather than skip. `2026.3.928` is AssemblyQuality's fix for that and
-  changes nothing else: with that DLL hidden, `BNAQ1001`, `BNAQ1002` and `BNAQ1004` each name
-  "ScopedEditors.ViewModels: 9 type(s) would not load" in `Skipped`, and the same assertions fail.
-
-- **XamlQuality `2026.3.928`, whose rule ids are `BNXQ1001` to `BNXQ1004`**, formerly `XQ*`;
-  the later rules, `BNXQ1005` to `BNXQ1009`, are not run here. Test-only. Only `BNXQ1001` and
-  `BNXQ1002` run here, and their mentions are renamed. The renames came with `2026.3.925`, and
-  `2026.3.928` adds only opt-in rules. The tightening since `2026.3.922` changes nothing: no markup
-  writes an empty `<AutomationProperties.Name>` element. Clean build, 264 pass. An unnamed
-  `TextBox` still fails on `2026.3.928`, and an unnamed `Expander` did on `2026.3.925`.
-
-- **A tooltip covers its host's children, so the property-name pill sets its tip once.** Since
-  Avalonia 11.1, `ToolTipService` walks up from the element under the pointer to the nearest
-  control with `ToolTip.Tip` set, as XamlQuality's `avalonia-gotchas.md` now says. The
-  `PropertyNameLabel` `TextBlock` in `PropertyEditorWrapper.axaml` repeated its `Border`'s tip on
-  the belief that tooltips don't propagate child→parent; the copy is gone and the comment is
-  corrected. `NavigationNodeViewModel`'s remarks on `BadgeTooltip` keep the badge's own tooltip,
-  now because it says something different from the row's, and no longer advise repeating the
-  row's tooltip on the icon and title. Headless, on the built markup, the pointer over the label
-  opens the `Border`'s tip; the label was given a transparent background so that it hit-tests
-  without real text rendering. The copy did do one thing: a control's automation help text falls
-  back to its own tip, so a property with no `Description` no longer gives a screen reader its
-  path. Ships in `.Avalonia` and `.ViewModels` with the next release.
-
-- **Every interactive control a property row draws declares an automation id**, XamlQuality's
-  `BNXQ1007`, adopted on the owner's call on 2026-09-28. The ids are bound to the property's schema
-  path, because the wrapper renders once per property and a fixed id would repeat on every row:
-  the value input takes the path, and each other control takes the path, `#` and its role, from
-  `#reset` to `#remove:<item>`. `AxamlAutomationIdCoverageTests` holds the markup to the rule, and
-  `PropertyEditorWrapperAutomationIdTests` reads the ids off a rendered row, since the rule cannot
-  see a binding that resolves to nothing or repeats. Planted and restored: a remove button's format
-  repeating the path failed only the rendered-row test, and the reset button's id removed failed
-  all three. The trim comparison still matches its baseline. The README documents the scheme.
-  Ships in `.Avalonia` with the next release; the owner holds that release for now.
-- **Synced to Bennewitz.Ninja.Templates `2026.4.1031`** (#12, #13), on 2026-10-31.
-  `scripts/repo-conventions.cs` and `scripts/assert-packages.cs` are that release's, and the retired
-  `"trimming"` key is gone from `repository.json`; `src/Directory.Build.props` still makes every
-  shipped assembly trimmable. The family's friend grants: `AssemblyInfo.InternalsVisibleTo.cs`,
-  written by `grants` for the four assemblies, an empty `.External.cs`, and the template's root
-  `Directory.Build.targets` linking both into every project. `src/ScopedEditors.AvaloniaUI/AssemblyInfo.cs`
-  and its grant to `ScopedEditors.Tests` are gone, and `src/AGENTS.md` no longer says grants go to
-  tests only: `internal` means solution-internal. `PublicVersion` moved to that targets file, as the
-  template's is: in `Directory.Build.props` `Version` has no value yet, so a local build recorded
-  it empty. The packed README drops its *Releasing* section and links the licence absolutely, which
-  `assert-packages` now requires; `docs/publishing.md` keeps the runbook. The tests move to xunit.v3
-  `4.0.2`, Templates' xunit part 2: `Parallelization.cs` declares `[assembly:
-  Xunit.v3.Parallelization(Mode = ParallelMode.None)]`, since 4.x made `CollectionBehavior`'s
-  `DisableTestParallelization` obsolete as an error, and TrxReport is gone. `check` conforms;
-  build, 267 of 267 tests, pack, `assert-packages`, and the trim check's 3 expected warnings and
-  none new pass on Windows. The packages' README changes, so a release follows on the maintainer's
-  word.
+- **Synced to Bennewitz.Ninja.Templates `2026.4.1103`**, on 2026-11-03. `scripts/repo-conventions.cs`
+  is that release's, which also checks that markdown is checked out as LF; the root `.gitattributes`
+  already does. `Microsoft.VisualStudio.Threading.Analyzers` `18.12.1` is referenced privately, with
+  only `VSTHRD101` and `VSTHRD110` on: the family's decision of 2026-11-03.
+- **The DataGrid's *Copy value* no longer ends the host's process when a copy fails.** `VSTHRD101`
+  reported `CopyValue`'s menu handler: an async lambda on `Click` is async void, so a throw from the
+  clipboard reached the dispatcher. It is now a named local handler whose whole body is one
+  try/catch, reporting the failure at Warning through Avalonia's logger, which the host routes
+  wherever it logs; this repository has no logger of its own. Nothing is suppressed. With the lambda
+  put back, the build fails at exactly that site. `check` conforms; build, 267 of 267 tests, pack,
+  `assert-packages`, and the trim check's 3 expected warnings and none new pass on Windows.
+  `.Avalonia`'s code changes, so it ships in the next release, on the maintainer's word.
 
 ## Next
 

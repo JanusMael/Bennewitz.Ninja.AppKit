@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
+using Avalonia.Logging;
 using Avalonia.VisualTree;
 
 namespace Bennewitz.Ninja.ScopedEditors.AvaloniaUI.Behaviors;
@@ -92,7 +93,7 @@ public static class CopyValue
         dg.SetValue(IsMenuAttachedProperty, true);
 
         MenuItem copyItem = new() { Header = "Copy value" };
-        copyItem.Click += async (_, _) => await CopyCellAsync(dg);
+        copyItem.Click += OnCopyClick;
 
         if (dg.ContextMenu is null)
         {
@@ -104,6 +105,22 @@ public static class CopyValue
         }
 
         dg.ContextMenu.Items.Add(copyItem);
+
+        // Async void, as an event handler has to be, so the whole body is guarded: a throw escaping
+        // it would reach the dispatcher and end the host's process over a failed copy. Reported
+        // through Avalonia's logger, which the host routes to wherever it logs.
+        async void OnCopyClick(object? sender, RoutedEventArgs e)
+        {
+            try
+            {
+                await CopyCellAsync(dg);
+            }
+            catch (Exception ex)
+            {
+                Logger.TryGet(LogEventLevel.Warning, LogArea.Control)?
+                    .Log(dg, "Copying a cell's value to the clipboard failed: {Exception}", ex);
+            }
+        }
     }
 
     // ── Pointer handler ──────────────────────────────────────────────────────
