@@ -10,46 +10,26 @@ All five ids — `Bennewitz.Ninja.AppServices`, `.Abstractions`, `.Logging`, `.A
 
 | Version | Tag | What it carried | Verified |
 |---|---|---|---|
+| `2026.4.1031` | `v2026.4.1031` at `7fe414e`, 2026-10-31 | The sync to Bennewitz.Ninja.Templates `2026.4.1031` (#16, #17): the packed README drops its *Releasing* section and links the licence absolutely. `BucketedRollingFileSink`'s inner minimum level is documented as no filter, and `MinimumLevel` and `ConfigureLogger` say how to lower one source below the minimum. In the repository: `scripts/repo-conventions.cs` and `scripts/assert-packages.cs` from that release, the comments the move left stale corrected, a tier required of every project under `src/`, and xunit.v3 `4.0.2` | Every id lists `2026.4.1031` in the nuget.org flat-container. Release run `41231829335` succeeded, and the GitHub release carries all five packages |
 | `2026.4.1001` | `v2026.4.1001` at `03ebb64`, 2026-10-01 | **`Bennewitz.Ninja.AppServices.EntryPoint`, a new id** (`plans/00001`, #8): `AppMain`'s `RunConsoleAsync`, `RunHostAsync` and `RunDesktop`, with `AppMainOptions` and `UsageException`. It references nothing and is native AOT compatible, measured by CI's required `aot-linux` and `aot-windows` jobs; a console or desktop run flushes the log on SIGTERM as well (see the drift below). `.Avalonia` gains `AvaloniaDiagnostics.EntryPointOptions()` and depends on `.EntryPoint`. **Breaking:** `DefaultShareService`'s `Process` seam is internal, granted to `ClaudeForge.Tests` (#10). Every package carries the solution-wide friend grants of Templates' `plans/00006` (#9). In the repository: the family's conventions, AI-facing documents and standard build properties, `PublicVersion` in `Directory.Build.targets`, AssemblyQuality 2026.3.929 with `BNAQ1005`, the headless bootstrap removed, `PackagingTests` failing closed, the numbered plans, and `packages.push` in dependency order | Every id lists `2026.4.1001` in the nuget.org flat-container, pushed in dependency order and each `Created`. A console app whose `nuget.config` names only nuget.org restored all five at `2026.4.1001`, built, and ran through `AppMain`. Before the tag, the last judge pass (its caveats fixed), the blank-version preflight's login and `check --release`, and `main`'s CI were green. The Templates session was told the version, the API and the AOT measurement the same day, `plans/00001` step 8 |
 | `2026.3.924` | `v2026.3.924` at `d1c5c9c`, 2026-09-24 | **Every assembly marked trimmable**, with the trim analyser on every build (`5600c1c`), fixing `.923`. **Breaking:** the Avalonia package keeps its id but its assembly and namespaces are `AppServices.AvaloniaUI` (`74b867c`, `a853070`); no `CancellationToken` has a default, `IShareService.ShareTextAsync`'s `uri` is required and `ShareOutcome` gains `Cancelled` (`746a856`); Avalonia 12.1.3 is the floor (`d1c5c9c`). `AvaloniaDiagnosticsOptions` gains `ConfigureLogger` and `EventListener` (`4815c74`). In the repository: the original MSTest suites ported to xunit v3 (`8b2caf2`, `cfb5b14`), and the AssemblyQuality rules run as tests (`44d9ba4`) | Every id lists `2026.3.924` in the nuget.org flat-container. A host referencing Avalonia below 12.1.3 fails restore with `NU1605`, measured against the packed packages |
 | `2026.3.923` | `v2026.3.923` at `5626145`, 2026-09-23 | The first release: the four ids moved out of OpenForge2k under `plans/00002` in Bennewitz.Ninja.Templates (`0928c61`). Launches return `ValueTask<LaunchResult>` and diagnostics go through a `DiagnosticSink` (`043b545`); the layering guards (`5626145`). ⚠ It shipped without `IsTrimmable`, with a defaulted `CancellationToken` (AQ1001) and `….Avalonia` namespaces shadowing Avalonia's root (AQ1004), and with the template's `TODO` paragraph as the packed README. All four are fixed in `.924` and guarded by `PackageMetadataTests` and `AssemblyQualityTests` | Every id listed in the nuget.org flat-container, and consumed from a project whose `nuget.config` names only nuget.org |
 
 ## On `main`, not yet released
 
-- **`BucketedRollingFileSink`'s inner `.MinimumLevel.Information()` says it is not a filter.** It
-  reads like one, and DiffView nearly reported it on 2026-10-08 as dropping a host's `Debug` lines.
-  `Emit` formats each event itself and passes every finished line on at Information, so it never
-  drops one; `BucketedRollingFileSinkTests.Emit_WritesDebugAndVerbose_UnderTheirOwnLevel` measures
-  that.
-- **A minimum per source is documented, not added.** DiffView found none the same day, in the copy
-  of this pipeline it consumes from ClaudeForge, which has no `ConfigureLogger`. Here
-  `ConfigureLogger` already takes Serilog's `MinimumLevel.Override`, which lowers one source below
-  `MinimumLevel` as readily as it raises one, so no option of this package's own was added.
-  `MinimumLevel` and `ConfigureLogger` now say so, and
-  `AvaloniaDiagnosticsHookTests.ConfigureLogger_can_lower_one_source_below_MinimumLevel` measures it.
-- **In the repository, the comments the move left stale are corrected.**
-  `AppServices.Abstractions.csproj` names `LayeringTests`; `MovedSourceSmokeTests` names the
-  layering guards as they now exist; `ShellLauncherWindowsTerminalTests` gives the
-  Microsoft.Testing.Platform filter, `--filter-trait "Category=…"`, which selects its one
-  diagnostic and three integration tests; `Parallelization.cs` names the static state and the
-  process-wide handlers the serial run protects, since `SerilogAvaloniaSinkTests`, which it named,
-  changes none.
-- **In the repository, every project under `src/` must have a tier.**
-  `LayeringTests.Every_project_under_src_has_a_tier` fails for a project with no row in
-  `LayeringTests.Tiers`, which would otherwise sit outside every layering check and BNAQ1003 with
-  nothing failing. With the `AppServices.EntryPoint` row deleted, it fails and names that project.
-- **Synced to Bennewitz.Ninja.Templates `2026.4.1031`** (#16, #17), on 2026-10-31.
-  `scripts/repo-conventions.cs` and `scripts/assert-packages.cs` are that release's; the retired
-  `"trimming"` key is gone from `repository.json`, and `src/Directory.Build.props` still makes every
-  shipped assembly trimmable. The packed README drops its *Releasing* section, as the template's has,
-  and links the licence absolutely: `assert-packages` now fails a relative link, since nuget.org
-  resolves one against itself. `docs/publishing.md` keeps the runbook. The tests move to xunit.v3
-  `4.0.2`, Templates' xunit part 2: `Parallelization.cs` declares `[assembly:
-  Xunit.v3.Parallelization(Mode = ParallelMode.None)]`, since 4.x made `CollectionBehavior`'s
-  `DisableTestParallelization` obsolete as an error, and TrxReport is gone, which nothing asked a
-  `.trx` of. `check` conforms; build, 184 of 199 tests (the 15 skipped need the native probe or
-  Linux, as before), pack and `assert-packages` pass on Windows. The packages' README changes, so a
-  release follows on the maintainer's word.
+- **Synced to Bennewitz.Ninja.Templates `2026.4.1103`**, on 2026-11-03. `scripts/repo-conventions.cs`
+  is that release's, which also checks that markdown is checked out as LF; the root `.gitattributes`
+  already does. `Microsoft.VisualStudio.Threading.Analyzers` `18.12.1` is referenced privately, with
+  only `VSTHRD101` and `VSTHRD110` on: the family's decision of 2026-11-03.
+- **`.Avalonia`'s three copy handlers no longer end the process when a copy fails.** `VSTHRD101`
+  reported each one: an async lambda on `Click` or `PointerPressed` is async void, so a throw from
+  the clipboard reached the dispatcher. The three are Copy to Clipboard in `FatalErrorDialog` and
+  `NonFatalNoticeDialog`, and the copy glyph beside a path in `AvaloniaDialogService`. Each is now a
+  named handler whose whole body is one try/catch, logging the failure through Serilog at Warning.
+  Nothing is suppressed. With the lambdas put back, the build fails at exactly those three sites.
+  `check` conforms; build, 184 of 199 tests (the 15 skipped as before), pack and `assert-packages`
+  pass on Windows. `.Avalonia`'s code changes, so it ships in the next release, on the maintainer's
+  word.
 
 ## Drift from `plans/00001`
 

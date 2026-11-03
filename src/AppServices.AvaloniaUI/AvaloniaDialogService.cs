@@ -12,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
 using Bennewitz.Ninja.AppServices.Abstractions;
+using Serilog;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 
@@ -652,15 +653,26 @@ public sealed class AvaloniaDialogService : IDialogService
         };
         ToolTip.SetTip(copyGlyph, $"Copy {path}");
 
-        copyGlyph.PointerPressed += async (_, _) =>
+        copyGlyph.PointerPressed += OnCopyGlyphPressed;
+
+        // Async void, as an event handler has to be, so the whole body is guarded: a throw escaping
+        // it would reach the dispatcher and end the process over a failed copy.
+        async void OnCopyGlyphPressed(object? sender, PointerPressedEventArgs e)
         {
-            TopLevel? top = TopLevel.GetTopLevel(dialogWindow);
-            if (top?.Clipboard is { } clip)
+            try
             {
-                await clip.SetTextAsync(path);
-                ToolTip.SetTip(copyGlyph, "Copied!");
+                TopLevel? top = TopLevel.GetTopLevel(dialogWindow);
+                if (top?.Clipboard is { } clip)
+                {
+                    await clip.SetTextAsync(path);
+                    ToolTip.SetTip(copyGlyph, "Copied!");
+                }
             }
-        };
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Copying {Path} to the clipboard failed", path);
+            }
+        }
 
         // BaselineAlignment.Center centres the glyph on the surrounding
         // text's vertical centre. Default `Baseline` aligns the glyph's

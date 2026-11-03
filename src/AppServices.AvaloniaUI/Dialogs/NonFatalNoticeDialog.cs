@@ -3,9 +3,11 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Serilog;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 
@@ -91,14 +93,7 @@ public sealed class NonFatalNoticeDialog : Window
         // screen reader reads the glyph name aloud.
         AutomationProperties.SetName(copyBtn, "Copy to Clipboard");
         AutomationProperties.SetHelpText(copyBtn, "Copy the full notice text to the clipboard");
-        copyBtn.Click += async (_, _) =>
-        {
-            IClipboard? clipboard = GetTopLevel(this)?.Clipboard;
-            if (clipboard != null)
-            {
-                await clipboard.SetTextAsync(_bodyText);
-            }
-        };
+        copyBtn.Click += OnCopyClick;
 
         Button closeBtn = new()
         {
@@ -121,6 +116,24 @@ public sealed class NonFatalNoticeDialog : Window
         root.Children.Add(scroll);
 
         return root;
+    }
+
+    // Async void, as an event handler has to be, so the whole body is guarded: a throw escaping it
+    // would reach the dispatcher and end the process over a failed copy.
+    private async void OnCopyClick(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            IClipboard? clipboard = GetTopLevel(this)?.Clipboard;
+            if (clipboard != null)
+            {
+                await clipboard.SetTextAsync(_bodyText);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Copying the notice text to the clipboard failed");
+        }
     }
 
     /// <summary>
