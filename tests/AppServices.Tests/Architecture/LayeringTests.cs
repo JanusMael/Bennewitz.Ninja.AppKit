@@ -62,11 +62,11 @@ public sealed class LayeringTests
     ];
 
     /// <summary>
-    /// Name fragments belonging to another repository. ⚠ The two families share no edge — measured,
-    /// not assumed — so either could be versioned or abandoned without touching the other. A
+    /// Name fragments belonging to another family or repository. ⚠ The families share no edge — measured,
+    /// not assumed — so any could be versioned or abandoned without touching the others. A
     /// reference here would quietly end that.
     /// </summary>
-    internal static readonly string[] ForeignFamilies = ["ScopedEditors", "LayeredEditors", "ClaudeForge", "AgentForge"];
+    internal static readonly string[] ForeignFamilies = ["ScopedEditors", "DiffView", "LayeredEditors", "ClaudeForge", "AgentForge"];
 
     [Fact]
     public void Every_tier_named_here_actually_exists()
@@ -89,7 +89,7 @@ public sealed class LayeringTests
         // no row is outside every check in this class and outside BNAQ1003, and nothing fails.
         string[] projects =
         [
-            .. Directory.EnumerateFiles(Path.Combine(RepoRoot(), "src"), "*.csproj", SearchOption.AllDirectories)
+            .. Directory.EnumerateFiles(Path.Combine(RepoRoot(), "src"), "AppServices*.csproj", SearchOption.AllDirectories)
                 .Select(path => Path.GetFileNameWithoutExtension(path))
                 .Order(StringComparer.Ordinal),
         ];

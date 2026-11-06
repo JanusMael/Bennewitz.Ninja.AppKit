@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../DiffView.Build.props" />
+
+  <PropertyGroup>
+    <Description>
+      Diff model for the DiffView side-by-side control: alignment, probing, search and
+      diagnostics. No UI dependency.
+    </Description>
+    <IsPackable>true</IsPackable>
+    <!-- See the note in DiffView.Avalonia.csproj: the package carries the Bennewitz.Ninja prefix,
+         the assembly stays unprefixed. Bennewitz.Ninja.DiffView.Avalonia depends on this one. -->
+    <PackageId>Bennewitz.Ninja.DiffView.Core</PackageId>
+    <AssemblyProduct>DiffView</AssemblyProduct>
+    <FamilyReadme>docs/diffview.md</FamilyReadme>
+    <PackageTags>diff;compare;text-diff;diffplex;alignment;side-by-side</PackageTags>
+    <!-- Public API is documented; a missing comment is a build error (CS1591 under warnings-as-errors). -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Marked trimmable, with the trim analyzer on every build (plan 00004 in
+         Bennewitz.Ninja.Templates). The mark is compiled in, and a consumer's TrimMode=partial
+         publish trims only marked assemblies. The analyzer cannot see compiled XAML; the trim
+         check's TrimMode=link publish of the demo is the ILLink pass that can. -->
+    <IsTrimmable>true</IsTrimmable>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DiffPlex" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <!-- The library's internals reach its own tests and nothing else, so it opts out of the solution's
+       friend grants (the root Directory.Build.targets) and declares its one grant here: the compiler
+       goes on holding every host in this repository to the public surface. -->
+  <PropertyGroup>
+    <SolutionFriendGrants>false</SolutionFriendGrants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>DiffView.Core.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

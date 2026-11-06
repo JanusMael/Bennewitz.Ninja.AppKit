@@ -7,14 +7,32 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
 
+# ⛔ Every job takes the two feed steps first, before anything restores. NuGet.config names the
+# sibling feed ../nuget-local, which holds what DiffView's demo references from the author's other
+# repositories, and a restore fails on a source that does not exist. The reference fetch clones
+# ClaudeForge at its pin when no sibling checkout exists, and the pack script builds the diagnostics
+# package from it.
+#
+# ⛔ Every family runs on every pull request, with no path filters (plans/00009 decision 14 in
+# Bennewitz.Ninja.Templates): requiredChecks names these jobs, and a job a path filter skips never
+# reports, which blocks every pull request indefinitely.
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -25,14 +43,83 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
+      - name: Restore
+        run: dotnet restore AppKit.slnx
+
       - name: Build
-        run: dotnet build AppServices.slnx -c Release --nologo -warnaserror
+        run: dotnet build AppKit.slnx --no-restore -c Release --nologo -warnaserror
 
       # PackagingTests runs here: it reads the project files and the two package lists, so it
       # catches an unclassified packable project on the push that adds it rather than at release
       # time, when a mistake is already permanent.
+      #
+      # ReportTrx reaches DiffView's tests alone (tests/DiffView.Tests.props): the other families'
+      # tests carry no TrxReport extension, and the switch fails on a test project without one.
       - name: Test
-        run: dotnet test --solution AppServices.slnx --no-build -c Release
+        run: >
+          dotnet test --solution AppKit.slnx
+          --no-build -c Release
+          -p:ReportTrx=true
+          --results-directory ./test-results
+
+      # ⚠ Away from Linux DiffView's image baselines are filtered out (LinuxBaselineAttribute,
+      # tests/DiffView.Tests.props): they were rendered and reviewed on Linux, and another platform's
+      # rasterization differs without anything being wrong. A filter is silent in the test summary,
+      # and tests that quietly vanish read as tests that passed, so this says how many were left out,
+      # and which. --ignore-exit-code 8 because most of the test assemblies hold no frame test, and a
+      # listing that finds none in an assembly exits 8.
+      - name: Linux-only baselines left out here
+        if: ${{ !cancelled() && runner.os != 'Linux' }}
+        run: >
+          dotnet test --solution AppKit.slnx
+          --no-build -c Release --list-tests
+          -p:ExcludeLinuxBaselines=false
+          --filter-trait Baseline=Linux
+          --ignore-exit-code 8
+
+      # ⛔ The mutation harness's standing half. A guard marked inert-at-pin is excused only at the
+      # version it was measured against, so a pin bump is exactly the change that lands green while
+      # that guard stops being excused; this fails on that, and on a `throw` in a gate file, which the
+      # harness cannot attribute a failure to. It proves no guard: a full run does that, and one is
+      # owed after any change to a gate file, a gated subject or a pin. One OS, because it reads
+      # files; !cancelled() so a red test step does not hide it.
+      - name: Mutation-harness guards
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        run: dotnet run scripts/mutate-gates.cs -- --guards
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.os }}
+          path: ./test-results/*.trx
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # ⭐ The step that turns a red CI run into evidence. Three kinds of gate here write a "received"
+      # file beside the committed one they disagree with: the theme audit's regenerated report, its
+      # compat dictionaries, which sit under src, and every Verify image snapshot. CI then throws the
+      # runner away, and the failure message names a file nobody outside the runner can read.
+      #
+      # ⚠ if: failure() rather than always(): on a green run these paths do not exist, and an
+      # upload-artifact step with no matching path warns.
+      - name: Upload what the gates rejected
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: received-${{ matrix.os }}
+          path: |
+            docs/*.received.md
+            src/**/*.received.*
+            tests/**/*.received.*
+          if-no-files-found: ignore
+          retention-days: 14
 
   # ⭐ Packing on every push, not only at release. The release workflow's pack step is the first
   # time packing runs there, so a packaging mistake would surface with a tag already pushed and
@@ -49,8 +136,14 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
       - name: Pack
-        run: dotnet pack AppServices.slnx -c Release --nologo --output ./packages/Release
+        run: dotnet pack AppKit.slnx -c Release --nologo --output ./packages/Release
 
       # The same guard the release runs, against the same artifacts, at no cost.
       - name: Assert packed matches declared
@@ -76,16 +169,25 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
       - name: Check the repository conventions
         env:
           GH_TOKEN: ${{ github.token }}
         run: dotnet run --file scripts/repo-conventions.cs -- check
 
-  # ⛔ The measurement behind AppServices.EntryPoint's IsAotCompatible (plans/00001, decisions 2 and
-  # 11): tests/EntryPointProbe published with native AOT, the library rooted whole and warnings as
-  # errors, then the probe's contract run against the native binary. One job per platform, since a
-  # native binary is built for its own. Both are required checks in .github/repository.json, so a
-  # change that breaks the claim cannot merge.
+  # ⛔ The measurement behind AppServices.EntryPoint's IsAotCompatible (decisions 2 and 11 of
+  # plans/00001): tests/EntryPointProbe published with native AOT, the library rooted whole and
+  # warnings as errors, then the probe's contract run against the native binary. One job per platform,
+  # since a native binary is built for its own. Both are required checks in .github/repository.json,
+  # so a change that breaks the claim cannot merge.
+  #
+  # The test step names its project: --filter-class over the solution finds nothing in the other test
+  # assemblies, and a test assembly that runs no test exits 8.
   aot-linux:
     runs-on: ubuntu-latest
 
@@ -98,12 +200,18 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
       # Native AOT links with the platform's C toolchain.
       - name: Install the native toolchain
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
       - name: Build
-        run: dotnet build AppServices.slnx -c Release --nologo -warnaserror
+        run: dotnet build tests/AppServices.Tests/AppServices.Tests.csproj -c Release --nologo -warnaserror
 
       - name: Publish the entry-point probe with native AOT
         run: dotnet publish tests/EntryPointProbe/EntryPointProbe.csproj -c Release -r linux-x64 -p:PublishAot=true -warnaserror --nologo -o artifacts/aot
@@ -111,7 +219,7 @@ jobs:
       - name: Run the probe's contract against the native binary
         env:
           ENTRYPOINT_PROBE_NATIVE: ${{ github.workspace }}/artifacts/aot/EntryPointProbe
-        run: dotnet test --solution AppServices.slnx --no-build -c Release --filter-class AppServices.Tests.EntryPoint.EntryPointProbeTests
+        run: dotnet test --project tests/AppServices.Tests/AppServices.Tests.csproj --no-build -c Release --filter-class AppServices.Tests.EntryPoint.EntryPointProbeTests
 
   aot-windows:
     runs-on: windows-latest
@@ -125,8 +233,14 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
       - name: Build
-        run: dotnet build AppServices.slnx -c Release --nologo -warnaserror
+        run: dotnet build tests/AppServices.Tests/AppServices.Tests.csproj -c Release --nologo -warnaserror
 
       - name: Publish the entry-point probe with native AOT
         run: dotnet publish tests/EntryPointProbe/EntryPointProbe.csproj -c Release -r win-x64 -p:PublishAot=true -warnaserror --nologo -o artifacts/aot
@@ -134,4 +248,129 @@ jobs:
       - name: Run the probe's contract against the native binary
         env:
           ENTRYPOINT_PROBE_NATIVE: ${{ github.workspace }}/artifacts/aot/EntryPointProbe.exe
-        run: dotnet test --solution AppServices.slnx --no-build -c Release --filter-class AppServices.Tests.EntryPoint.EntryPointProbeTests
+        run: dotnet test --project tests/AppServices.Tests/AppServices.Tests.csproj --no-build -c Release --filter-class AppServices.Tests.EntryPoint.EntryPointProbeTests
+
+  # ⭐ The only check that reads ScopedEditors' COMPILED XAML. Avalonia's XAML compiler weaves IL into
+  # ScopedEditors.AvaloniaUI after Roslyn has finished, so the trim analyser that runs in `build`
+  # never sees it. ILLink reads the finished assemblies, woven IL included. TrimCheck.csproj roots
+  # every shipped assembly, and the warnings ILLink reports must match
+  # trimcheck/expected-warnings.txt exactly, in both directions.
+  trim:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
+      # ⚠ `shell: bash` is what turns on pipefail. Left unspecified, the shell runs as `bash -e`,
+      # so a publish that failed would pass this step through tee and leave the comparison an
+      # empty log, which it fails too, but with the wrong message.
+      - name: Publish trimmed
+        shell: bash
+        run: dotnet publish trimcheck/TrimCheck.csproj -c Release -r linux-x64 --nologo | tee trim-publish.log
+
+      - name: Compare warnings with the baseline
+        run: dotnet run scripts/check-trim-warnings.cs -- trim-publish.log trimcheck/expected-warnings.txt
+
+  culture-leg:
+    name: Culture Leg (de-DE)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
+      - name: Restore
+        run: dotnet restore AppKit.slnx
+
+      - name: Build (Debug)
+        run: dotnet build AppKit.slnx --no-restore -c Debug -warnaserror
+
+      # The audit, not a second platform. DiffView's suite runs pinned to a culture the library
+      # ships, and a failure here that is green everywhere else means one thing: a test asserted
+      # English text without saying it wanted English, invisible on an English runner, red on a
+      # German desk. One OS, because the axis under test is the culture.
+      #
+      # Tests that are genuinely about English words say so with [EnglishChrome] and are out of this
+      # leg's reach by construction; a test added without it is in the leg by default, which is the
+      # way round it should be.
+      - name: Test (DIFFVIEW_TEST_UI_CULTURE=de-DE)
+        env:
+          DIFFVIEW_TEST_UI_CULTURE: de-DE
+        run: >
+          dotnet test --solution AppKit.slnx
+          --no-build -c Debug
+          -p:ReportTrx=true
+          --results-directory ./test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-culture-de-DE
+          path: ./test-results/*.trx
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # ⭐ As in `build`: what the gates rejected, for a red run to be read at all.
+      - name: Upload what the gates rejected
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: received-culture-de-DE
+          path: |
+            docs/*.received.md
+            src/**/*.received.*
+            tests/**/*.received.*
+          if-no-files-found: ignore
+          retention-days: 14
+
+  trim-check:
+    name: Trim Check (Release linux-x64)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
+      # DiffView's first intended host publishes trimmed; a new IL2xxx here is fixed or suppressed
+      # with a DECISIONS.md entry, never ignored.
+      - name: Publish (Release, linux-x64, trimmed)
+        run: >
+          dotnet publish src/DiffView.Demo
+          -c Release -r linux-x64
+          --self-contained true
+          -o /tmp/trim-check

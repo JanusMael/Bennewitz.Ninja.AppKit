@@ -1,0 +1,341 @@
+using AvaloniaEdit.Document;
+using Bennewitz.Ninja.DiffView;
+using Bennewitz.Ninja.DiffView.Core;
+
+namespace Bennewitz.Ninja.AgentBaseline;
+
+/// <summary>
+/// The review: the seed's text on the left as an accumulator, edited by hand and never replaced, and
+/// the queue's candidates shown on the right one at a time — plan 00034 step 5, <i>cycling with the
+/// accumulator intact</i> — and the four decisions made about a candidate's sections, step 6. Each
+/// pane shows its document's normalised text, which is the text the queue counted every candidate's
+/// changes over.
+/// </summary>
+/// <remarks>
+/// <para>
+/// ⛔ <b>The left is assigned once, here, and never again.</b> Assigning a side a source that differs
+/// from the one it holds replaces that side's <c>TextDocument</c> — AGENTS.md §6 — and with it every
+/// edit and the undo stack, however faithfully the new source copies the text across. Cycling assigns
+/// the right alone, which <c>DiffBuildController.OnSourceChanged</c> keeps strictly per side, and each
+/// build compares the candidate against the left as it now stands: once the left has been edited, the
+/// build reads its live text rather than the seed's.
+/// </para>
+/// <para>
+/// ⚠ <b>A source equal to the one a side holds is not assigned at all</b>, measured: a
+/// <see cref="PaneSource"/> is a record, and Avalonia raises a property change only for a value that
+/// differs. So the same seed assigned twice is harmless, and the first assignment that differs in any
+/// member — the text, the title, the path — is the defect. That is what makes it easy to write: a left
+/// whose title counted the candidates would lose every edit on the first cycle.
+/// </para>
+/// <para>
+/// ⛔ <b>Neither source carries a path.</b> <see cref="SideBySideDiffView.Save"/> writes a side back to
+/// its <see cref="PaneSource.Path"/>, and the header's menu offers that save the moment the side is
+/// dirty, so a left built from the seed's file would offer to overwrite that machine's live file —
+/// which decision 9 exists to rule out. The baseline is written by this tool, to a new path, at step 10.
+/// </para>
+/// <para>
+/// ⭐ <b>A take and a drop are edits of the left's own document</b>, positioned by a parse of the left's
+/// live text and checked before they are made — <see cref="AccumulatorEdits"/>, decision 5 — never a
+/// copy over the diff's alignment, which over a reordered candidate writes one rule over another. Each
+/// is one edit, so one undo takes it back. A <c>leave</c> and a <c>defer</c> write nothing to the left:
+/// the first goes to the <see cref="DurableStore"/>, the second to the <see cref="SessionStore"/>, and
+/// that difference is the one decision 10 turns on.
+/// </para>
+/// <para>
+/// ⚠ The stores record what was decided, and the left is the operator's to go on editing — an undo of
+/// a take, or the take edited by hand. Reconciling the two is decision 9c's work at save, which reads the
+/// left's section against the text the take recorded (<see cref="DurableStore.Reconcile"/>).
+/// </para>
+/// <para>
+/// ⭐ A session begins from the decisions earlier runs made when it is given them — step 8, read back from
+/// the decision file a save wrote — so a version decided then is answered now (<see cref="StandingOf"/>).
+/// It never begins from an earlier session store: what was put off is offered again.
+/// </para>
+/// <para>
+/// Every title ends with its candidate's own file name, because the control chooses a pane's grammar
+/// from the title's extension when there is no path. A title of the label alone would highlight one
+/// candidate and not the next, as a label happened to end in <c>.md</c> or not.
+/// </para>
+/// <para>
+/// ⭐ <b>Where the accumulator moved under a review is the session store's to say</b> — decision 11's narrow
+/// staleness, <see cref="Staleness"/>. Every move of the right pane records the accumulator as the candidate
+/// leaving it was reviewed against, and a candidate is stale where the accumulator has since gained or changed a
+/// section it carries a version of its own. Step 10's save is what warns on it.
+/// </para>
+/// <para>Like the view it drives, a session is used on the UI thread only.</para>
+/// </remarks>
+internal sealed class ReviewSession
+{
+    private readonly SideBySideDiffView view;
+
+    /// <summary>
+    /// Why <paramref name="queue"/> cannot be reviewed — it holds only the seed — or <see langword="null"/>
+    /// when it can: one reading, for the session and for the start-up that refuses before a window opens.
+    /// </summary>
+    internal static string? WhyNothingToReview(ReviewQueue queue)
+    {
+        if (queue.Items.Count == 0)
+        {
+            return $"nothing to review: the corpus holds only the seed, \"{queue.Seed.Label}\", and a file "
+                + "has nothing to offer against itself";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Seeds <paramref name="view"/>'s left with <paramref name="queue"/>'s seed and shows the first
+    /// candidate on its right.
+    /// </summary>
+    /// <param name="queue">The seed and the candidates to review.</param>
+    /// <param name="view">The view to review them in.</param>
+    /// <param name="earlier">
+    /// The decisions earlier runs made, as <see cref="DecisionFile.Read"/> gives them back, or
+    /// <see langword="null"/> for a first run.
+    /// </param>
+    /// <exception cref="CorpusRefusedException">
+    /// The queue holds nothing to review — refused before the view is touched.
+    /// </exception>
+    internal ReviewSession(ReviewQueue queue, SideBySideDiffView view, IReadOnlyList<SectionDecision>? earlier = null)
+    {
+        ArgumentNullException.ThrowIfNull(queue);
+        ArgumentNullException.ThrowIfNull(view);
+        if (WhyNothingToReview(queue) is { } why)
+        {
+            throw new CorpusRefusedException(why);
+        }
+
+        Queue = queue;
+        Durable = new DurableStore(earlier ?? []);
+        this.view = view;
+
+        // Merging two phrasings is typing in the left (decision 9c), so the accumulator is editable. A
+        // candidate is read and never changed: what a take records is the candidate's own version.
+        view.LeftReadOnly = false;
+        view.RightReadOnly = true;
+        view.LeftSource = new PaneSource(queue.Seed.Document.Text)
+        {
+            Title = TitleOf($"baseline from {queue.Seed.Label}", queue.Seed),
+        };
+        Show();
+    }
+
+    /// <summary>The seed and the candidates under review, in the order they are reviewed.</summary>
+    internal ReviewQueue Queue { get; }
+
+    /// <summary>Taken, rejected and dropped: what the next run must know was decided, earlier runs' first.</summary>
+    internal DurableStore Durable { get; }
+
+    /// <summary>Where the review is, and what it has put off for now.</summary>
+    internal SessionStore Session { get; } = new();
+
+    /// <summary>Where in <see cref="ReviewQueue.Items"/> the right pane is.</summary>
+    internal int Position => Session.Position;
+
+    /// <summary>The candidate the right pane shows.</summary>
+    internal QueuedCandidate Current => Queue.Items[Position];
+
+    /// <summary>The accumulator's text as it now stands — takes, drops and typing alike: what a save writes.</summary>
+    internal string Accumulator => view.LeftDocument.Text;
+
+    /// <summary>
+    /// The current candidate's section that governs 1-based <paramref name="line"/> of the right pane, or
+    /// <see langword="null"/> for a line above its first heading or past its last line. The right shows
+    /// the text the candidate's outline was read from, so its lines are the outline's.
+    /// </summary>
+    internal MarkdownSection? CandidateSectionAt(int line) => SectionAt(Current.Candidate.Document.Outline, line);
+
+    /// <summary>
+    /// The heading path of the accumulator's section that governs 1-based <paramref name="line"/> of the
+    /// left pane, read from a parse of the left's live text, or <see langword="null"/> for a line in no
+    /// section.
+    /// </summary>
+    internal string? AccumulatorPathAt(int line) => SectionAt(MarkdownOutline.Read(view.LeftDocument.Text), line)?.HeadingPath;
+
+    /// <summary>
+    /// Shows the next candidate. At the last there is none, so nothing moves and the answer is
+    /// <see langword="false"/>.
+    /// </summary>
+    internal bool Next()
+    {
+        if (Position == Queue.Items.Count - 1)
+        {
+            return false;
+        }
+
+        MoveTo(Position + 1);
+        return true;
+    }
+
+    /// <summary>
+    /// Shows the previous candidate. At the first there is none, so nothing moves and the answer is
+    /// <see langword="false"/>.
+    /// </summary>
+    internal bool Previous()
+    {
+        if (Position == 0)
+        {
+            return false;
+        }
+
+        MoveTo(Position - 1);
+        return true;
+    }
+
+    /// <summary>Shows the candidate at <paramref name="index"/> in <see cref="ReviewQueue.Items"/>.</summary>
+    /// <exception cref="ArgumentOutOfRangeException">There is no candidate there; nothing moves.</exception>
+    internal void JumpTo(int index)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(index, Queue.Items.Count);
+        MoveTo(index);
+    }
+
+    /// <summary>
+    /// Takes <paramref name="section"/> — one of the right's sections — into the accumulator: its
+    /// version replaces the left's section at the same heading path, or is inserted where the candidate
+    /// has it when the left holds none. Recorded as taken, with the content taken.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="section"/> is not one of the current candidate's.</exception>
+    /// <exception cref="DecisionRefusedException">
+    /// The take cannot be placed, or would change another section; nothing is written or recorded.
+    /// </exception>
+    internal TakeResult Take(MarkdownSection section)
+    {
+        int index = IndexInCurrent(section);
+        TextDocument left = view.LeftDocument;
+        (TextEdit edit, TakeResult result) = AccumulatorEdits.Take(left.Text, Current.Candidate.Document.Outline, index);
+        if (result != TakeResult.Unchanged)
+        {
+            left.Replace(edit.Offset, edit.Length, edit.Text);
+        }
+
+        Decide(new SectionDecision(DecisionKind.Taken, SectionIdentity.Of(section), Current.Candidate.Label, section.Content));
+        return result;
+    }
+
+    /// <summary>
+    /// Leaves <paramref name="section"/> — one of the right's sections — out of the baseline, durably:
+    /// the same version is not offered again. The left is not touched.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="section"/> is not one of the current candidate's.</exception>
+    internal void Leave(MarkdownSection section)
+    {
+        IndexInCurrent(section);
+        Decide(new SectionDecision(DecisionKind.Rejected, SectionIdentity.Of(section), Current.Candidate.Label, null));
+    }
+
+    /// <summary>
+    /// Puts <paramref name="section"/> — one of the right's sections — off for this session, deciding
+    /// nothing: it is held in the session store and never in the durable one. The left is not touched.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="section"/> is not one of the current candidate's.</exception>
+    /// <exception cref="DecisionRefusedException">
+    /// That version is already decided, and putting it off would leave the decision standing unseen.
+    /// </exception>
+    internal void Defer(MarkdownSection section)
+    {
+        IndexInCurrent(section);
+        SectionIdentity identity = SectionIdentity.Of(section);
+        if (Durable.LatestFor(identity) is { } decided)
+        {
+            throw new DecisionRefusedException(
+                $"this version of {MarkdownOutline.Spoken(section.HeadingPath)} is already {decided.Kind.Spoken()}, and putting it off "
+                + "would leave that decision standing where nobody can see it — decide it again instead");
+        }
+
+        Session.Defer(new DeferredSection(identity, Current.Candidate.Label));
+    }
+
+    /// <summary>
+    /// What the durable store says of <paramref name="section"/> — one of the right's sections — earlier
+    /// runs' decisions included: whether a review offers it again, and why not
+    /// (<see cref="DurableStore.StandingOf"/>).
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="section"/> is not one of the current candidate's.</exception>
+    internal SectionStanding StandingOf(MarkdownSection section)
+    {
+        IndexInCurrent(section);
+        return Durable.StandingOf(section, Current.Candidate.Label);
+    }
+
+    /// <summary>
+    /// Where the candidates reviewed so far are stale — plan 00034 decision 11, narrowed: each section of a
+    /// candidate that the accumulator has gained or changed since the candidate last left the right pane, where
+    /// the candidate carries its own version and that version is not the one the accumulator now holds
+    /// (<see cref="SessionStore.StaleIn"/>). The accumulator is read from its live text, so typing counts as a
+    /// take does.
+    /// </summary>
+    internal IReadOnlyList<StaleSection> Staleness() => Session.StaleIn(Queue.Items, MarkdownOutline.Read(view.LeftDocument.Text));
+
+    /// <summary>
+    /// Drops the accumulator's own section at <paramref name="headingPath"/> from the baseline, durably:
+    /// the only decision that makes the baseline lose something the machines had (decision 10).
+    /// </summary>
+    /// <exception cref="DecisionRefusedException">
+    /// The left holds no section at that path, or two, or dropping it would move another; nothing is
+    /// written or recorded.
+    /// </exception>
+    internal void Drop(string headingPath)
+    {
+        TextDocument left = view.LeftDocument;
+        (TextEdit removal, MarkdownSection dropped) = AccumulatorEdits.Drop(left.Text, headingPath);
+        left.Replace(removal.Offset, removal.Length, removal.Text);
+        Decide(new SectionDecision(DecisionKind.Dropped, SectionIdentity.Of(dropped), null, null));
+    }
+
+    /// <summary>
+    /// Moves the right pane to the candidate at <paramref name="index"/>, the session store recording what the
+    /// candidate leaving it was reviewed against: the accumulator as it reads now.
+    /// </summary>
+    private void MoveTo(int index)
+    {
+        Session.MoveTo(index, MarkdownOutline.Read(view.LeftDocument.Text));
+        Show();
+    }
+
+    /// <summary>Shows the candidate at <see cref="Position"/> on the right.</summary>
+    private void Show()
+    {
+        Candidate candidate = Current.Candidate;
+        view.RightSource = new PaneSource(candidate.Document.Text) { Title = TitleOf(candidate.Label, candidate) };
+    }
+
+    /// <summary>Records a durable decision, which settles any deferral of the same version.</summary>
+    private void Decide(SectionDecision decision)
+    {
+        Durable.Record(decision);
+        Session.Settle(decision.Section);
+    }
+
+    /// <summary>
+    /// Where <paramref name="section"/> is among the current candidate's sections. By reference: a
+    /// section is a handle on the right's own outline, and an equal one from elsewhere is not it.
+    /// </summary>
+    private int IndexInCurrent(MarkdownSection section)
+    {
+        ArgumentNullException.ThrowIfNull(section);
+        IReadOnlyList<MarkdownSection> sections = Current.Candidate.Document.Outline.Sections;
+        for (int i = 0; i < sections.Count; i++)
+        {
+            if (ReferenceEquals(sections[i], section))
+            {
+                return i;
+            }
+        }
+
+        throw new ArgumentException(
+            $"{MarkdownOutline.Spoken(section.HeadingPath)} is not one of the sections of \"{Current.Candidate.Label}\", the candidate on the right",
+            nameof(section));
+    }
+
+    /// <summary>
+    /// The section of <paramref name="outline"/> whose lines hold <paramref name="line"/>. A section runs to
+    /// the line before the next heading of any level, so the sections never overlap and at most one does.
+    /// </summary>
+    private static MarkdownSection? SectionAt(MarkdownOutline outline, int line) =>
+        outline.Sections.FirstOrDefault(s => s.FirstLine <= line && line <= s.LastLine);
+
+    private static string TitleOf(string name, Candidate candidate) =>
+        $"{name} — {System.IO.Path.GetFileName(candidate.Path)}";
+}

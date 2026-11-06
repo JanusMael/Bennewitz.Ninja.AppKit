@@ -1,13 +1,144 @@
-# AGENTS.md — Bennewitz.Ninja.AppServices
+# AGENTS.md — Bennewitz.Ninja.AppKit
 
-> For anyone changing this repository, human or agent. The invariants a change must not break, the
-> commands, and the checklists for recurring work. Each top-level directory has an `AGENTS.md` of
-> its own for what only its files show. Work state is [`PROGRESS.md`](PROGRESS.md). What every
-> repository in this family carries, and how it is checked, is prescribed in
+> For anyone changing this repository, human or agent. This top half is the repository as a whole:
+> the three families it holds, how each releases, the invariants they share, the commands and the
+> checklists. Each family's own contract follows under its name. Each top-level directory has an
+> `AGENTS.md` of its own for what only its files show.
+>
+> Work state lives in [`PROGRESS.md`](./PROGRESS.md), updated in the same change as the work it
+> describes. What every repository in this family carries, and how it is checked, is prescribed in
 > [`docs/repository-conventions.md`](https://github.com/JanusMael/Bennewitz.Ninja.Templates/blob/main/docs/repository-conventions.md)
-> in Bennewitz.Ninja.Templates.
+> in Bennewitz.Ninja.Templates, whose `plans/00009` brought the three families here.
 
 ## What this repository is
+
+Building blocks for .NET desktop apps, in three families, each with its own packages, version line
+and releases.
+
+| Family | What it is | Packages | Projects | Its README |
+|---|---|---|---|---|
+| `appservices` | Application services behind contracts a test can fake, and one entry point for every kind of app | `Bennewitz.Ninja.AppServices`, `.Abstractions`, `.Logging`, `.Avalonia`, `.EntryPoint` | `src/AppServices*` | [`docs/appservices.md`](docs/appservices.md) |
+| `scopededitors` | Schema-driven property editors for data set at more than one scope | `Bennewitz.Ninja.ScopedEditors.Abstractions`, `.ViewModels`, `.Avalonia` | `src/ScopedEditors*` | [`docs/scopededitors.md`](docs/scopededitors.md) |
+| `diffview` | Diff controls for Avalonia 12 | `Bennewitz.Ninja.DiffView.Core`, `.Avalonia` | `src/DiffView*`, and the app `src/AgentBaseline` | [`docs/diffview.md`](docs/diffview.md) |
+
+Each family's README is its packages' nuget.org page: each package packs its family's file as
+`README.md` (`FamilyReadme` in its csproj). The root [`README.md`](README.md) is the overview.
+
+The repository grew from Bennewitz.Ninja.AppServices, renamed; ScopedEditors' and DiffView's histories
+were imported whole, ScopedEditors' tags renamed `scopededitors/v…`, and DiffView's approved plans
+moved unchanged to `plans/diffview/`.
+
+## Layout
+
+| Path | What it holds |
+|---|---|
+| `src/` | The shipped projects, each folder named for its family, and DiffView's two apps |
+| `tests/` | The families' test projects, and the apps AppServices' entry-point tests run |
+| `trimcheck/` | ScopedEditors' rooted trimmed publish and its ILLink baseline |
+| `fixtures/` | DiffView's test inputs, compared byte for byte |
+| `mappings/` | DiffView's reviewed theme-audit key tables |
+| `reference/` | ⛔ Upstream checkouts, fetched and never committed. **Prune it from every search** |
+| `docs/` | Each family's README, the release runbook, and DiffView's documents |
+| `plans/` | Numbered plans, continuing AppServices' sequence; `plans/diffview/` holds that family's, unchanged |
+| `scripts/` | File-based apps: the release resolution, the packaging guard, the conventions check, and each family's own tools |
+| `AppKit.slnx` | The one solution: every family's `src` and `tests` projects |
+| `DECISIONS.md`, `CHANGELOG.md`, `theme-audit.json` | DiffView's decisions, its changelog and its theme-audit configuration |
+| `AssemblyInfo.InternalsVisibleTo.cs` / `.External.cs`, `Directory.Build.targets` | Templates' solution-wide friend grants: every project grants its internals to every assembly the solution builds, except DiffView's two libraries, which opt out |
+
+## Families and releases
+
+Each family releases alone, from its own tag, `<family>/vYYYY.Q.MMDD`: `scopededitors/v2026.4.1201`.
+`scripts/release-target.cs` resolves the tag into the family's ids from `.github/repository.json`'s
+`families`; the release packs only those projects, publishes only those ids, and writes its notes
+from the family's own commits since its previous tag. The bare `v…` tags were AppServices' releases
+before the merge (`"bareTags": "appservices"`), so its first family release starts from the last of
+them. A bare `v…` tag, or a dispatch without a family, is refused before anything builds. A family is
+released when it changes, never because another did.
+[`docs/publishing.md`](docs/publishing.md) is the runbook.
+
+⛔ **A packable project never references another family's packable project.** A family's release
+packs at that family's version, so the reference would pack a dependency on a version of the other
+family that need not exist. Across families, a package references the other's package at a
+published version. `repo-conventions check` fails the packable case.
+
+⛔ **Every restore needs the local feed.** `NuGet.config` names `../nuget-local`, which holds
+`LayeredEditors.Avalonia.Diagnostics`, DiffView's demo's, and NuGet fails on a source that does not
+exist. `dotnet run scripts/fetch-reference.cs` then `dotnet run scripts/pack-diagnostics.cs` fill it,
+before anything else, on a developer's machine as in every CI job and the release. No package carries
+it.
+
+## Invariants every family shares
+
+| Invariant | Failure if broken | Guarded by |
+|---|---|---|
+| Every packable project's id is in exactly one of `packages.push` and `packages.local`, and the ids of `families` are exactly `packages.push`'s | A package nobody chose is published permanently, or a declared id is never released | Each family's `PackagingTests`; `scripts/assert-packages.cs`; `repo-conventions check` |
+| A release publishes the ids `release-target.cs` resolves for its family, each by its exact file, and never globs `*.nupkg` | A package of another family, or a new packable project, is published by the next tag | `.github/workflows/release.yml`; `release-target.cs`; `assert-packages.cs --family`; `repo-conventions check` |
+| The version is the tag's, `YYYY.Q.MMDD` with the quarter of its date | The package and the tag disagree. A published version can never be replaced | `release-target.cs`, before anything builds |
+| `NUGET_USER` is a repository **variable**, not a secret | A masked value hides why a trusted-publishing login fails | `release.yml`, step `Refuse to release without NUGET_USER` |
+| Every package id resolves from exactly one source: nuget.org, and `LayeredEditors.*` from the local feed | A second source added later silently starts supplying packages | `NuGet.config`, `packageSourceMapping` |
+| Versions are pinned centrally, one pin per package, transitive ones included. The one exception is `xunit.v3` `3.2.2` for DiffView's tests, in `tests/DiffView.Tests.props`, because `Avalonia.Headless.XUnit` fails on 4.0 | Two projects drift to different versions of one dependency | `Directory.Packages.props`, `CentralPackageTransitivePinningEnabled` |
+| Warnings are errors | A warning ships | `Directory.Build.props`; `ci.yml` builds with `-warnaserror` |
+| Every library is trimmable, and the apps under `src/` say they are not | A consumer's trimmed publish keeps an unmarked assembly whole | `src/Directory.Build.props`; `repo-conventions check` |
+| Every project grants `InternalsVisibleTo` to every assembly this repository builds, from the generated `AssemblyInfo.InternalsVisibleTo.cs`, and to other repositories only from `AssemblyInfo.InternalsVisibleTo.External.cs`. `DiffView.Core` and `DiffView.Avalonia` opt out and declare their own, to their tests alone | A seam between two projects becomes public API for want of a grant, and a grant from anywhere else goes unseen | `repo-conventions check` |
+| The repository meets the family conventions | Documentation or settings go missing unnoticed | `scripts/repo-conventions.cs`, run by CI and by the release |
+
+## Commands
+
+```bash
+dotnet run scripts/fetch-reference.cs
+dotnet run scripts/pack-diagnostics.cs
+dotnet build AppKit.slnx -c Release --nologo -warnaserror
+dotnet test --solution AppKit.slnx --no-build -c Release
+dotnet pack AppKit.slnx -c Release --nologo --output ./packages/Release
+dotnet run scripts/assert-packages.cs -- ./packages/Release
+dotnet run --file scripts/repo-conventions.cs -- check
+dotnet run --file scripts/repo-conventions.cs -- grants
+```
+
+- Tests run on Microsoft.Testing.Platform (`global.json`), so `dotnet test` takes `--solution` and
+  rejects VSTest-only switches such as `--nologo`. `--no-build` needs the Release build first.
+- A solution-wide switch reaches every family's tests. `--report-trx` fails on those without a
+  TrxReport extension, so a `.trx` is asked for with `-p:ReportTrx=true`, which DiffView's tests read;
+  `--filter-class` finds nothing in the other assemblies and exits 8, so it takes `--project`.
+- `repo-conventions.cs` reads GitHub through the `gh` CLI, so a local run needs a `gh` login.
+- Write `-p:` rather than `/p:`: Git Bash on Windows rewrites a leading-slash argument into a path.
+- `grants` rewrites `AssemblyInfo.InternalsVisibleTo.cs` from every project's assembly name. Run it
+  after adding, removing or renaming a project; `check` fails until the list matches.
+- Each family's own commands are in its section below.
+
+## Checklists every family shares
+
+**Adding a package:** add the project under `src/`, in a folder named for its family; its id to
+`packages.push` and to its family in `.github/repository.json`, or to `packages.local` with the
+reason; `FamilyReadme` and `AssemblyProduct` in its csproj; confirm the trusted-publishing policy's
+pattern for its family covers it (`docs/publishing.md`); the family's own section adds its steps;
+record it in `PROGRESS.md`.
+
+**Adding a family:** its stem in `families`, lower-case; its ids in `packages.push`; its README in
+`docs/<family>.md`; its tests in a project of their own; a section in this file and in `README.md`.
+
+**Adding, removing or renaming a project:** run `repo-conventions grants`.
+
+**Adding a top-level directory:** give it an `AGENTS.md` and a `CLAUDE.md` containing `@AGENTS.md`,
+or exempt it in `.github/repository.json` under `undocumented`, with the reason.
+
+**Changing a dependency version:** in `Directory.Packages.props` only. One pin serves every family, so
+a raise moves the floor of every package that references it: say so in that family's README. Moving
+Avalonia moves `Avalonia.Headless` and `Avalonia.Headless.XUnit` with it, and moving
+`Avalonia.Controls.DataGrid` can move ScopedEditors' trim baseline. DiffView's section lists the
+gates a pin move re-opens.
+
+**Releasing a family:** only on the maintainer's word for that release. `docs/publishing.md`; tag
+`<family>/vYYYY.Q.MMDD`, one release per calendar day per family; verify against the feed, then record
+it in `PROGRESS.md`.
+
+**Every change:** update `PROGRESS.md` in the same commit. Commits are Conventional Commits, with `!`
+on a change that breaks a consumer, and a breaking change gets a line in the family's README, which
+is what nuget.org shows.
+
+# AppServices
+
+## What AppServices is
 
 Application services for desktop apps — shell launching, environment probing, sharing, dialogs and
 logging — behind contracts a test can fake without referencing a UI toolkit. It ships packages to
@@ -22,23 +153,10 @@ through its project references. A test or a non-UI host references `.Abstraction
 the entry point every app's `Main` calls, console, web and desktop alike (`plans/00001`).
 `README.md` is packed into every package and is the nuget.org description.
 
-## Layout
-
-| Directory | What it holds |
-|---|---|
-| `src/` | The shipped projects and `src/Directory.Build.props`, which marks them trimmable |
-| `tests/` | `AppServices.Tests`: the ported suites, the headless dialog tests, the entry-point tests, and the architecture and packaging guards. `EntryPointProbe` and `EntryPointWebProbe`: the apps the entry-point tests run |
-| `scripts/` | File-based apps: `assert-packages.cs` and `repo-conventions.cs` |
-| `docs/` | `publishing.md`, the release runbook |
-| `plans/` | Numbered plans, `NNNNN-slug.md`: a draft is edited in place, an approved one never again |
-| `.github/` | The workflows, `repository.json`, and the pointer for tools that read `.github/` |
-
-## Invariants
+## AppServices's invariants
 
 | Invariant | Failure if broken | Guarded by |
 |---|---|---|
-| Every packable project's id is in exactly one of `packages.push` and `packages.local` | A package nobody chose is published, permanently | `PackagingTests.Every_packable_project_is_classified`, `PackagingTests.No_id_is_both_published_and_private`; `scripts/assert-packages.cs`; the release step `Assert packed matches declared` |
-| The release pushes the ids `packages.push` names and never globs `*.nupkg` | A new packable project is published by the next tag | `.github/workflows/release.yml`, steps `Push to NuGet.org` and `Create GitHub Release`; `PackagingTests.The_release_workflow_globs_nothing_and_publishes_what_is_declared` |
 | `AppServices.Abstractions` references nothing but the framework | A test or non-UI host inherits a UI toolkit or a logger, and the split stops paying for itself | `LayeringTests.Abstractions_compiles_against_nothing_but_the_framework`, `LayeringTests.No_project_reaches_outside_its_tier` |
 | `AppServices.EntryPoint` references nothing but the framework | A native AOT app that takes it for its `Main` carries whatever it references | `LayeringTests.EntryPoint_compiles_against_nothing_but_the_framework`, `LayeringTests.No_project_reaches_outside_its_tier` |
 | `AppServices.EntryPoint` is native AOT compatible, measured | A native AOT app, such as the family's `bbapi`, fails to publish once it calls `AppMain` | `IsAotCompatible` in its csproj; CI's `aot-linux` and `aot-windows` publish `tests/EntryPointProbe` with native AOT and run `EntryPointProbeTests` against the binary |
@@ -48,46 +166,26 @@ the entry point every app's `Main` calls, console, web and desktop alike (`plans
 | Each project reaches only what its tier allows: only `AppServices.AvaloniaUI` sees Avalonia, and `AppServices.Logging` sees Serilog and nothing else | A lower package drags a UI framework into every consumer | `LayeringTests.Tiers`; `LayeringTests.Every_project_under_src_has_a_tier`; `LayeringTests.No_project_declares_a_package_its_tier_forbids`; `AssemblyQualityTests.BNAQ1003_no_assembly_references_what_its_tier_forbids` |
 | Nothing here references another family (`LayeringTests.ForeignFamilies`) | The families can no longer be versioned or abandoned independently | `LayeringTests.Nothing_here_reaches_another_family`, `LayeringTests.No_compiled_assembly_reaches_another_family` |
 | Every shipped assembly passes the family's AssemblyQuality rules `BNAQ1001`–`BNAQ1005` | A package ships a violation nothing ran | `AssemblyQualityTests`, one test per rule and `Every_shipped_assembly_is_in_the_scan` |
-| Every project grants `InternalsVisibleTo` to every assembly this repository builds, from the generated `AssemblyInfo.InternalsVisibleTo.cs`, and to other repositories only from `AssemblyInfo.InternalsVisibleTo.External.cs`; no project declares a grant of its own | A seam between two projects becomes public API for want of a grant, and a grant from anywhere else goes unseen, or nowhere when its name is wrong | `scripts/repo-conventions.cs check`; `AssemblyQualityTests.BNAQ1005_every_friend_grant_names_an_allowed_assembly` |
 | No public method takes a defaulted `CancellationToken`, or is a token-less overload of one that takes it | A caller silently opts out of cancellation | `AssemblyQualityTests.BNAQ1001_no_public_method_takes_a_defaulted_cancellation_token` |
 | No public signature names a `Microsoft.Win32`, `System.Runtime.InteropServices` or `System.Diagnostics` type | A contract becomes Windows-shaped, or a test seam becomes API, and every consumer binds against platform plumbing it never chose | `AssemblyQualityTests.BNAQ1002_no_platform_or_leak_prone_type_appears_in_the_public_surface` |
 | No namespace segment shadows a referenced root, so the Avalonia assembly and namespaces are `AppServices.AvaloniaUI` while its package id stays `Bennewitz.Ninja.AppServices.Avalonia` | Under a `….Avalonia` namespace, `Avalonia.X` resolves against it instead of Avalonia's root; a changed package id strands every consumer on the old one | `AssemblyQualityTests.BNAQ1004_no_namespace_segment_shadows_a_referenced_root`; `PackageId` in `src/AppServices.AvaloniaUI/AppServices.AvaloniaUI.csproj` |
-| Every shipped assembly declares itself trimmable | A consumer's trimmed publish keeps it whole and outside its trim analysis, and says nothing | `src/Directory.Build.props`; `PackageMetadataTests.Every_shipped_assembly_is_marked_trimmable` |
 | Every packable project states `IsPackable`, a `Description` and `PackageTags`, with no `TODO`, and the packed `README.md` has no placeholder | Placeholder metadata is published and can never be replaced | `PackageMetadataTests` |
 | Avalonia is pinned at 12.1.3 or later | UI Automation selection stops reaching the client on Windows; the headless tests cannot see it | `Directory.Packages.props`, `UI` group comment; `Avalonia.Headless` pinned to the same version |
-| Packages resolve from nuget.org only | A second source added later silently starts supplying packages | `NuGet.config`, `packageSourceMapping` |
-| Versions are pinned centrally, transitive ones included | Two projects drift to different versions of one dependency | `Directory.Packages.props`, `CentralPackageTransitivePinningEnabled` |
-| Warnings are errors | A warning ships | `Directory.Build.props`, `TreatWarningsAsErrors`; `ci.yml` builds with `-warnaserror` |
-| The version is the tag, `vYYYY.Q.MMDD` | The package and the tag disagree. A published version can never be replaced | `release.yml`, step `Resolve version and tag` |
-| `NUGET_USER` is a repository **variable**, not a secret | A masked value hides why a trusted-publishing login fails | `release.yml`, step `Refuse to release without NUGET_USER` |
-| The repository meets the family conventions | Documentation or settings go missing unnoticed | `scripts/repo-conventions.cs`, run by CI's `conventions` job |
 
-## Commands
+## AppServices's commands
 
 ```bash
-dotnet build AppServices.slnx -c Release --nologo -warnaserror
-dotnet test --solution AppServices.slnx --no-build -c Release
-dotnet pack AppServices.slnx -c Release --nologo --output ./packages/Release
-dotnet run scripts/assert-packages.cs -- ./packages/Release
-dotnet run --file scripts/repo-conventions.cs -- check
-dotnet run --file scripts/repo-conventions.cs -- grants
 dotnet publish tests/EntryPointProbe/EntryPointProbe.csproj -c Release -r <rid> -p:PublishAot=true -warnaserror
 ```
 
-- Tests run on Microsoft.Testing.Platform (`global.json`), so `dotnet test` takes `--solution` and
-  rejects VSTest-only switches such as `--nologo`. `--no-build` needs the Release build first.
-- Write `-p:` rather than `/p:`: Git Bash on Windows rewrites a leading-slash argument into a path.
-- `grants` rewrites `AssemblyInfo.InternalsVisibleTo.cs` from every project's assembly name, and
-  writes an empty External file when there is none. Run it after adding, removing or renaming a
-  project; `check` fails until the list matches.
-- The native AOT publish links with the platform's C toolchain: clang and zlib on Linux, the Visual
-  Studio C++ tools on Windows. Visual Studio 18 Build Tools' `vcvarsall.bat` calls `vswhere.exe` by
-  name, so put `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` on PATH first, or the link
-  fails with its "is not recognized" message where the linker's path should be.
+The native AOT publish links with the platform's C toolchain: clang and zlib on Linux, the Visual
+Studio C++ tools on Windows. Visual Studio 18 Build Tools' `vcvarsall.bat` calls `vswhere.exe` by
+name, so put `%ProgramFiles(x86)%\Microsoft Visual Studio\Installer` on PATH first, or the link fails
+with its "is not recognized" message where the linker's path should be.
 
-## Checklists
+## Adding a AppServices package
 
-**Adding a package**
+What the shared checklist above leaves out:
 1. Add the project under `src/`, with `IsPackable`, a `PackageId` of `Bennewitz.Ninja.AppServices.<Name>`,
    an `AssemblyName` equal to the project file name, a `Description`, `PackageTags` and
    `GenerateDocumentationFile`.
@@ -100,13 +198,1011 @@ dotnet publish tests/EntryPointProbe/EntryPointProbe.csproj -c Release -r <rid> 
    an id outside it needs the policy widened first, see `docs/publishing.md`.
 5. Add it to the package table in `README.md`, and record it in `PROGRESS.md`.
 
-**Adding a top-level directory:** give it an `AGENTS.md` and a `CLAUDE.md` containing `@AGENTS.md`,
-or exempt it in `.github/repository.json` under `undocumented`, with the reason. CI fails until
-one of the two is done.
+# ScopedEditors
 
-**Releasing:** `docs/publishing.md`. One version per calendar day; verify against the nuget.org
-flat-container, then move the release into `PROGRESS.md` under `Published`.
+## What ScopedEditors is
 
-**Every change:** update `PROGRESS.md` in the same commit. Commits are Conventional Commits, with
-`!` on a change that breaks a consumer, and a breaking change gets a line in `README.md`, which is
-what nuget.org shows.
+Schema-driven property editors for structured data whose values can be set at more than one scope,
+where one scope overrides another. The code moved here from OpenForge2k's `LayeredEditors`
+projects; every rename since is recorded in Bennewitz.Ninja.Templates'
+`docs/layered-editors-renames.md`. It ships these packages to nuget.org, each listed in
+`packages.push`:
+
+| Package id | Assembly | What it ships |
+|---|---|---|
+| `Bennewitz.Ninja.ScopedEditors.Abstractions` | `ScopedEditors.Abstractions` | The scope and override model and the severity model (`IEditorSchema`, `IEditorScope`, `IEditorValue`, `IEditorWorkspace`, `AppSeverity`, `DangerAssessment`). References nothing |
+| `Bennewitz.Ninja.ScopedEditors.ViewModels` | `ScopedEditors.ViewModels` | Property-editor view-models, factories, navigation nodes and messages, with no UI-framework reference |
+| `Bennewitz.Ninja.ScopedEditors.Avalonia` | `ScopedEditors.AvaloniaUI` | Avalonia views, converters and behaviours, the bundled JetBrains Mono fonts, and the opt-in `Themes/SemiBundle.axaml` |
+
+The consumers are Avalonia desktop applications in OpenForge2k, which take
+`Themes/SemiBundle.axaml` from their `App.axaml`; `HeadlessTestApp` loads the same include. A test
+or a non-UI host references `.Abstractions` or `.ViewModels` alone.
+
+## ScopedEditors's invariants
+
+| Invariant | Failure if broken | Guarded by |
+|---|---|---|
+| The Avalonia package's id is `Bennewitz.Ninja.ScopedEditors.Avalonia`; its assembly and namespaces are `ScopedEditors.AvaloniaUI` | A namespace segment named `Avalonia` shadows Avalonia's own root namespace (CS0234); renaming the id instead strands every consumer on a dead id | `PackageId` and `AssemblyName` in `src/ScopedEditors.AvaloniaUI/ScopedEditors.AvaloniaUI.csproj`; `AssemblyQualityTests.BNAQ1004_no_namespace_segment_shadows_a_referenced_root`; `PackagingTests.Every_packable_project_is_classified` |
+| Every `avares://` URI names the assembly, `avares://ScopedEditors.AvaloniaUI/…`, never the package id | A `StyleInclude` fails a host's build with `AVLN2000`; a single-family `FontFamily` throws `InvalidOperationException` at first layout; a fallback list draws the wrong face silently | `BundledFontTests.Each_bundled_face_shapes_text_by_its_documented_uri`; `HeadlessTestApp` loads `Themes/SemiBundle.axaml` by its URI |
+| `ScopedEditors.Abstractions` references nothing; `ScopedEditors.ViewModels` references no UI framework; only `ScopedEditors.AvaloniaUI` sees Avalonia or Semi | An editor can no longer be built off the UI thread, and a non-UI host inherits Avalonia | `LayeringTests` (`Tiers`, `ViewModels_compiles_without_any_UI_framework`, `Abstractions_compiles_against_nothing_but_the_framework`); `AssemblyQualityTests.BNAQ1003_no_assembly_references_what_its_tier_forbids` |
+| Nothing here references the AppServices family or another repository's projects | The two families can no longer be versioned or abandoned independently | `LayeringTests.ForeignFamilies`, `Nothing_here_reaches_another_family`, `No_compiled_assembly_reaches_another_family` |
+| Every shipped assembly passes the family's AssemblyQuality rules | A release ships a violation of a rule nothing ran | `AssemblyQualityTests`, including `Every_shipped_assembly_is_in_the_scan` |
+| There is no bare `Bennewitz.Ninja.ScopedEditors` package | The trusted-publishing pattern `Bennewitz.Ninja.ScopedEditors.*` cannot authorise it, and it was never meant to exist | `packages.push`, header comment; `PackagingTests` |
+| A rooted trimmed publish produces exactly the ILLink warnings in `trimcheck/expected-warnings.txt` | A trim hazard in compiled XAML ships unseen, or ILLink silently stops analysing `ScopedEditors.AvaloniaUI` | CI's `trim` job; `scripts/check-trim-warnings.cs` |
+| Avalonia and `Avalonia.Headless` are pinned to the same version, which is the consumer's floor | A lower Avalonia loses the UI Automation selection fix a host relies on; a mismatched headless platform trips central transitive pinning | `Directory.Packages.props`, `UI` and `Testing` groups |
+| The README is the nuget.org description and carries no placeholder | The placeholder is published permanently on every id | `Directory.Build.props` packs `README.md`; `PackageMetadataTests.The_packed_readme_is_not_the_template_placeholder` |
+
+## ScopedEditors's commands
+
+```bash
+dotnet publish trimcheck/TrimCheck.csproj -c Release -r linux-x64 | tee trim-publish.log
+dotnet run scripts/check-trim-warnings.cs -- trim-publish.log trimcheck/expected-warnings.txt
+```
+
+`TrimCheck.csproj` is not in `AppKit.slnx`; only the publish above builds it.
+
+## Adding a ScopedEditors package
+
+What the shared checklist above leaves out:
+1. Add the project under `src/`, with `IsPackable`, `PackageId`, `AssemblyName`, `Description` and
+   `PackageTags` set in its csproj (`PackageMetadataTests`).
+2. Add it to `LayeringTests.Tiers` and `TrimmerRootAssembly` in `trimcheck/TrimCheck.csproj`.
+3. Add its id to `packages.push`, or to `packages.local` with the reason as a comment above it.
+4. Confirm the trusted-publishing policy's `Bennewitz.Ninja.ScopedEditors.*` pattern covers a new
+   `packages.push` id; see `docs/publishing.md`.
+5. Add it to the package table in `README.md`, and record it in `PROGRESS.md`.
+
+# DiffView
+
+> Plan numbers in this part mean `plans/diffview/NNNNN`, `README.md` means
+> [`docs/diffview-development.md`](docs/diffview-development.md), and `PROGRESS.md` means
+> [`docs/diffview-progress.md`](docs/diffview-progress.md). ⛔ These `## N.` headings stay as they are:
+> a section number is an anchor that approved plans cite, and `DocumentationCitationTests` holds it.
+
+> Audience: an agent returning to DiffView cold. Purpose: surface the contracts that are not
+> visible from a single-file read, so an invariant is not broken by accident. Narrative context
+> lives in [`README.md`](README.md), the plan under `plans/`, [`DECISIONS.md`](DECISIONS.md) and
+> [`PROGRESS.md`](PROGRESS.md); this file is the shape ClaudeForge's `AGENTS.md` set.
+
+This file is **fact-shaped**: every claim cites a file, a type, a member or a test name, so
+drift surfaces as a missing symbol under `grep`, not as stale prose. No source-line numbers,
+no dates, no counts.
+
+## 1. Hard invariants
+
+| Invariant | Failure signature if broken | Canonical source |
+|---|---|---|
+| The editor's document is the source text; padding is rendered, never inserted as lines | Offsets between the model and the editor drift; a re-diff destroys caret, selection and the undo stack | `DiffPanePresenter.Document` is assigned by the host only; `PaddingElement` has `documentLength` 0; test `DiffPanePresenterTests.The_document_text_equals_the_source_text_and_the_line_counts_agree` |
+| Padding is the first of the text view's element generators, ahead of the single-character generator AvaloniaEdit creates in the `TextView` constructor: where two generators want one offset, the first to build an element with a length takes it and the rest are not asked, and padding has no length | A padded line whose first character that generator draws — a space or a tab while whitespace shows, a control character always — renders without its padding, every row below it slips against the other pane, and a copy arrow drawn in the missing padding lands on the next line's number | `DiffPanePresenter` constructor, `ElementGenerators.Insert(0, …)`; tests `ViewOptionsTests.Showing_whitespace_keeps_the_padding_of_a_line_that_begins_with_it`, `ViewOptionsTests.A_padded_line_keeps_its_padding_whatever_character_it_begins_with` |
+| A rebuild never replaces a `TextDocument`: assigning `DiffPanePresenter.DiffDocument` swaps `PaneMetadata`, redraws and re-primes | Caret, selection, scroll offset and undo lost on every rebuild | `DiffPanePresenter.ApplyMetadata` |
+| Metadata access is bounds-checked and version-stamped: an unknown line is `Unchanged` with no padding, and `PaneMetadata.Version` is the model's `SideBySideDocument.Version` | A keystroke between two builds throws from a renderer | `PaneMetadata.KindOf`, `PaneMetadata.PaddingFor`; test `DiffPanePresenterTests.Metadata_for_a_different_document_renders_unknown_lines_as_unchanged_and_never_throws` |
+| `PaneMetadata` is the only place the editor's 1-based line numbers meet the model's 0-based lines | Off-by-one kinds or padding on the wrong line | `PaneMetadata` |
+| Workers never touch a `TextDocument`; AvaloniaEdit enforces owner-thread access | `InvalidOperationException` from `TextDocument.VerifyAccess` | `DiffDocumentBuilder.Build` takes `PaneSource` text; `DiffSearch.Find` reads `IPaneText`, which the composite supplies as `DocumentPaneText.Capture` — an immutable snapshot plus the line table, both taken on the UI thread |
+| `SearchPanel.Uninstall()` runs in `DiffPanePresenter.OnApplyTemplate`, after the base call, because `TextEditor.OnApplyTemplate` installs one on every template application (the panel is null in the constructor) | Ctrl+F opens AvaloniaEdit's panel over the composite's find bar; a null reference in the constructor | `DiffPanePresenter.OnApplyTemplate`; test `DiffPanePresenterTests.No_search_panel_is_installed` |
+| Every decorator is a fault boundary: it catches, reports once through `DiffPanePresenter.ReportFault`, and disables itself; the text layer always renders | A throwing renderer takes down every frame | `GuardedBackgroundRenderer.Draw`, `DiffMargin.Render`, `PaddingElementGenerator`, `DiffPanePresenter.PrimeNow`, `DiffPanePresenter.OnCaretPositionChanged`; tests `A_throwing_renderer_raises_RenderFault_once_disables_itself_and_the_text_still_renders`, `A_throwing_generator_raises_RenderFault_once_and_the_lines_render_without_padding` |
+| A new model re-enables every decorator | A decorator stays dark after the input that broke it is gone | `DiffPanePresenter.ResetFaults`, called from `ApplyMetadata` |
+| No renderer or margin reads `TextView.VisualLines` while `TextView.VisualLinesValid` is false | `VisualLinesInvalidException` during layout | `GuardedBackgroundRenderer.Draw`, `DiffMargin.Render` |
+| Line splitting agrees three ways: `LineSplitter`, DiffPlex `LineChunker`, AvaloniaEdit `NewLineFinder` | Kinds and padding land on the wrong lines for CR or mixed input | `DiffPane.Lines` count equals `TextDocument.LineCount`; test `DiffPanePresenterTests.The_model_and_the_editor_count_the_same_lines_on_mixed_line_endings` |
+| Document text is never logged | A secret under comparison lands in a log file | `DiffPanePresenter.ReportFault` goes through `DiffViewLog.RenderFault`, which logs decorator, side, line number and — for a grammar — its language, never text |
+| The interaction lines are `DiffViewLogCategories.Interaction` at `Debug`, and that category's level is the whole switch — there is no property beside it | A host at the usual `Information` is shown every click; or a second switch disagrees with the first | `DiffViewLog.PaneClick`, `DiffViewLog.PaneSelection`, `DiffViewLog.FoldOpened`; test `InteractionLogTests.A_host_logging_at_Information_is_told_nothing` |
+| Every string hole of an interaction template is `:l`, and no hole given an enum is | Under Serilog a phrase of the sentence is quoted as though it were a value — `click "in the text at" "3:4"`; and `:l` on an enum makes `Enum` throw a `FormatException` from inside a log call | `DiffViewLog.PaneName`; test `DemoActionLogTests.The_library_s_interaction_lines_reach_the_demo_s_log_at_the_level_it_keeps`, the one test that reads a Serilog pipeline — the library's own tests format through `Microsoft.Extensions.Logging`, which writes a string as it is and cannot see the difference |
+| The unified view's pane document is the exception to the rule above, and the only one: `InlineDiffView` composes it from both sides and rewrites it when the model changes, which is why that pane is read-only and why its sides' documents stay off screen | An edit lands in a document that is half one file and half the other, or the composed text stops matching the unified table | `InlineDiffView.ComposeUnifiedText`; §7 |
+| Syntax highlighting is a foreground: TextMate colours the tokens and nothing else, so the row fills, the word pieces, the match highlights and the selection all compose over it | Colours fight, or a grammar hides the diff | `SyntaxHighlighting` installs `AvaloniaEdit.TextMate` and sets a grammar and a theme only; test `SyntaxSnapshotTests.Syntax_colour_and_the_inserted_fill_compose_on_the_same_row` |
+| A grammar is chosen from `DiffPanePresenter.SyntaxFileName`'s extension; no extension, or one no grammar claims, is plain text and **not** a fault | A `.txt` pair puts the control in `Degraded`, or an unknown file throws | `SyntaxHighlighting.GrammarFor`; tests `SyntaxTests.An_extension_no_grammar_claims_leaves_plain_text_and_the_state_stays_ready`, `SyntaxTests.A_source_with_no_name_at_all_stays_plain_text` |
+| No namespace this repository authors carries a segment matching the root namespace of an assembly it references | C# walks enclosing namespaces before global, so `Avalonia.Media.Color` resolves to *our* `…DiffView.Avalonia.Media.Color` and fails with CS0234; every use needs `global::` until the segment is renamed | `BNAQ1004` with `IncludingInternalTypes()` over both shipped assemblies, test `AssemblyQualityTests.No_shipped_namespace_shadows_a_referenced_root`, which replaced plan 00017's hand-rolled test in plan 00028; and `DiffCommand`'s cref, which stops compiling — the compiler holds half of this |
+| The release pushes the packages it names, never a `*.nupkg` glob | A glob publishes whatever the solution happens to produce, irreversibly, on the first release that adds a packable project — `src/ThemeAudit` was that project until the analysis moved to `Bennewitz.Ninja.XamlQuality` | `.github/workflows/release.yml`; test `PackagingTests.The_release_workflow_names_the_packages_it_pushes` |
+| `packages.push` names exactly what the solution packs and what each of the release's two publishing steps names | A project made packable and never classified is found on nuget.org, where an id cannot be withdrawn; or a step publishes less than the file says | `packages.push`, `.github/workflows/release.yml`; test `PackagesPushTests.The_file_names_exactly_what_the_solution_packs_and_the_release_publishes` |
+| The package version is the git tag, carried by `/p:Version=` into **both** build and pack | `dotnet pack --no-build` reuses the build's output, so a version given to one and not the other packs the wrong thing silently; with neither, a release publishes `1.0.0` at a version that can never be reused | `.github/workflows/release.yml`; test `PackagingTests.The_release_workflow_carries_the_tag_version_into_build_and_pack` |
+| Every packable project carries a licence, an author, both URLs and tags | Each defaults to something wrong rather than failing: `Authors` and `PackageId` fall back to the assembly name, and a package with no licence expression passes nobody's compliance review | `Directory.Build.props` and each `.csproj`; test `PackagingTests.Every_packable_project_carries_the_metadata_a_consumer_needs` |
+| Every control this library defines has an automation peer of its own — internal, beside its control, reached through an `OnCreateAutomationPeer` override — which is a control element of the type the control is to a person and advertises no pattern: the three views `Group`, the pane `Edit`, the header `Header`, the find bar `ToolBar`, the strip `StatusBar`, the map `ScrollBar`, the gutter and both margins `Custom` | A search of UI Automation's control view finds no part of DiffView, because the stock `NoneAutomationPeer` is not a control element; or a checker reports a pattern a peer does not honour | `DiffViewAutomationPeer`, `DiffPanePresenterAutomationPeer`, `DiffPaneHeaderAutomationPeer`, `DiffFindBarAutomationPeer`, `DiffStatusStripAutomationPeer`, `DiffMinimapAutomationPeer`, `ChangeConnectorGutterAutomationPeer`, `DiffMarginAutomationPeer`; `BNXQ1006` in test `AccessibilityCoverageTests.Every_themed_control_has_a_peer_of_its_own`, and test `AccessibilityCoverageTests.Every_control_of_ours_on_screen_is_a_control_element_of_its_type` over every concrete control type — `GetTypes`, so the internal margins count |
+| The pane's peer answers `HasKeyboardFocus`, `IsKeyboardFocusable` and `SetFocus` for its text area, because AvaloniaEdit's `TextEditor` is not focusable and the stock peer reads its owner's own focus | A harness asks a pane being typed into whether it has the keyboard and is told no, or `SetFocus` leaves the keyboard where it was | `DiffPanePresenterAutomationPeer`; test `PanePeerFocusTests.SetFocus_on_a_panes_peer_puts_the_keyboard_in_its_text_area_and_the_peer_says_so` |
+| Every part carries an explicit `AutomationId`, unique within the part that owns it — a view's parts within the view, a pane's two margins within the pane, a menu entry within its menu. The templates declare theirs beside each part's `Name`; code declares the margins', in `DiffMargin`'s constructor, and the menu entries', through `DiffMenuItem.AutomationId`, which defaults to the verb's name and which `DiffPaneMenu.Build` sets on the `MenuItem`. The values are pinned in `fixtures/automation-ids.txt`, which a rename, an addition or a removal edits in the same change. No harness searches by a name | A search by name finds nothing in `de-DE`, the names being translated; an id derived from a `Name` moves when the part is renamed; two parts answer one search; a renamed id passes every other gate while every harness searching for the old one finds nothing | the control themes under `Themes/`, `DiffMargin`, `DiffMenuItem.AutomationId`, `DiffPaneMenu.Build`, `fixtures/automation-ids.txt`; tests `AccessibilityCoverageTests.Every_part_the_library_places_carries_an_explicit_automation_id` (`BNXQ1007`), `AccessibilityCoverageTests.Every_id_the_library_declares_is_found_once_within_the_part_that_owns_it`, `AccessibilityCoverageTests.Every_entry_of_every_menu_a_surface_opens_carries_an_id_unique_within_it`, `AccessibilityCoverageTests.Every_id_a_harness_searches_for_is_the_one_the_fixture_pins`; and `HostingGuideTests.The_guides_id_table_names_exactly_the_ids_the_fixture_pins`, which holds the hosting guide's table to the fixture both ways and its menu row to the rule the row states |
+| The text area's margin host, an `ItemsControl` in `Themes/DiffPanePresenter.axaml`, is `AutomationProperties.AccessibilityView="Raw"`, so a margin's parent in the control view is its pane | Both margins sit under an unnamed `List` in every pane, which is what a harness walking the tree reports as their parent | `Themes/DiffPanePresenter.axaml`; test `AccessibilityCoverageTests.Every_control_of_ours_on_screen_is_a_control_element_of_its_type` |
+| A part shown only on request — the map, the headers, the strip, the banner's action, the find bar — is hidden through `IsVisible`, never by a slot of no size or a width of zero | A harness finds a part nobody can see: a control merely shrunk stays effectively visible, and its peer stays in the tree | `BNXQ1008` in test `GridSlotTests.No_control_is_hidden_by_a_slot_of_no_size_alone`; the off state of test `AccessibilityCoverageTests.Every_id_the_library_declares_is_found_once_within_the_part_that_owns_it` |
+
+## 2. Height priming
+
+- **Triggers.** `DiffPanePresenter.RequestPrime` runs from `ApplyMetadata` (model or side changed)
+  and `OnDocumentSwapped`. It primes at once when `CanPrimeNow` — the presenter `IsLoaded` and the
+  text view's measure is valid, so the styled font has reached the text view — and otherwise
+  leaves the prime pending for `DiffPanePresenter.OnLoaded` or the next `LayoutUpdated`,
+  whichever comes first. `Loaded` is dispatched after the first layout pass and after that
+  pass's `LayoutUpdated`, which is why `OnLoaded` is a trigger: without it only the padded lines
+  inside the first viewport reach the height tree, and the extents are equal by luck when every
+  padded line is visible (test `After_a_load_both_extents_are_equal_before_scrolling_and_the_renderer_sees_each_lines_kind`
+  keeps one below the viewport). `OnLayoutUpdated` also re-primes when
+  `PaddingHeightPrimer.LineHeightChanged` reports a moved default line height (a font change
+  rebases plain lines only).
+- **Redraw first.** `ApplyMetadata` calls `TextView.Redraw()` before priming so built lines
+  carrying the old padding are dropped and the generator runs again.
+- **Union rule.** `PaddingHeightPrimer.Prime` rebuilds the previous padded set together with the
+  new one for the same `TextDocument`, because a line that lost its padding keeps its stale
+  height until rebuilt. A document swap calls `PaddingHeightPrimer.Forget`.
+- **Batches.** `PaddingHeightPrimer.BatchSize` carries the Phase 1 measurement; a `Redraw`
+  separates batches, `InvalidateMeasure` closes the prime.
+- **Extent equality** also relies on `TextEditorOptions.AllowScrollBelowDocument` being false,
+  set in the presenter's constructor.
+- Tests: `DiffPanePresenterTests.After_a_load_both_extents_are_equal_before_scrolling_and_the_renderer_sees_each_lines_kind`,
+  `DiffPanePresenterTests.Assigning_a_new_model_reprimes_so_lines_that_lost_their_padding_return_to_one_row`.
+
+## 3. Padding geometry
+
+- `PaddingRun.Baseline` and `PaddingRun.Size` are the spike's formulas over `PaddingMetrics`;
+  `PaddingElement` sits at the line start with `HandlesLineBorders` true and supplies a caret
+  stop only when alone on the line.
+- `DiffLineBackgroundRenderer.PaddingOf(VisualLine)` reads the padding a visual line actually
+  carries from its element, never from the metadata, so a disabled generator leaves no phantom
+  fills.
+- **Caret column.** `DiffPanePresenter.NormaliseCaretColumn` moves visual column 0 to 1 on a
+  padded line; test `PresenterPixelTests.Home_pressed_twice_on_a_padded_line_keeps_the_caret_on_the_first_text_column`.
+- **Selection and caret.** The constructor makes `TextArea.SelectionBrush` transparent,
+  `TextArea.SelectionBorder` null and `Caret.CaretBrush` transparent; `DiffSelectionRenderer` and
+  `DiffCaretRenderer` draw from `TextBands` (`TextTop` to `TextBottom`). Test
+  `PresenterPixelTests.A_selection_across_a_padded_line_paints_only_text_bands_and_the_caret_is_one_text_line_tall`.
+
+## 4. Theming
+
+- The control themes live in `Themes/DiffPanePresenter.axaml`, compiled as
+  `DiffPanePresenterTheme`; the presenter's constructor merges that class into its own
+  `Resources` and applies `DiffPanePresenter.TextAreaThemeKey` to its text area. A runtime
+  `ResourceInclude` in code is IL2026 under the trim-check; the `x:Class` dictionary is not. The `DiffView.*` tokens come from the host's `DiffViewResources.ThemeUri`
+  include; `DiffBrushes.Resolve` reads them on attach, `ResourcesChanged` and
+  `ActualThemeVariantChanged`, with a hard fallback per token.
+- **Each control of this library has its theme in a compiled dictionary of its own, merged by that
+  control and holding nothing else**: `SideBySideDiffViewTheme`, `InlineDiffViewTheme`,
+  `DiffViewerTheme`, `DiffPaneHeaderTheme`, `DiffStatusStripTheme` and `DiffFindBarTheme`, each
+  compiled from the `Themes/` file named after its control — as the presenter's is, which holds the
+  theme it applies to its text area beside its own. So no theme of ours is found twice on the way
+  up from any element, and a view carries no theme for a part it does not host — the viewer, which
+  has no find bar, holds no `DiffFindBarTheme`. ⚠ **The rule is about the
+  resource path, not the files.** Before plan 00021 phase 3 every key already sat in one
+  dictionary, and the path still found each twice: the headers, the strip and the find bar each
+  merged the editor's whole dictionary beneath an editor that had merged it too. Tests
+  `ControlThemeTests.No_theme_of_ours_is_found_twice_on_the_way_up_from_any_element`,
+  `ControlThemeTests.The_viewer_carries_no_theme_for_the_find_bar_it_does_not_have`.
+- `InlineDiffView`'s template is the editor's with one pane and no connector or map, and
+  `DiffViewer`'s is the editor's without the find bar's row. The three view themes were written as
+  copies of one another, so a pseudo-class one of them styles, all three style — test
+  `ControlThemeTests.Every_pseudo_class_one_view_theme_styles_every_view_theme_styles`, which asks
+  agreement and not coverage: most of the pseudo-classes the views publish are styled by none.
+- `DiffLineNumberMargin` draws one column of the document's own numbers for a side's pane and two
+  columns of the *sides'* numbers for a unified one, a context line filling both; each column is
+  measured against its own side's line count (§7).
+- Nothing under `src/DiffView.Avalonia/Themes` references a host theme key: `theme-audit report`
+  scans that directory as the "DiffView" consumer and `ReferenceAuditTests` fails on drift.
+- **A template edit regenerates `docs/template-parts.md`, and so may an AvaloniaEdit or XamlQuality bump**, the
+  same edits `theme-audit report` asks after: `TemplatePartReferenceTests.The_committed_reference_equals_a_fresh_reading`
+  fails on drift and writes the fresh reference beside the committed one, and `scripts/gen-template-parts` takes it.
+  The test has no write mode, and its two checks run first and write nothing. It reads the gates' own control set,
+  peer table and scan, and `BNXQ1003`'s reading through `TemplatePartRule.ReadParts`; that reading has no entry for
+  `DiffStatusStrip` or `DiffPaneHeader`, whose code declares no part, so their parts come from their themes in the
+  scan's markup, a reading held to the rule's wherever both read.
+- A new colour token goes into `DiffView.Tokens.axaml`, `DiffView.Tokens.ColorBlind.axaml` and
+  `contrast-pairs.json` together; `ThemeResolutionTests.Every_DiffView_token_resolves_in_both_palettes`
+  asserts the two palettes define the same keys.
+- **A decorator that draws a ground *under* a glyph needs a `contrast-pairs.json` pair of its
+  own.** The contract scored a marker against the plain gutter and the host page and nothing
+  else, so a chip drawn behind one was outside what it could see, and a chip that failed the 3.0
+  floor was designed, rendered and reviewed before anything measured it. The pairs holding
+  `DiffView.Marker*Brush` against `DiffView.MarkerChip*Brush` are what closes that; anything new
+  drawn behind a glyph adds its own.
+- **An outline is scored against the ground; a fill is scored against its outline.** A closed
+  glyph's outline carries the silhouette, so it is what makes the shape visible and it takes the
+  3.0 floor against the gutter. Its fill is interior to the shape, and what has to hold of it is
+  that it reads apart from the outline — 1.5, per the `DiffView.*ArrowFillBrush` pairs. Scoring a
+  fill against the ground instead is a category error with teeth: it ruled every yellow out of the
+  light gutter and so ruled out the hue that separates the two copy arrows, until the pairs were
+  re-aimed. `DiffView.SelectionArrowFillBrush` sits at 1.51 in Dark, so that one is a real edge.
+- The `DiffView.MarkerChip*Brush` tokens are **opaque**, and each is its marker composited over
+  that variant's `DiffView.PaneBackgroundBrush` — not over the gutter it is painted on. Over the
+  pane because that is the lighter of the two, which is what keeps a marker above its floor; a
+  blend into the gutter darkens the ground towards the glyph and cannot reach 3.0 for
+  `DiffView.MarkerModifiedBrush` at any alpha. Opaque because a colour computed over one surface
+  and painted on another is not expressible as a translucent brush with an `over` key, and
+  because `theme-audit` scores an opaque token directly. `DiffBrushes.MarkerChipFor` reads them.
+- The **view options** — `ShowWhitespace` (which covers spaces *and* tabs), `ShowLineEndings` and
+  `TabWidth` (`IndentationSize`, coerced to at least 1) — are written onto the editor's
+  `TextEditorOptions` by `DiffPanePresenter.ApplyDisplayOptions`, which also runs when a host
+  replaces `Options` wholesale. None of them changes a row's height, so none re-primes; anything
+  added here that *would* change a row's height must (test
+  `ViewOptionsTests.A_tab_width_change_moves_text_sideways_and_leaves_the_rows_and_the_extents_alone`).
+- The **pane font** is `SideBySideDiffView.PaneFontSize` / `PaneFontFamily`, and `double.NaN` /
+  `null` mean "leave the pane theme's own": `ApplyPaneFont` clears the local value rather than
+  writing a default over it. Inheriting `FontSize` into the panes does not work — the presenter's
+  `ControlTheme` setter beats an inherited value. A size change re-primes through
+  `PaddingHeightPrimer.LineHeightChanged`; test
+  `ViewOptionsTests.A_font_size_change_re_primes_both_panes_and_leaves_their_extents_equal`.
+- The **focus accent** is a collapsed overlay in the header's template (`PART_FocusAccent`, the
+  `:pane-focused` pseudo-class, `DiffView.FocusAccentBrush`), never a border thickness: an
+  unfocused header must lay out exactly as it did before it existed, so focus moves no row.
+  `DiffBuildController.UpdateCaret` and `UpdateHeader` are the two places that set it.
+- The **syntax** theme follows `ActualThemeVariant` and nothing else: `ThemeName.DarkPlus` under
+  Dark, `ThemeName.LightPlus` otherwise (`SyntaxHighlighting.ThemeNameFor`), re-applied from
+  `DiffPanePresenter.OnThemeVariantChanged`. The colour-blind palette is a `DiffView.*` matter and
+  does not reach it. The `RegistryOptions` is per pane, built on the first file with an extension,
+  because TextMateSharp tokenizes on its own thread and reaches back into the registry.
+- `DiffViewResources.MonospaceFontFamilyKey` is defined in `DiffView.axaml`;
+  `HeadlessTestApp.Initialize` overrides it with the bundled font, which is what keeps the
+  rendered snapshots machine-independent.
+- `IsReadOnly` defaults to true through a local value in the presenter's constructor, because
+  `TextEditor.OnIsReadOnlyChanged` applies the flag to the text area only when the property
+  changes.
+- `WordWrap` is forced off in `DiffPanePresenter.OnPropertyChanged`.
+
+## 5. Tests
+
+- Avalonia tests run serially (`xunit.runner.json`); a test that renders calls
+  `TestLogSink.AssertNoWarnings` afterwards; a new headless test is proven able to fail before
+  it is committed; `Perf` tests are excluded by default and `Reference` tests need the checkouts
+  the `EnsureReferenceSources` target fetches.
+- **The static-analysis gates' mutations are committed, not scratch: `scripts/mutate-gates.sh`.**
+  Each mutation declares what must happen to it — a **named test** must fail, the **build** must
+  reject it with a **named diagnostic**, or it must stay **green** because it encodes a gate's blind
+  spot — and the harness compares its verdict against that declaration. `--list` names them,
+  `--guards` lists the guards they must cover, `--only <text>` runs a subset. A gate whose mutation
+  merely survives reports clean over a codebase that is not, which reads as coverage.
+- **Three verdicts look like success and are not**, which is why `Expect` is compared rather than
+  printed: a kill by a *different* test in the filtered class (`wrong-killer`), a kill by the
+  *compiler* before the gate ran — or, for a mutation that exists to be a build kill, a failure without
+  its diagnostic (`killed-by-the-build`; `AddPublicMember`'s comment records how easily an edit slips
+  into that) — and a **test-host abort**, no summary outcome or `Failed!` with no failing test, per the
+  bullet below (`aborted`). Each fails the run; an uncompared expectation would make `killed` mean only
+  "the filtered class went not-`Passed!`".
+- ⭐ **A guard is proven only when a mutation makes it the FIRST assertion to fail**, because a test
+  stops there and "killed by the test it names" says nothing about the assertions after that one. The
+  harness derives every assertion in the gate files (`GateFiles`, plus the nuspec gate's method),
+  attributes each failure to the gate-file line its trace stops on — mapped back through any edit the
+  mutation made to that file — and a full run fails every assertion no mutation reached first. A
+  `--only` run proves only what it reached and judges nothing. ⚠ **It cannot see an assertion that was
+  never written**: a gate with no floor has no floor to trip, so a new or changed guard gets its
+  blinding mutation in the same change.
+- **Two controls read by one scan are anchored by their qualified names.** A finding's `Subject` is
+  text and an anchor is a substring of it, so a control whose name contains another's stands in for
+  it: `LeakControl` and `StockLeakControl` share `BNAQ1002`'s control scan, and while the first was
+  anchored by `nameof`, a `LeakControl` that had stopped leaking passed on the stock one's finding —
+  the mutation *BNAQ1002's DiffPlex control stops leaking* survived until both were anchored by
+  `typeof(…).FullName`, in
+  `AssemblyQualityTests.The_model_does_not_expose_the_diff_engine_on_its_public_surface`.
+- **A guard is an assertion, so a gate file holds no `throw`.** A `?? throw` or a throwing switch arm
+  is tripped by mutations and credited to nothing, which would put a guard beyond the check above; the
+  harness refuses to start while any gate-file line throws. Setup that must fail — the runtime walk's
+  failing build — lives outside the gate files, in `CompositeHost.FailingBuilder`.
+- **An assertion that cannot fail at the current pin is marked, not claimed.** The line above it reads
+  `// inert-at-pin: <package> <version>`, which excuses that one guard only while
+  `Directory.Packages.props` pins the package at that version. A moved pin, or a mutation that trips the
+  guard anyway, fails the run. No marker stands in the gate files at the current pins: the last one, on
+  `BNXQ1004`'s `Skipped` guard, came off when `2026.3.925` made that guard able to fail and a mutation
+  proved it.
+- **The proof is point-in-time: a full run is owed after any change to a gate file, a gated subject or
+  a pin.** A full run takes minutes and CI does not make one. What CI runs is `--guards`, on Linux in
+  `build-and-test` — the standing half, in seconds: it lists the derived guards, judges each marker
+  against the current pin, and exits non-zero on an expired marker or a gate-file `throw`. It proves no
+  guard.
+- **Two mutations must stay green, and that is asserted**: `PrivateAssets="all"` hides a used type
+  from the nuspec gate, and Roslyn emits no reference for an unused package, so `BNAQ1003` and the
+  nuspec gate are each blind to exactly what the other catches. A red there is `unexpected-red` and
+  fails — the complementarity claim is the whole reason both are adopted.
+- **`scripts/mutate-gates.sh` refuses to start on a dirty `src` or `tests`** unless `--force`,
+  because it reverts both before every mutation and an earlier generation of these harnesses
+  repeatedly destroyed uncommitted work that way. It also checks the revert *worked* afterwards, and
+  reads `--untracked-files=all` so a `status.showUntrackedFiles=no` config cannot hide the file
+  `git clean` is about to delete. What a mutation may touch is **derived**, not listed: the whole
+  repository's status is compared before and after every edit, and anything written outside the
+  reverted scope is put back and stops the run — it would otherwise be reported as a no-op, survive the
+  revert, and contaminate every mutation after it. ⚠ **Edit nothing in the worktree while a run is in
+  progress**: an edit outside `src` and `tests` reads as a mutation's stray, and is put back.
+- ⭐ **`--parallel <n>` runs the whole set in `n` worktrees at once, and judges it as one run.** It cuts `n`
+  detached worktrees from `HEAD` under the temp directory, runs a shard in each — every `n`th mutation,
+  dealt round so the slow accessibility ones at the head of the list spread — has each write its verdicts
+  and the guard lines it tripped first (`--emit`), and merges them into the judgement a sequential run
+  makes. ⛔ **The merge refuses anything but every declared mutation exactly once**, from shards `k/n` of
+  one `n` over one commit: a partial set proves only the guards it reached, so a lost shard fails the run
+  rather than shrinking it, and a `--merge` run by hand refuses unless this checkout is the commit the
+  shards ran over. **It never edits this checkout**, so the rule above does not bind it — edit while it
+  runs. It refuses uncommitted changes under `src`, `tests` or the root build files, which a worktree cut
+  from `HEAD` would silently leave out, and its shards skip `fetch-reference`, which no gate reads.
+  Measured on the Windows box over 112 mutations: **27.8 min** sequential in this checkout, **26.6** in
+  one worktree, **11.5** in four and **9.9** in eight, so four is where most of the gain is — and the
+  four- and eight-worktree runs identical to the one-worktree run over the same commit in every verdict
+  and every trip. `--shard k/n`, `--emit <file>` and `--merge <file>` are its parts, and each runs alone.
+- **A `no-op` means the mutation matched nothing, and it fails the run.** It is *not* a surviving
+  mutation and not a pass: the gate was never exercised. The code moved and the mutation needs
+  re-pointing. When a construct is deliberately designed out of existence, its mutation is **deleted**
+  and the plan records why — a permanently unappliable mutation is not evidence.
+- ⛔ **Reverting a mutation does not unbuild it, so the harness rebuilds on every exit it controls**
+  once mutations have started, from a `finally`. A run killed outright cannot, and a
+  `dotnet test --no-build` straight after one is worthless: the last mutation's assemblies sit in
+  `bin/` while the source is reverted, so the run tests mutated code against clean markup — measured,
+  `GridSlotTests` reported **nothing inspected** where it inspects its whole population, and the gate
+  was briefly suspected of the harness's defect. Rebuild first.
+- ⭐ **A behaviour test is proven by `scripts/mutate-behaviour.cs`, from a set committed beside it** —
+  `tests/<project>/Mutations/<subject>.json`, read with `--set`; `docs/mutation-proofs.md` describes the
+  method. A set names its test project, the test files it holds to account, and for each mutation the
+  edit, the test that must fail under it (`killer`) and the words that failure must carry (`says`) — or
+  `expect: green` and why it should not matter. A full run fails while any declared test was killed by
+  no mutation; a kill by another test is `wrong-killer`, the declared test failing on other words
+  `wrong-assertion`, a host that died with no test failed `aborted`, and a key the set's types do not
+  know is refused rather than skipped, `"kiler"` read as nothing being a check silently dropped. Each
+  edit is reverted from a snapshot of the file's bytes, so a set runs over uncommitted work, and
+  `--check` proves every edit applies once and every killer is declared while running nothing. **A test
+  no mutation of ours can reach carries the gates' marker**, `// inert-at-pin: <package> <version>`, in
+  its body — `MarkdownOutlineTests` asks two questions of Markdig's CommonMark compliance rather than of
+  our code — and is excused while the set's pins hold that version: `Directory.Packages.props`, or the
+  `pins` file a set names, which is how the harness's own fixtures stay off the real pins. A moved pin,
+  a marker in no test the reader found and a test file in which it finds no test are setup faults, and a
+  marked test a mutation killed anyway fails the run and names the mutation; `--kills` judges recorded
+  kills in place of runs, which is how that judgement is proven. ⛔ **The harness's own set,
+  `tests/DiffView.Avalonia.Tests/Mutations/mutate-behaviour.json`, never runs from
+  `scripts/mutate-behaviour.cs` itself**: the tests it judges run `dotnet run` on that file, which
+  rebuilds the binary a harness started from it is running from — locked on Windows — so every test
+  would go red and every mutation read as killed. A dry run notes it and a run refuses it; run that set
+  with `--parallel` or from a copy of the script. ⛔ **And no test of the harness reads that set**: while
+  one of its mutations is in place that mutation's own edit no longer applies, so a check of the set
+  fails and a test reading it is killed by every mutation of it, its declared kill proving nothing.
+  `MutateBehaviourTests` reads no committed set, only `fixtures/mutations/` and the script's built-in
+  one — `set-edits-its-runner.json` is the shape of the harness's own set without its edits — and it was
+  the set's one green mutation, going red, that found the test which did not. ⭐ **Every committed set
+  carries a green mutation**, an edit equivalent by a stated law — addition or `Math.Max` commuting, an
+  interpolation as the concatenation it is — in the file most of the set's mutations edit, because a
+  green run is the only one in which a test failing under every mutation shows — **and the harness
+  refuses a set holding red mutations and no green one**, a setup fault judged on the whole set, never
+  on the part `--only` or `--shard` chose
+  (`MutateBehaviourTests.A_set_with_red_mutations_and_no_green_one_is_refused_before_anything_runs`,
+  `MutateBehaviourTests.A_shard_dealt_no_green_mutation_is_not_refused_for_it`). A check for a test
+  killed by every mutation was weighed and left out: as a fault it misfires on a small set aimed at one
+  test, which every mutation kills legitimately, and beside a green control a warning would say nothing
+  the control does not.
+- ⭐ **`--parallel <n>` runs every mutation of the sets it is given in `n` worktrees at once, uncommitted
+  work included.** It writes this checkout's state as a git tree through a temporary index — no commit
+  and no ref moved — cuts `n` detached worktrees from `HEAD`, loads that tree into each and checks each
+  holds it before anything builds; every worktree runs every `n`th mutation of each set (`--shard k/n
+  --emit <file>`) from the binary that started the run, so the harness's own set needs no copy there;
+  and `--merge` judges each set exactly as a sequential run does, refusing anything but every declared
+  mutation exactly once from shards of one `n` over that one tree. It never edits this checkout. Every
+  build and test run the harness starts is given `AVALONIA_TELEMETRY_OPTOUT=1`
+  (`Dotnet.BuildEnvironment`,
+  `MutateBehaviourTests.Every_build_and_test_run_the_harness_starts_has_Avalonias_telemetry_off`): the
+  collector Avalonia's build task starts before each compile once kept a worktree for three quarters of
+  an hour after its build. Anything else a build starts that holds a worktree, the harness names, with
+  how to remove it. **`--owed <ref>` runs only the sets a change owes** — one whose own file, pins, test
+  files or a file one of its mutations edits changed since the ref, committed or not — among those
+  named, or else every `tests/*/Mutations/*.json`; ⚠ it reads files rather than dependencies, so a
+  change to code no mutation edits can still owe a set a run it does not name, and it narrows the runs
+  between full ones without replacing any. Two trims, each measured before it was made: a mutation's
+  build skips the restore (6.4 s to 4.5), and a mutation naming its killer runs only the classes of the
+  set's test files (6.0 s to 1.7 for one class), a green one and a red one naming no killer keeping the
+  set's whole filter so that narrowing can relabel a failure and never pass one; `--list` prints what
+  each run filters to and whether its build restores, which is how both rules are held
+  (`MutateBehaviourTests.A_listed_mutation_says_what_its_run_filters_to_and_whether_its_build_restores`).
+  Measured on the Windows box over the five AgentBaseline sets, the same 176 mutations each time: **40.2
+  min** one at a time in this checkout before the trims, **32.8** in one worktree with them and **16.5**
+  in four, every run's verdicts the sequential run's mutation for mutation — the trims worth about a
+  fifth, and four worktrees about twice as fast as one rather than four times, each shard's builds
+  sharing the CPU with the other three's.
+- `PresenterHost` under `tests/DiffView.Avalonia.Tests/Presenter` is the fixture for presenter
+  tests; `ThemeSwap` and `ThemeTargets` cover the ten theme targets.
+- **A test-host abort reads as a pass to any grep, so judge the whole summary.** When the host dies
+  mid-run the runner prints **`Test run summary: Failed!` with `failed: 0`** and a total short of the
+  suite — `failed: 0` is true and meaningless, and `succeeded:` matches the tests that did run. The
+  one abort this repository has diagnosed was root-caused and repaired (`DECISIONS.md`, plan 00020's
+  `StatusController` clock), so this is a guard against misreading rather than a live defect.
+  `scripts/catch-crash.sh` is the guard: `--check <log>` judges a captured run, and with no argument
+  it re-runs the suite until it catches one and keeps that log. Its load-bearing clause is that the
+  summary outcome must say `Passed!` — no arithmetic over the counts can see an abort, because
+  412 + 0 + 0 closes perfectly. Pass **`--expect auto`** to make a short total a failure too: it
+  reads the suite's size from `dotnet test --list-tests` against the current build. ⛔ **Never write the
+  number down.** `Judge` compares with `!=`, so a stale count is wrong in both directions at once —
+  every clean run reports a false abort, and the one-test-short run the flag exists to catch passes.
+  With `--check`, discovery reads the build that is here now, so judge a log from the build that made it.
+- `CompositeHost` keeps syntax highlighting **off** unless a test passes `syntax: true`, for the
+  reason it keeps the caret from blinking: TextMateSharp tokenizes on its own thread, so a frame
+  captured without waiting is a coin toss. A test that wants colour waits on
+  `CompositeHost.PumpUntilAsync` with a `SyntaxProbe` condition — the built runs' foregrounds,
+  which are readable the moment the line is rebuilt — never on a sleep.
+- ⛔ **A build is awaited, never pumped for.** `DiffBuildController.RunBuildAsync` runs the diff on the
+  thread pool and posts its outcome to the dispatcher, so one `CompositeHost.Layout()` lands a build
+  only when the pool happened to finish first: green on a fast desk, intermittently red on a slower
+  runner, at the same commit. `CompositeHost.WaitForBuildAsync` is the wait, and `View.CurrentBuild`
+  says whether there is one — a test asserting a state *before* a re-diff pins `Assert.Null` on it, so
+  the premise cannot quietly stop holding when a verb starts re-diffing at once. `SideBySideDiffView.Revert`
+  is that verb: it re-diffs through `ReDiffNow` rather than the debounce the hand-advanced clock never
+  fires, and it replaces the whole text, so AvaloniaEdit keeps the pane's `CollapsedLineSection`s while
+  every line they covered has gone — `DiffPanePresenter.CollapsedSectionCount` still counts them with
+  the height tree holding nothing collapsed at all, which is why the count is no evidence that a fold
+  is in place. The folds come back from the re-diff's `RefreshFolds` and from nothing else. Test
+  `EditUnderFoldTests.A_revert_after_a_same_line_edit_leaves_each_fold_over_the_lines_it_covered`, which
+  holds its own build on a gate so that middle state can be read at all.
+- ⛔ **A test that opens a window of its own puts every view in it on the hand-advanced clock before the
+  window shows**, as `CompositeHost`, `InlineHost`, `ViewerHost` and AgentBaseline's `ReviewHost` do. A
+  view's `StatusController` takes the view's `TimeProvider` when it is built, a finished build arms a
+  success's auto-clear on it, and a build that lands after the window closes builds a controller nothing
+  will dispose, the residue `DECISIONS.md` accepts. On the real clock that timer comes due on a pool thread,
+  and the headless host runs its UI loop on one: when the two coincide, `StatusController.DispatchToUiThread`
+  runs the clear inline, `DiffStatusStrip.State` fails `VerifyAccess` and the test host aborts mid-suite,
+  which `DemoMenuTests` did while it closed the demo's window with its build in flight. Every test that opens
+  the demo's window sets the clock on its views.
+- `InlineHost` under `tests/DiffView.Avalonia.Tests/Inline` is `CompositeHost`'s unified twin —
+  the same hand-advanced clock, the same zero-time builder, the same syntax rule. A test that
+  reads what a margin or a background renderer *drew* captures a frame (`Capture()`); a layout
+  pass alone does not redraw a margin.
+- `ViewerHost` under `tests/DiffView.Avalonia.Tests/Viewer` is `CompositeHost`'s twin for
+  `DiffViewer` — the same clock, builder and syntax rule. It exists because `CompositeHost.View` is
+  typed as the editor, so none of the coverage written against it reaches the viewer. A test that
+  shows an editor and a viewer side by side focuses a pane just before pressing keys in its window:
+  keyboard focus belongs to one device, and focusing the second window's pane takes it from the first.
+- Rendered text must be machine-independent (`SmokeSnapshotTests`, `PresenterSnapshotTests`) — no
+  build time, no machine's font. Static seams: `DebugFlags.ResetForTesting`,
+  `DiffViewStrings.ResetForTesting`, `DemoLogging.ResetForTesting`.
+- ⛔ **A snapshot proves Linux's rendering and nothing else.** Every committed baseline was rendered
+  and reviewed on Linux, and rasterization is the platform's: the bundled font fixes which glyphs are
+  drawn and nothing about how, so the same frame differs by 10–13% of its pixels on Windows and
+  macOS without anything being wrong. Every test that compares a frame therefore carries
+  `[LinuxBaseline]`; away from Linux the runner filters it out (`tests/Directory.Build.props`,
+  `-p:ExcludeLinuxBaselines=false` to run it anyway), and CI prints how many it left out, because a
+  filter is silent in the summary. A new frame test takes the attribute, or it fails two CI legs.
+  What looks at rendering on Windows and macOS is a by-hand run, not this suite. A pixel assertion
+  beside a capture is a property rather than a picture, so it runs everywhere and must hold at every
+  platform's rasterization: it reads ink as coverage (`PixelProbe.Coverage`), never as a count of
+  pixels past a colour threshold, which measures one rasterizer's rounding. `MarkerChipTests` and
+  `MarkerGlyphTests` carry beside their bounds the per-platform readings those were derived from.
+- **The snapshot comparer tolerates anti-aliasing, not glyphs, and this is the trap that recurs.**
+  `VerifySetup.ChannelTolerance` and `VerifySetup.MaxDifferingFraction` exist so a platform's
+  anti-aliasing does not fail a frame; the cost is that a change smaller than that fraction passes
+  every snapshot *while the frames still depict the old drawing*. A redrawn arrow, a swapped
+  marker glyph, a new chip behind one and plan 00008's realigned headers have each done it in this
+  repository — every baseline green, every baseline stale. **A snapshot is never the guard for
+  anything smaller than a row.**
+  Put a pixel assertion beside the capture (`PixelProbe`, `PresenterHost.Near`,
+  `PresenterHost.Token`) and let the PNG be what a reviewer looks at.
+- To find what a small change actually moved: set `VerifySetup.MaxDifferingFraction` to zero,
+  **leaving `ChannelTolerance` at 8**, run once, regenerate exactly the baselines that fail,
+  restore the constant. Promoting every `.received.png` blindly is not the same thing — it
+  rewrites frames a change never touched.
+- **Do not zero `ChannelTolerance` as well.** It absorbs sub-perceptual anti-aliasing, and some
+  frames carry a few pixels of it that reproduce run to run: zeroing it reported two
+  `SyntaxSnapshotTests` frames as moved by a change to the copy arrow, which those frames do not
+  even draw. The differences were 3 and 5 of 255 in a single-pixel column; the genuinely changed
+  frames differed by 121 to 143. The fraction is what hides a real change, and the fraction alone
+  is what the sweep should remove.
+- **A captured frame cannot show that something was invalidated.**
+  `Window.CaptureRenderedFrame` draws the whole visual tree whether or not anything asked it to,
+  so a test that renders after a state change passes even with the invalidation removed — the
+  selection arrow's clearing test did exactly that. Where a decorator's contract is *when* it
+  repaints rather than what it paints, assert the notice reaching it
+  (`DiffLineNumberMargin.SelectionNotices`), not the pixels afterwards.
+- **A frame is not evidence for a few pixels either, and the tail bar is the measured case.**
+  Removing `CopyArrowGlyph`'s tail bar leaves all twelve `SelectionArrowSnapshotTests` frames
+  green; the guard is
+  `CopySelectionTests.The_selection_arrow_carries_the_palette_s_share_of_shape`, which reads the
+  tail as luminance against the gutter — 9 inked rows of a 12 px zone with the bar, 5 without.
+- A reported rectangle cannot show that a drawing is where it should be, because a drawing that
+  strays reports where it strayed to. Where position matters, assert it against something the
+  decorator does not choose: `DiffLineNumberMargin.LastColumnRight` names the edge the numbers
+  were aligned to, which is why a copy arrow shifted four pixels survived every other assertion.
+- `AccessibilityCoverageTests` derives its element set from the library — every public `Control` it
+  ships, less `Excluded`, plus the framework names in `LiveFrameworkElements` and `ForwardCover` — so
+  every pane in a view carries `AutomationProperties.Name` and a new public control is covered the
+  moment it exists. Each name is floored on its own: one that covers nothing fails, and so does a
+  forward-cover name that starts covering something. Its scan of `src` is accounted for subject by
+  subject — the library, the demo and `AgentBaseline`'s review window, each with a floor of its own — so
+  a further markup-bearing project under `src` makes the accounting false until it has a subject and a
+  floor too, the way `BaselineWithin` came with the review window's first markup.
+- **A test that hit-tests draws a frame first.** Avalonia hit-tests the scene the compositor last
+  rendered, not the layout, so a control just shown hit-tests to whatever was drawn there before it —
+  the find bar's centre landed on the pane below until a frame was drawn. `Window.CaptureRenderedFrame`
+  draws one, and the peer walk in `AccessibilityCoverageTests` calls it before each state's hit-tests.
+  The general lesson is XamlQuality's (§8).
+- **An id a test asserts is read off the attached property first.** Avalonia derives an id from a
+  control's `Name` when none is set, so an explicit id equal to the `x:Name` is indistinguishable at run
+  time from the derived one, and a lookup alone cannot fail when the explicit id is deleted:
+  `DemoViewTests.Each_view_is_found_by_its_own_explicit_id_while_it_is_the_one_on_screen`.
+- **A reading that asserts only that nothing wrong was found carries a positive control**, because it
+  passes when it reads nothing. Plan 00026's id readings each have one, with a mutation that blinds the
+  reading and trips it first: the walk's requirement is refused when empty, the off state must still
+  find the parts left on, and every menu that opens must show its entries.
+- **A test that asserts English text says so, with `[EnglishChrome]`.** `HeadlessTestApp` pins the
+  UI culture to `en-US` and `DIFFVIEW_TEST_UI_CULTURE` flips it; CI's `culture-leg` job flips it to
+  `de-DE` over the whole suite. A test that fails only there was asserting English without saying
+  it wanted English — invisible on an English runner, red on a German desk. The attribute is the
+  claim that this test is about the English words, and it belongs on the **method**; on a class it
+  is shorthand for *every test in this class is a frame*, which also silently covers whatever the
+  class gains later. A new test carries no pin by default and is therefore in the leg, which is the
+  way round it should be.
+- **Pin, do not soften.** The cheap repair for an assertion of English text is to resolve the same
+  key on both sides of the comparison — `Assert.Equal(DiffViewStrings.Get(key), control.Text)` —
+  and it passes in every culture while asserting almost nothing, because a control wired to the
+  wrong key moves both sides together. Soften only where the test's subject really is the wiring,
+  and say so at the call site. `MinimapLaneTests.The_tooltip_names_the_lane` is the case that shows
+  the cost: it asserts one tooltip contains `"left"` and a second does not, and under German the
+  second half passed vacuously while the first failed.
+- **The pin is a scope, never an assignment.** `EnglishChromeAttribute` opens
+  `DiffViewStrings.Override` before each test and disposes it after. Pinning
+  `DiffViewStrings.Localization` once at start-up was measured and recovers 16 of 94:
+  `LocalizationTests` assigns the seam and calls `ResetForTesting` in a `finally`, both by design,
+  and the serial run reverts every test after it to the machine's language.
+
+## 6. The composite
+
+**Since plan 00021 phase 1, the composite is two objects.** `SideBySideDiffView` is the control and
+the public API — find, editing, copying, the context menus and the key map. `DiffBuildController` is
+everything both a diff editor and a diff viewer do: building, the model, the state machine, the
+template parts, the panes, the chrome, folding and navigation. It is internal and it is not a
+control, but it reads every option from the control it is handed, so it runs with no window and no
+template — never with no control (`ViewerStateTests.A_viewer_that_is_never_shown_builds_to_ready`).
+
+The two meet at `IDiffSurface`, an internal seam the control implements **explicitly**, so none of
+it reaches the public surface. Its members re-expose what the framework marks protected (`Control`,
+`PseudoClasses`, `SetAndRaise`), answer at the variation points where an editor and a viewer
+differ, or raise the events, which only a declaring type may raise. **A change
+to shared behaviour belongs in the controller, and a new thing the two surfaces disagree about is a
+new member on the seam — not a type check.** The invariants below name whichever of the two holds
+each one.
+
+`SideBySideDiffView`'s reachable public surface is gated against `fixtures/api/sidebyside.txt`
+(`SurfaceGateTests`); a member added on purpose regenerates that file in the same change. That gate proves nothing leaked out; it does not police the refactor,
+because an explicit implementation is private in IL and invisible to it. The behaviour suite is what
+does.
+
+| Invariant | Failure signature if broken | Canonical source |
+|---|---|---|
+| Assigning `LeftSource` / `RightSource` replaces that side's `TextDocument` and clears the model until the build lands; changing an option rebuilds over the same documents and keeps the model, marked stale | The old kinds paint over new text, or caret, selection, scroll and undo are lost on an option change | `DiffBuildController.OnSourceChanged`, `DiffBuildController.RequestBuild`; tests `Changing_an_option_rebuilds_and_preserves_caret_selection_scroll_and_undo_in_both_panes`, `A_slow_build_shows_progress_after_the_threshold_and_the_previous_result_is_marked_stale` |
+| Latest wins: a build's outcome is applied only while its generation is the latest, on the UI thread; the worker sees captured text, never a `TextDocument` | A stale result overwrites a newer one, or `TextDocument.VerifyAccess` throws off-thread | `DiffBuildController.RunBuildAsync`, `DiffBuildController.Complete`; test `A_change_during_a_build_supersedes_it_and_the_final_state_reflects_the_last_input` |
+| The control is always in one `DiffViewState`; every transition is logged once at `Information` through `DiffViewLog.StateChanged` | A transition logged twice or not at all | `DiffBuildController.SetStateCore`; test `The_log_never_carries_document_text_and_each_state_transition_appears_exactly_once` |
+| `DiffViewLog` is the only place a log line is formatted, and no line carries document text | A secret under comparison reaches a log file | `DiffViewLog`; the sentinel test above |
+| `StatusController.Set` is private; only `SetActive`, `SetSuccess`, `SetWarning`, `SetFailure`, `SetState` emit | A failure renders as quiet text | `StatusController`; `StatusControllerTests` |
+| `DiffPanePresenter.RenderFault` is raised after the render pass, via the dispatcher | "Visual was invalidated during the render pass" from a listener | `DiffPanePresenter.ReportFault` |
+| `ScrollSync` compares before it sets and guards re-entrancy; both panes' horizontal bars are `Visible` or `Hidden` together | A feedback loop, or panes with unequal viewport heights | `ScrollSync.Follow`, `DiffBuildController.UpdateHorizontalScrollBars`; test `Scroll_sync_is_one_to_one_at_top_middle_and_bottom_with_no_feedback_loop` |
+| The scroll coupling waits for both panes' templates: `DiffPanePresenter.PaneScrollViewer` is null until `OnApplyTemplate` | Sync silently absent after a template re-application | `DiffBuildController.TryWireScrollSync` on `TemplateApplied` |
+| Every user-visible string of the composite, headers and strip goes through `DiffViewStrings` and is computed per instance, never at type initialisation | Swapping `DiffViewStrings.Resolver` before load changes nothing | `DiffBuildController.RefreshStrings`, `UpdateHeaders`, `UpdateStrip`; test `Swapping_the_string_resolver_before_load_changes_the_rendered_strings` |
+| The composite, each header, the strip and the find bar merge their own compiled theme — `SideBySideDiffViewTheme`, `DiffPaneHeaderTheme`, `DiffStatusStripTheme`, `DiffFindBarTheme` — into their own resources, and each dictionary holds that one theme (§4) | Invisible controls without a host include, IL2026 under the trim-check, or a theme found twice on the way up and carried by a view with no such part | the four constructors; tests `ControlThemeTests.No_theme_of_ours_is_found_twice_on_the_way_up_from_any_element`, `ControlThemeTests.The_viewer_carries_no_theme_for_the_find_bar_it_does_not_have` |
+| A rendered frame carries no machine-specific text: `CompositeHost.ZeroTimeBuilder` zeroes the build time in the test host, and the demo loads its sides on `Opened` so the smoke test can install it first | Snapshots drift by build time | `CompositeHost`, `MainWindow.OnOpened`, `SmokeSnapshotTests` |
+| Word-level pieces are read through `WordDiffLookup` over the live documents, one lookup per build result bound to that build's options; the cache is filled only by rows that rendered | Stale pieces after a rebuild, or a keystroke throwing from the renderer | `WordDiffLookup.PiecesFor` (bounds-checked), `DiffBuildController.ApplyModel`; test `WordDiffTests.Word_rectangles_cover_exactly_the_piece_columns_in_both_panes_and_the_cache_holds_only_rendered_rows` |
+| A piece rectangle's columns come from `VisualLine.GetVisualColumn`, never from the character index directly | Highlights drift by one column on padded lines and by more over tabs | `DiffLineBackgroundRenderer.DrawWordPieces` |
+| A line longer than `MaxWordDiffLineLength` gets no pieces, and the marker margin's tooltip says so | A one-megabyte line stalls the UI in the word diff, or is silently unhighlighted | `WordDiffCache.GetPieces`, `ChangeMarkerMargin.TooltipFor`; test `WordDiffTests.The_one_megabyte_single_line_renders_without_pieces_and_the_marker_tooltip_says_so` |
+| Row geometry is uniform once primed: a **visible** row's top is its index times the line height, and the current-block border, the centring scroll, the connector polygons and the minimap viewport all compute from that product. A model row is a visible row only once `RowProjection` has made it one — *A row becomes a pixel in exactly one place*, below — so none of the four multiplies a model row | Borders, connectors and jumps land on the wrong rows when priming is skipped or stale, or as many rows down as a fold above them hides | `DiffLineBackgroundRenderer.DrawCore` (border), `DiffBuildController.ScrollToRows`, `ChangeConnectorGutter.TopOfRow`, `DiffMinimap`; the priming contracts in §2 |
+| A connector's left extent is the block's first `ModifiedCount + DeletedCount` rows and its right extent the first `ModifiedCount + InsertedCount`, per the row builder's pairing rule | Wedges point the wrong way or bands are the wrong height | `ChangeConnectorGutter.Render`; test `OverviewTests.Connector_polygons_have_the_expected_extents_a_click_selects_the_block_and_a_drag_resizes_the_panes` |
+| `CurrentChangeIndex` is set only through `DiffBuildController.SetCurrentChange`, which clamps, scrolls, and pushes the block to the presenters, the gutter and the minimap together; a new model resets it | One surface shows a different current change than another | `DiffBuildController.SetCurrentChange`, `ApplyModel`; test `NavigationTests.NextChange_from_the_top_lands_on_the_first_block_and_stops_at_the_last_with_the_strip_saying_so` |
+| The key bindings are the composite's `KeyBindings`, built from `KeyMap`; Avalonia tries an ancestor's bindings before raising the key event, so they fire while a pane has focus, and a host may rebind, unbind or clear them | Keys stop working after a template change, or a host cannot rebind | `SideBySideDiffView.KeyMap`, `GestureFor`, `CommandFor`; tests `NavigationTests.F7_and_Shift_F7_navigate_and_F6_switches_panes`, `KeyMapTests.*` |
+| **Only the bindings the control created are replaced** when the map changes — `KeyBindings` is public, so a host may have added its own. `DiffKeyBindings` is the single implementation of that rule and of the two-commands-on-one-gesture warning, held by both views: a second copy is where they would drift apart | A host's own `KeyBinding` deleted without a word by a rebind, or the two views' rules parting | `DiffKeyBindings.Rebuild`; tests `KeyMapTests.A_binding_the_host_added_survives_a_rebuild`, `InlineKeyMapTests.A_binding_the_host_added_survives_a_rebuild` |
+| `CopyToLeft` / `CopyToRight` copy the **selection when there is one and the current block otherwise** — the rule the gutter already applies when a selection arrow takes a block arrow's cell. `CopyBlockToLeft` / `CopyBlockToRight` are the block-always pair, unbound by default so the old behaviour keeps a name | The gutter draws one operation and the chord fires another, which is what plan 00006 left behind | `SideBySideDiffView.CopyToward`, `CanCopyToward`; test `KeyMapTests.The_gutter_and_the_chord_agree_on_the_contested_cell` |
+| The pane menu is raised from `ContextRequested`, **not** a `ContextMenu` in a template: the keyboard raises the same event with no position, which resolves to the caret. A right-click **never moves the caret**, and the event is marked handled only when a menu actually opened | Shift+F10 opens a menu built for the wrong place; a right-click discards the selection the menu offers to copy; a `ContextMenu` a host set on the view is eaten in silence | `DiffPanePresenter.OnContextRequested`, `ContextAt`; tests `PaneContextMenuTests.A_right_click_leaves_the_caret_and_the_selection_where_they_were`, `The_keyboard_asks_at_the_caret`, `A_request_the_pane_answers_with_nothing_still_reaches_an_ancestor_menu` |
+| The menu's **shape does not move with the state**: every entry is present on every open, enabled or not, so a host's "insert after this item" means the same thing every time. A verb the *view* does not have is **absent** rather than disabled, decided by `CommandOrNull` | A host's insertion wanders as items come and go; or a greyed entry promises a state that does not exist | `SideBySideDiffView.MenuItemsFor`, `DiffPaneMenu.Verb`; tests `PaneContextMenuTests.The_menu_shape_does_not_move_with_the_selection`, `InlinePaneContextMenuTests.A_verb_the_resolver_has_no_command_for_makes_no_item_at_all` |
+| `PaneContextMenuOpening` amends the control's items; `PaneContextMenu` replaces the menu and **suppresses that event**. Either way the context reaches the menu as its `DataContext` | A host with its own menu cannot learn what was clicked | `DiffPaneMenu.Request`; test `PaneContextMenuTests.The_replacement_menu_suppresses_the_opening_event` |
+| **Every string that names a side is a whole sentence per direction**, never one sentence with the side word substituted in — a translator cannot inflect a word dropped into someone else's sentence. Only runtime values are placeholders; a kind standing alone between separators is a label, not a phrase | A translated build reads as English grammar with foreign words in it | `DiffViewStrings.CopyArrowTooltip`, `LineTooltipAligned`, `MinimapLaneTooltip` and their siblings; test `StringCatalogueTests.No_string_of_the_library_is_built_by_pasting_a_side_word_into_it` |
+| Every declared key has English text, reaches the host's resolver, and is named once | A key added without a default renders as its own name and nothing notices | `StringCatalogueTests`, adapted from ClaudeForge's `LocalizationParityTests` |
+| Text resolves through the one `DiffViewStrings.Localization` record — a host resolver and a culture together, never two settable statics | A resolver answering for one language while the bundled translations answer for another, which no single-property version can prevent | `DiffViewLocalization`, `DiffViewStrings.Localization`; test `LocalizationTests.Resetting_restores_both_the_resolver_and_the_culture` |
+| `Get` reads `Localization` once, resolves one culture, and hands that culture to the resolver | A key answered out of one culture and its fallback out of another; a host that returns null not knowing which language will answer | `DiffViewStrings.Get`; test `LocalizationTests.A_partial_resolver_falls_through_to_the_resolved_culture_not_the_machines` |
+| The chain is host resolver, then bundled translation for that culture, then the compiled English table, which cannot fail to load | A trimmed or mispackaged build rendering keys instead of text | `DiffViewStrings.Translation` catches `MissingManifestResourceException`; test `LocalizationTests.A_host_resolver_outranks_the_bundled_translation` |
+| The neutral `Strings.resx` is generated from `DiffViewStrings.EnglishDefaults` and never hand-edited; the locale files beside it are authored | The embedded resource and the compiled table disagreeing, which silently changes what every lookup returns | `scripts/gen-strings.cs`; test `LocalizationTests.The_committed_neutral_resx_carries_every_English_default_and_no_others` |
+| A shipped locale carries every key, no undeclared key, and English's placeholder set per key; `SatelliteResourceLanguages` names the eight | A locale rendering literal braces or throwing `FormatException`; a ninth locale built and then dropped from a trimmed publish | `LocaleParity`; tests `LocaleParityTests.Every_shipped_locale_passes_every_check` and `The_shipped_locales_are_exactly_the_declared_set` |
+| Every key's `<summary>` accounts for the placeholders its string takes **and reads on its own**, without the key above it | A native reviewer judging a translation against context that is false or empty. The review packet shows one key per row, so a summary that says *"The same, rightwards"* resolves to nothing — and accounts for all of its zero placeholders, which is why there are two gates and not one | `DiffViewStrings`; tests `StringCatalogueTests.Every_summary_accounts_for_the_placeholders_its_string_takes` and `StringCatalogueTests.No_summary_leans_on_the_key_above_it` |
+| `docs/locale-review/<culture>.md` is generated from the strings and never hand-edited; a correction goes into the `.resx` and the document regenerates | Two spellings of a language with no rule about which wins, and a reviewer signing off on strings that have since moved | `scripts/gen-locale-review.cs` (`--check`); test `LocaleReviewTests.Every_committed_review_document_describes_the_strings_it_claims_to` |
+| A string whose leading or trailing space is load-bearing renders that space as `␣` in the review packet | A markdown cell trims, so the reviewer reads a string that is not the string and returns a translation with the padding removed — `Fold.Placeholder` is `" ⋯ {0} matching rows hidden "` and is drawn as a pill | `scripts/gen-locale-review.cs`; tests `LocaleReviewTests.A_string_padded_with_spaces_survives_the_round_trip` and `LocaleReviewTests.A_padded_string_shown_without_its_padding_is_caught` |
+| **The locale caveat is stated in eleven places and no shipped or authored text says native review gates the release** — lifted 2026-09-18. The two facts (machine-generated, unreviewed) are asserted in the README, the hosting guide and the eight locale headers; the blurb names the locales. Wording is **not** compared, the eleven spanning three registers. ⛔ `DECISIONS.md`, `PROGRESS.md` and `plans/` are outside the scanned set and cannot be added: each must quote the claim — the superseded markers record the correction by naming it, and plan 00027 quotes the lifted imperative three times while specifying this gate | The README told its public readers for three and a half weeks that review gates the first release, and the eight locale headers ordered it; a consumer meets the caveat nowhere, or meets a constraint that no longer exists. Or the gate fails on the commit that fixes the drift, the corrections reading "does not **gate** the release" where the claim reads "review **gates** it" — matched on the affirmative inflection, with a positive control because a reading that only finds nothing passes when it reads nothing | `src/DiffView.Avalonia/DiffView.Avalonia.csproj`'s `Description`, `README.md`, `docs/diffview.md`, `src/DiffView.Avalonia/Localization/Strings.<culture>.resx` × 8; tests `LocaleCaveatTests.Every_place_a_consumer_meets_the_caveat_states_it`, `The_package_blurb_names_the_shipped_locales`, `No_shipped_or_authored_text_says_native_review_gates_the_release` — whose normalization strips markdown emphasis as well as collapsing whitespace, the README reading "have `**`not`**` been read by a native speaker" with the markers inside the phrase |
+| `SplitRatio` is applied to both the headers grid and the panes grid, which share their star columns | Headers drift from their panes after a gutter drag | `DiffBuildController.ApplySplit`, template parts `PART_Headers` and `PART_Panes` |
+| A margin's tooltip is resolved per line under the pointer by `DiffMargin.OnPointerMoved` and cleared on exit; each margin supplies `TooltipFor(lineNumber)` from `PaneMetadata` | A tooltip names the wrong line, or lingers | `DiffMargin`, `DiffLineNumberMargin.TooltipFor`, `ChangeMarkerMargin.TooltipFor`; `TooltipTests` |
+| `DiffPanePresenter.CanCopyOut` carries the **other** side's editable flag, not its own: a pane offers to copy a block out when the side that would receive it is editable | Arrows appear on the pane that cannot be copied from, or vanish from the one that can | `DiffBuildController.AttachPane` and the `LeftReadOnlyProperty` / `RightReadOnlyProperty` branches of `OnPropertyChanged` — both paths, because a host that sets the flag in XAML is wired by the first and never reaches the second; test `CopyArrowMarginTests.A_side_editable_before_the_template_applies_is_wired_too` |
+| A copy arrow is drawn over the line number of its block's **anchor row** — the block's first row — and a block a side has no lines in draws its arrow in that side's padding, where no number is given up | An arrow on the wrong row, or a block that offers no copy on the side that has nothing to send | `DiffLineNumberMargin.LastCopyArrows` (its `OverLine` is null for a padding arrow), `PaneMetadata.BlockAtRow`, `ChangeBlock.LinesFor`; tests `CopyArrowMarginTests.One_arrow_per_block_on_the_block_s_first_line`, `A_one_sided_block_at_the_very_end_is_reached_in_the_trailing_padding` |
+| The number margin shows `StandardCursorType.Hand` over an arrow and clears its `Cursor` off one, so the pointer says which cells are clickable; the margin claims no cursor elsewhere and keeps the pane's | A clickable arrow under a text I-beam | `DiffLineNumberMargin.OnPointerMoved`, `OnPointerExited`; test `CopyArrowMarginTests.The_pointer_says_the_arrow_is_clickable` |
+| The number margin hit-tests its arrow before the row it sits in; the composite performs the copy, because a pane knows nothing about the other side | A click on an arrow moves the caret instead of copying, or a pane tries to reach across | `DiffLineNumberMargin.OnPointerPressed`, `DiffPanePresenter.CopyOutRequested`, `SideBySideDiffView.OnPaneCopyOutRequested`; test `CopyArrowMarginTests.A_click_on_a_number_still_only_moves_the_caret` |
+| `SideBySideDiffView.CopyBlock` and `CopySelection` write through one `CopyLines`: a block copy and a selection copy differ in the range they name and in nothing else | The terminator rules or the append-past-an-unterminated-last-line rule drift apart between the two copies | `SideBySideDiffView.CopyLines`, `LinesOf`, `RegionOf`; tests `CopyToSideTests.*`, `CopySelectionTests.The_copy_lands_in_the_aligned_rows` |
+| A selection copy's target is the other side's lines **in the rows the selection's whole lines occupy** — not the same line numbers; where every one of those rows is padding on that side the copy inserts, at the line after the last one that side has above the run | Copied lines land beside the rows they were aligned with, or an insertion lands a line out | `SideBySideDiffView.AlignedLinesOf` over `SideBySideDocument.Rows` / `LineOf`, positioned the way `DiffDocumentBuilder.NextLine` positions a block's empty range; tests `CopySelectionTests.The_copy_lands_in_the_aligned_rows`, `A_selection_over_padding_inserts` |
+| `DiffPanePresenter.SelectedLines` takes whole lines at both ends, and a selection whose end sits on the very start of a line stops at the line above | A three-line drag copies four | `DiffPanePresenter.SelectedLines`; test `CopySelectionTests.A_selection_reaching_the_next_line_s_first_column_stops_above_it` |
+| The selection's arrow takes the number cell of the selection's **first** row, and where that row is also a block's anchor the selection's arrow wins it and the block's is not drawn at all | Two arrows in one cell, or a rule that lives only in the order of two `if`s | `DiffLineNumberMargin.RenderCore` (the selection anchor is tested before `AnchorBlockOf`), `LastSelectionArrow`; tests `CopySelectionTests.The_selection_arrow_wins_the_contested_cell`, `SelectionArrowSnapshotTests.The_selection_arrow_takes_the_block_s_cell` |
+| `CopySelectionRequested` carries **no** payload: the composite reads the selection back through `SelectedLines` when it acts | A range captured at click time is stale by the time it is used | `DiffPanePresenter.CopySelectionRequested`, `SideBySideDiffView.OnPaneCopySelectionRequested` |
+| The two arrows are told apart by colour in the default palette and by colour **and** a tail bar in the colour-blind one; the margin always lays the bar out and paints it in `DiffView.SelectionArrowBarBrush`, which is `Transparent` by default. Nothing branches on the palette, because the palette is a dictionary the host merges and the control never learns it happened | A host merges the colour-blind dictionary and gets no shape cue, or sets a property that disagrees with the dictionary | `CopyArrowGlyph.Draw`'s `tailBar`, `DiffLineNumberMargin.DrawSelectionArrow`, `Themes/DiffView.Tokens.axaml` and its `ColorBlind` sibling; test `CopySelectionTests.The_selection_arrow_carries_the_palette_s_share_of_shape` |
+| The number margin is invalidated from `TextArea.SelectionChanged`, so the selection arrow appears and goes with the selection rather than at the next unrelated redraw | An arrow that lags the selection, which looks like a race and is not | `DiffPanePresenter.OnSelectionChanged` → `DiffLineNumberMargin.OnSelectionChanged`; test `CopySelectionTests.Clearing_the_selection_takes_the_arrow_with_it` — and §5 on why the assertion is the notice, not the frame |
+| `PART_Headers` and `PART_Panes` share a column layout — `Auto,*,16,*,Auto` — so a header is exactly as wide as its pane **and starts where it starts**. `SplitRatio` is written into columns 1 and 3 of both | A header the right size in the wrong place. This was broken for four plans: the headers' spacers were 24 and 14 against the panes' 16 and 22, two stale numbers that summed to the same 38, so the widths matched and only the boundary between them was 8 px out | `DiffBuildController.ApplySplit`, `ApplyMinimapPlacement`, the two grids in `Themes/SideBySideDiffView.axaml`; test `MinimapLaneTests.Each_header_is_exactly_as_wide_as_its_pane` |
+| The overview map docks either side through `MinimapPlacement`, the left unless a host sets `Right`, into an `Auto` slot at each end of both grids; the empty slot takes no width, and the template puts the map in the right-hand one, so the default is `ApplyMinimapPlacement`'s work on the template path. The map's **lanes do not follow the dock** — a lane names a file, not an edge — while the current-block marker and the find ticks do, through the single `DiffMinimap.MirrorEdges` flag | A lane that means the left file on one dock and the right file on the other, or a marker pointing away from the text; or, with the template path applying no placement, the map on the right of a view that set nothing | `DiffBuildController.ApplyMinimapPlacement`, `DiffMinimap.MirrorEdges` and the `LaneLeft` / `MarkerLeft` / `TicksLeft` helpers that read it; tests `MinimapLaneTests.The_map_docks_outside_the_panes_either_way`, `MinimapLaneTests.The_map_docks_outside_the_left_pane_unless_a_host_says_otherwise`, `MinimapSnapshotTests.Docked_left_the_lanes_stay_and_the_edges_mirror` |
+| The overview map is **two lanes**, one per side: a bucket inks a lane only where that side has a line in the rows it covers, so a one-sided block inks one lane and notches the other. `KindOfBucket(bucket)` stays the strongest kind on either side and is the stronger of the two lanes, so nothing that asked the old question gets a new answer | A lane claims rows its side does not own, or the single-lane reading changes under a caller that never asked for lanes | `DiffMinimap.BucketKinds(DiffSide)` over `SideBySideDocument.LineOf`; tests `MinimapLaneTests.A_deletion_inks_the_left_lane_and_notches_the_right`, `Every_lane_bucket_is_one_the_model_puts_there` |
+| A press **inside** `DiffMinimap.ViewportBounds` drags the viewport; a press outside it jumps. The box is what divides the two gestures, so they cannot contest a pixel | A click scrolls continuously, or a drag only jumps once | `DiffMinimap.OnPointerPressed`, `OnPointerMoved`, `OnPointerReleased`; test `MinimapLaneTests.A_press_outside_the_viewport_jumps_and_a_press_inside_it_drags` |
+| `SideBySideDiffView.ShowMinimap` is applied on **both** the template-application path and the property-change path | A host that sets it in XAML is ignored — the same gap `CanCopyOut` had | `SideBySideDiffView.OnApplyTemplate` and the `ShowMinimapProperty` branch of `OnPropertyChanged`; test `MinimapLaneTests.A_host_setting_the_toggle_before_the_template_applies_is_wired_too` |
+| `ShowHeaders` and `ShowStatusStrip` are applied on **both** paths too, through one `ApplyChromeVisibility` per view rather than two copies | A host that sets either in XAML is ignored | `DiffBuildController.ApplyChromeVisibility`, `InlineDiffView.ApplyChromeVisibility`, called from `OnApplyTemplate` and from the `ShowHeadersProperty`/`ShowStatusStripProperty` branch; tests `ChromeToggleTests.The_headers_flag_set_before_the_template_applies_still_takes`, `The_status_strip_flag_set_before_the_template_applies_still_takes` |
+| **`ShowBanner` is NOT applied that way, and must never be.** The banner's visibility belongs to the `:banner-none` pseudo-class, so the toggle is a disjunct inside `UpdatePseudoClasses` and nothing writes `IsVisible` on `PART_Banner` | A code write lands at `LocalValue`, outranks the style for the life of the control, and strands an empty banner on screen the next time a build has nothing to say | `DiffBuildController.UpdatePseudoClasses`, `InlineDiffView.UpdatePseudoClasses`; test `ChromeToggleTests.A_permitted_banner_with_nothing_to_say_stays_hidden`, which is the only test that separates this from the mechanism it replaced |
+| `:banner-none` means **not shown**, which is wider than *nothing to say* | A reader who assumes the narrow meaning concludes the banner is empty when a host has merely switched it off | `UpdatePseudoClasses` is the only writer on both views |
+| A marker chip covers a **run** of same-kind rows, not a row, and needs no padding test: adjacent lines of one changed kind are always adjacent rows, because a side's lines inside a block are contiguous and blocks are separated by at least one unchanged row | A band claims rows the side does not own, or a block's extent stops being visible | `ChangeMarkerMargin.RenderChips`, `ChangeMarkerMargin.LastChips`; test `MarkerChipTests.The_chips_are_exactly_the_runs_the_model_describes` |
+| A run continuing past the viewport extends a row beyond the edge, so its rounding falls off screen | A scrolled block looks as though it ends where the window does | `ChangeMarkerMargin.RenderChips`; test `MarkerChipSnapshotTests.A_run_scrolled_off_the_top_is_not_rounded_there` |
+| The marker margin's chip stops exactly where the modified-since-load bar begins, and both are centred on a line's own **row** rather than its text band or its whole visual box | Chip and bar overlap, or a mark spans the padding rows above a line — which belong to the other side's lines, and which nobody edited | `ChangeMarkerMargin.RenderChips`, `ChangeMarkerMargin.RenderModifiedBar`; tests `MarkerChipTests.The_chip_stops_where_the_modified_since_load_bar_begins`, `EditFeedbackTests.The_bar_covers_the_line_s_own_row_and_not_the_padding_above_it` |
+| Find is latest-wins by generation and debounced on `TimeProvider`; a query, an option or a new model cancels the search in flight and re-runs it | A stale result paints matches over newer text, or over rows a newer model renumbered | `SideBySideDiffView.RequestFind`, `RunFind`, `CompleteFind`, and its `IDiffSurface.OnModelApplied`, which `DiffBuildController.ApplyModel` calls |
+| `SearchMatchRenderer` is added to the text view **before** `DiffSelectionRenderer`; both draw on `KnownLayer.Selection`, in list order | The selection vanishes under the match highlight, or matches fall under the row fills | `DiffPanePresenter` constructor; test `FindTests.Match_highlights_sit_above_the_row_fill_and_below_the_selection` |
+| A fresh `FindResult` leaves `CurrentFindMatchIndex` at -1; only `FindNext`, `FindPrevious` and the setter reveal a match, and revealing is the only thing that selects, focuses and scrolls | Typing in the query box pulls focus into a pane after every keystroke | `SideBySideDiffView.ApplyFindResult`, `SetCurrentFindMatch`, `RevealMatch`; test `FindTests.In_both_scope_F3_walks_the_matches_in_row_then_side_order_and_the_pane_holding_one_has_it_selected` |
+| A query that cannot run is `FindResult.Error` shown inline in the bar; `State` does not change and no match is highlighted | A typo in a regular expression puts the control in `Failed` | `SideBySideDiffView.CompleteFind`, `UpdateFindBar`; test `FindTests.An_invalid_regular_expression_shows_the_error_inline_leaves_no_highlights_and_the_state_stays_ready` |
+| A grammar that will not install turns the pane back to plain text, reports one fault naming the language, and is retried only when `SyntaxFileName` or `UseSyntaxHighlighting` changes — never by a rebuild, which would repeat the same failure | The control flickers between `Ready` and `Degraded` on every option change, or a broken grammar is never retried after the file changes | `DiffPanePresenter.DisableSyntax`, `UpdateSyntax`; test `SyntaxTests.A_grammar_that_will_not_install_degrades_the_control_names_it_and_leaves_the_diff_highlighting` |
+| `DiffPanePresenter.SyntaxFault` outlives `ResetFaults`, and `DiffBuildController.ApplyResult` reads `PaneFault()` **before** applying the model, so a fault raised while a build ran lands as `Degraded` when the build does | A grammar failure during `Building` is swallowed by the `Ready` that follows | `DiffBuildController.ApplyResult`, `PaneFault`; the test above |
+| The find query is never logged — only its length — because Ctrl+F pre-fills it from the pane's selection, so it may be document text | A secret under comparison reaches a log file through the find bar | `DiffViewLog.FindStarted`, `DiffViewLog.FindFailed`; the sentinel test above |
+| A pane gesture is read at the **press** and written at the release. The press takes the surface it landed on, and the selection and the caret as it finds them: the text area captures the pointer on a press it takes — a click in the change-marker column among them — and every event after that names the text area as its source. The release writes a selection only when the gesture made or changed it, and a click that moved no caret at the line under the pointer | A click in a margin written as a click in the text; a click on a copy arrow or a fold's placeholder — each takes the press — written as the selection it found, or at a caret it never moved | `DiffPanePresenter.OnPointerPressedForLog`, `DiffPanePresenter.OnPointerReleasedForLog`, `DiffPanePresenter.RegionOf`, `DiffPanePresenter.SpanOf`; tests `InteractionLogTests.A_click_says_which_surface_of_the_pane_it_landed_on`, `InteractionLogTests.A_click_that_leaves_a_selection_as_it_was_is_written_as_the_click`, `InteractionLogTests.A_right_click_is_written_where_the_pointer_was_because_it_leaves_the_caret`, `InteractionLogTests.A_click_on_a_fold_placeholder_is_written_at_its_line_after_the_fold_it_opened` |
+| Every fold opening — a placeholder, a command or a find — goes through the one `OpenFold` its view has, which writes the line | A way to open a fold that the log never mentions | `DiffBuildController.OpenFold`, `InlineDiffView.OpenFold`; test `InteractionLogTests.Opening_a_fold_is_logged_with_the_rows_it_gives_back` |
+| **Which surface a menu is about comes from the event's source, not from the pointer's x** — and by identity against the pane's own two margins, not by type. A margin the library did not draw is left alone rather than answered with the text's menu | A menu for the wrong gutter at a boundary pixel, which is plan 00008's 8-px header again; or a host's own margin answered with verbs that are not its | `DiffPanePresenter.OnContextRequested`; tests `PaneContextMenuTests.Each_gutter_reports_its_own_region_and_the_text_still_reports_text`, `A_margin_the_library_did_not_draw_is_left_alone`. Matching by type does not compile here: `DiffPanePresenter` exposes a property named `ChangeMarkerMargin`, which shadows the type of the same name in a pattern and fails as **CS0150, "a constant value is expected"** — which names neither the property nor the shadowing |
+| **A right-click navigates nothing.** The connector and the map act on the left button only, and their context handlers *offer* the verb rather than performing it. Off every polygon the connector opens no menu at all: its every entry is about a block, and the empty column is the splitter, whose verb is a drag | A right-click jumps the panes or scrolls them before the menu opens; or a menu of four greyed rows over the splitter, each promising a state in which it would work | `ChangeConnectorGutter.OnPointerPressed`, `DiffMinimap.OnPointerPressed`, `SideBySideDiffView.OnConnectorContextRequested`, `OnMinimapContextRequested`; tests `ConnectorAndMapMenuTests.A_right_click_on_the_connector_names_the_polygons_own_block_and_jumps_nowhere`, `A_right_click_on_the_map_names_the_row_it_reports_and_scrolls_nothing`, `A_right_click_off_every_polygon_is_the_splitter_and_opens_nothing` |
+| **A row-shaped context names the line the row has, and the surface says whose.** The connector and the map are not panes, and `AlignedRow` carries a nullable line per side, so a row has up to two lines and at least one. `Side` is the map's lane under the pointer and `null` on the connector; `LineNumber` is the row's line on that side, or the left's then the right's where the surface names none; `SourceSide` says which, and `IsReadOnly` follows it. The connector reports no selection, naming no pane | A synthetic line number a consumer reads as truth; or `Side` read as "the unified view", which it meant until this plan | `SideBySideDiffView.RowContext`; test `ConnectorAndMapMenuTests.The_maps_context_names_the_lane_under_the_pointer_and_the_line_that_row_has`. The map's row is `RowForClick`, the row a *click* goes to, not `RowAtPixel` — and the two agree on any fixture with fewer rows than the map has pixels, so an assertion between them needs a document taller than the map: `The_maps_row_is_the_one_a_click_goes_to_not_the_one_the_pixel_starts_at` |
+| **A header carries `DiffHeaderContext`, not a sixth `DiffPaneRegion`.** Its subject is a side and its file with no line at all, and `DiffPaneContext.LineNumber` is a non-nullable `int`. `DiffPaneRegion` therefore has no `Header` member: an enum value its own context type cannot describe is how an enum starts lying | A synthetic line on a header context; or `LineNumber` relaxed to `int?`, charging the five regions that have a line for the one that does not | `DiffHeaderContext`, `DiffPaneRegion`; test `HeaderMenuTests.A_headers_context_names_the_side_and_its_file`. A fixture whose two sides agree cannot tell a context reading the wrong side from one reading the right side — this one differs on every member it asserts |
+| **Two context types, one menu.** `DiffPaneMenu.Request` takes the context as `object` and two callbacks the caller closes over its own type with; placement, the disabled-item rule and the replacement rule stay in the one place. `HeaderContextMenu` governs the header and `PaneContextMenu` the rest — neither governs the other | The two contexts taking the menu's behaviour apart with them; or one replacement property quietly making the five surfaces and the header one surface again | `DiffPaneMenu.Request`, `SideBySideDiffView.OpenMenu`; tests `ConnectorAndMapMenuTests.The_replacement_menu_suppresses_the_opening_event_on_both_new_surfaces`, `HeaderMenuTests.The_replacement_menu_suppresses_the_opening_event_on_a_header_too`, `The_two_replacement_properties_govern_their_own_surface_only`. **A header handler is attached to its header, so it has exactly one source and there is no foreign-header guard to write** — unlike the margin handler above, which is attached to the pane and has several. What is worth asserting there is that the event bubbles: `A_click_on_the_title_inside_the_header_is_a_click_on_the_header` |
+| **A menu icon is the gutter's own mark, painted from the inherited `TextElement.Foreground`.** The copy entries share `CopyArrowGlyph.Geometry` with the gutter rather than a second set of points; the entries about a change draw the marker margin's `+` `−` `≠` as strokes, because the margin chose those three by weighing ink in the *pane* font and a menu is not drawn in it. Every item gets its **own** control — a visual has one parent, so a shared instance vanishes from the first row that had it | A menu arrow that drifts from the gutter's the first time either is tuned; an icon in `DiffBrushes`' yellows, which mean something against the gutter's background and nothing in a host's menu; or a theme swap the icons do not follow | `CopyArrowGlyph.Geometry`, `DiffMenuIcons`, `SideBySideDiffView.AddBlockVerbs`; tests `MenuIconTests.The_copy_entries_carry_the_gutters_own_arrow_pointing_the_way_the_text_travels`, `The_change_entries_carry_that_changes_own_kind`, `An_icon_follows_the_foreground_rather_than_the_gutters_palette`. `StreamGeometry` is opaque once closed — it enumerates nothing and its `ToString` is the type name — so the operators are a `PathGeometry` and the arrow is asserted by probing a point only one direction contains |
+| **A row becomes a pixel in exactly one place.** `RowProjection` maps a model row to a visible row and back; the connector gutter, the overview map, both views' scroll-to **and the current block's border** go through it rather than multiplying a row index by `DefaultLineHeight`. The border is the one in-pane drawing placed from a row index rather than from a visual line — it spans a block's rows whether or not they are on screen — so it reads `DiffPanePresenter.Projection`, which `DiffBuildController.RefreshFolds` and `InlineDiffView.RefreshFolds` assign beside the pane's collapsed lines. The rest of in-pane drawing needs nothing — the two margins, the background renderer's row fills and the search renderer walk `TextView.VisualLines` and read `VisualTop`, which the height tree already answers under a fold | The viewport box on the map pointing where the viewport is not; a scroll-to landing a screenful out; a right-click on the connector naming the wrong block; or the current block's border drawn around unchanged lines, as many rows below the block as the folds above it hide — each of them silent, because `row × lineHeight` is *correct* until something folds | `RowProjection`, `ChangeConnectorGutter.TopOfRow` / `RowAt`, `DiffMinimap.FirstRowOfBucket` / `BucketOfRow`, `DiffBuildController.ScrollToRows`, `InlineDiffView.ScrollToLines`, `DiffLineBackgroundRenderer.DrawCore`, `DiffPanePresenter.Projection`; tests `RowProjectionTests`, `RowProjectionWiringTests` — the border's three, `The_current_blocks_border_is_drawn_at_its_visible_rows_not_its_model_rows`, `The_viewers_border_is_drawn_at_its_visible_rows_not_its_model_rows` and `The_unified_views_border_is_drawn_at_its_visible_lines_not_its_unfolded_ones`, read the expected top off the height tree, per §5. The connector's two **cull** bounds are the subtle pair: the lower one only ever under-culls, but the upper one drives the loop's `break`, so getting it wrong does not misplace a polygon — it silently stops drawing every block below the fold (`The_connector_still_draws_the_blocks_a_fold_brought_into_view`) |
+| **A fold is a row range, projected onto each side's lines — never a line range read off a document.** `FoldPlan` computes runs from the model and `FoldPlan.LinesOf` projects one onto a side. The line ranges the panes collapse come from the *projection's* own folds, not from the plan, because a run the projection declined is a run neither pane may collapse | The two panes collapsing different runs, which is the misalignment the whole design exists to prevent | `FoldPlan`, `DiffBuildController.RefreshFolds`; tests `FoldingTests`. The ranges are in **AvaloniaEdit's 1-based** line numbers and an `AlignedRow` holds a **0-based** index, the same offset `PaneMetadata` undoes at its own boundary. A fold shifted by one is nearly invisible — both panes collapse the same *number* of lines, so the extents match and every pair still shares a row top — and `A_fold_leaves_its_first_line_standing_and_takes_every_line_after_it` is what catches it, by asserting which lines are left standing rather than how many |
+| **A row is foldable only if collapsing its lines removes that row's height and nothing else.** Padding is height *on* a line, so a line at a run's edge can be carrying rows the fold does not cover — rows the other pane is still drawing. The rule is a property of the fold's neighbours: the first row is foldable when the row above it has a line on both sides, the last when nothing after it rides on a side's final line | The panes diverging by exactly the orphaned padding — equal row counts, unequal heights | `FoldPlan.Take`; tests `FoldingTests.A_fold_never_starts_on_a_line_carrying_padding_for_the_rows_above_it`, `A_fold_never_ends_on_a_sides_last_line_while_that_side_has_a_trailing_gap`. It fires **only** where `UnchangedContextRows` is `0`: with any context the cut has already moved both ends past the boundary rows, and no interior line of an unchanged run can carry padding |
+| **Collapsing a line is not hiding it.** `TextView.CollapseLines` writes the height tree; `CreateAndMeasureVisualLines` then walks `LastDocumentLine.NextLine` **without** skipping what is collapsed. The element that makes one visual line span the run is what keeps that walk on a line it can build | `InvalidOperationException: Trying to build visual line from collapsed line`, from the measure pass, the moment a fold comes into view — and not before, which is why a fold that is off screen is not a fold that has been rendered | `FoldPlaceholderGenerator`, `DiffPanePresenter.SetCollapsedLines`; test `FoldPlaceholderTests.The_placeholder_spans_its_run_and_says_how_many_rows_it_hides`. The generator is interested in the **end** offset of the line before a run where `PaddingElementGenerator` is interested in a line's **start**, so the two never compete for an offset — asserted by `The_padding_and_the_placeholder_share_a_document_rather_than_displace_each_other`, because an order that is right by accident is the thing to rule out. `FoldingManager` is not used at all: `Install` would claim a slot in `TextArea.LeftMargins` and generator index 0 |
+| **A fold follows its lines, and keeps the name it was collapsed under.** `FoldPlaceholderGenerator` reads the pane's live `CollapsedLineSection`s and keeps no line numbers of its own: AvaloniaEdit moves a section with its lines, shrinks one whose first or last line is deleted and uncollapses one whose lines are all deleted, and the height tree is what the text view checks the generator against. Each fold is a `CollapsedFold` that also carries its identity — its first line as the model had it when the pane collapsed it — which a placeholder reports when clicked (`FoldPlaceholderElement.Identity`), `DiffPanePresenter.FoldIdentityAt` answers for the caret, and `DiffBuildController.FoldNamed` maps to the model's run. A document swap clears the generator's folds, the old sections holding the old document's lines | An edit that moves a line under the folds breaks the layout before its re-diff lands — *Line N was skipped by a VisualLineElementGenerator, but it is not collapsed*; or, with the folds following their lines but named by where they are now, a click or the expand command on a fold that moved opens nothing until the re-diff | `FoldPlaceholderGenerator`, `CollapsedFold`, `DiffPanePresenter.SetCollapsedLines`, `DiffPanePresenter.FoldIdentityAt`, `DiffBuildController.FoldNamed`; tests `EditUnderFoldTests`, which assert that no decorator faulted as well as that nothing was thrown — the generator is a fault boundary, so one that broke shows only in `DiffPanePresenter.Faults`. A removal that starts on a fold's first line keeps that line, AvaloniaEdit giving it what followed, so the fold shrinks onto the line after the removal until the re-diff: `EditUnderFoldTests.A_removal_from_a_folds_first_line_keeps_that_line_so_the_fold_shrinks_onto_the_next` |
+| **A collapse leaves the extent stale.** `DocumentHeight` answers at once; the visual lines and the published `ExtentHeight` follow only from a `Redraw()` **and** an `InvalidateMeasure()` — the two steps `PaddingHeightPrimer` already takes for the same reason | An extent assertion passing against a number that never moved, which is how two of the folding spike's own assertions passed before it was found | `DiffPanePresenter.SetCollapsedLines`; tests `FoldingTests`, and `FoldingSpikeTests.Settle` for the same two steps in the spike |
+
+### The viewer
+
+`DiffViewer` is the controller's second host: the editor's template without the find bar's row, and
+none of the verbs — no find, no menus, no copy, no save or revert, no key map. Everything in this
+section holds for it except where the ledger below says otherwise. Like §7, it is a ledger of
+divergences, not a promise that the two controls stay parallel.
+
+| Invariant | Failure signature if broken | Canonical source |
+|---|---|---|
+| Every property the viewer carries is the editor's own registration through `AddOwner`: a styled one is the editor's instance, a direct one compares equal and is registered on the viewer | The controller raises and dispatches through the editor's identities, so a property registered afresh compares unequal and its branch never runs — with no error anywhere | `DiffViewer`'s property fields; test `SharedRegistrationTests.Every_property_the_viewer_carries_is_the_editors_own_registration` |
+| The viewer registers **no** document or model property, not even internally, and raises nothing for its documents: whatever is registered answers to the editor's **public** identity, and whatever is raised reaches `PropertyChanged` as `NewValue` — XamlQuality's `docs/avalonia-gotchas.md`, *A direct property is never private: one shared with `AddOwner` answers to the original owner's public field*. The controller's `SetAndRaise` through the editor's identity needs no registration | `viewer.GetValue(SideBySideDiffView.LeftDocumentProperty)` returns the live document and an insert through it succeeds — the read-only control made writable in one line | `DiffViewer`; `DiffViewer`'s `IDiffSurface.OnDocumentReplaced` raises nothing; tests `SurfaceGateTests.The_viewer_hands_out_no_TextDocument`, `ViewerStateTests.The_seam_answers_for_its_own_control` |
+| The viewer's public surface **equals** `fixtures/api/viewer.txt`; a member added or removed on purpose edits that file in the same change | A member vanishes with the gate green, which after the first publish is the break | test `SurfaceGateTests.DiffViewer_reachable_surface_matches_its_allow_list` |
+| No surface of the viewer opens a menu: it wires no context handler on the panes, the connector, the map or the headers, so a right-click anywhere reaches a `ContextMenu` a host put on the view itself | A menu of greyed verbs on a control that has none, or a host's own menu swallowed | `DiffViewer`'s `IDiffSurface.OnPartsAttached` and `OnPaneAttached`; test `ViewerVerbTests.No_surface_opens_a_menu_where_the_editor_opens_one` |
+| The viewer binds no key — `KeyBindings` is empty and none of `DiffKeyMap.Default()`'s chords moves state — while an arrow and Page Down stay the pane's | F7 walks, F6 switches panes, Ctrl+F looks for a find bar that is not there | test `ViewerVerbTests.No_key_the_editor_binds_does_anything_and_the_panes_keys_still_scroll` |
+| Both panes keep the presenter's defaults: read-only, no copy arrow, and focusable, because that is how keyboard scrolling and select-to-copy work | A keystroke or a paste lands in a viewer, or an arrow offers a copy the control cannot make | `DiffViewer`'s `IDiffSurface.OnPaneAttached`; test `ViewerVerbTests.Each_pane_selects_and_copies_and_neither_takes_a_keystroke_or_a_paste` |
+| The viewer draws exactly what the editor draws for the same input, compared as two frames pixel for pixel beside each decorator's own record — never against a stored picture | A visual difference for the same sources, which the plan allows none of; a stored snapshot misses one smaller than a row | test `ViewerDrawingTests.The_viewer_draws_exactly_what_the_editor_draws` |
+| Every dual-path contract above holds on the viewer through a test of its own, set after load and set before the template applies — the editor's tests bind to `CompositeHost.View`, and none of their coverage reaches a second control | A host setting a toggle, the placement or the split in XAML is ignored by the viewer | `ViewerChromeTests` |
+| All three views carry the same pseudo-classes through the same states | A host's rule on `:degraded` or `:banner-error` styles two of the three | test `ViewerStateTests.All_three_views_carry_the_same_pseudo_classes_through_the_same_states` |
+| A rule that styles both controls is a comma-union type selector with an **owner-qualified** setter property — XamlQuality's `docs/avalonia-gotchas.md`, *In a selector with a comma, an unqualified setter property is looked up on the alternatives' common base* — and one setter reaches both only because every property they share is the editor's own registration | A host's rule fails to load; or, were the viewer to register a property of its own, loads and styles one control without a word | test `SharedRegistrationTests.One_comma_union_rule_styles_both_controls_through_one_setter` |
+
+## 7. The unified view
+
+`InlineDiffView` is the same model, builder, renderers, margins, find engine and state machine as
+`SideBySideDiffView`, on one pane. Only what differs is listed here; everything in §1–§6 that is
+not contradicted below holds unchanged.
+
+**This section is a ledger of divergences, not a requirement that the two views stay parallel.**
+A member on one view and not the other is recorded here and is not thereby a defect — the map,
+the connector gutter and the per-side read-only switches are all of that kind. Whether a new
+member belongs on both is answered by what it is for, not by this section.
+
+| Invariant | Failure signature if broken | Canonical source |
+|---|---|---|
+| The pane's document is *composed*, not a source: `InlineDiffView.ComposeUnifiedText` rewrites `PaneDocument` from `InlineDocument.Lines` on every model change, keeping the one `TextDocument` instance and clearing its undo stack | The caret and the scroll jump to the top on every option change, or the editor's line count stops matching the unified table | `InlineDiffView.ComposeUnifiedText`, `ApplyModel`; test `InlineDiffViewTests.The_pane_holds_the_two_sides_unified_and_the_change_counts_match_the_side_by_side_view` |
+| The unified pane is read-only, and there is no per-side read-only switch | An edit lands in a document that is half one file and half the other | `InlineDiffView.AttachPane` |
+| `LeftDocument` and `RightDocument` are still built and never displayed: the word diff reads a row's two lines from them, and the search runs over `DocumentPaneText` snapshots of them | Word pieces vanish, or the search reads the composed document and finds a context line once where the model has it twice | `InlineDiffView.OnSourceChanged`, `ApplyModel`, `RunFind` |
+| A unified pane takes its metadata from `InlineDocument`, and `DiffPanePresenter.IsUnified` is what says so — `PaneMetadata.Unified` rather than `PaneMetadata.For` | The pane renders a side's kinds over unified lines | `DiffPanePresenter.ApplyMetadata`, `PaneMetadata.Unified` |
+| There is no padding in a unified reading: `PaneMetadata.PaddedLineNumbers` yields nothing and the primer does no work | The height tree is primed for lines that hold no padding, and rows stop being uniform | `PaneMetadata.PaddingFor`, `PaddedLineNumbers`; test `InlineDiffViewTests.Every_visible_row_is_filled_by_its_own_kind_and_none_of_them_is_padded` |
+| Both halves of a modified row carry `DiffLineKind.Modified`, and the renderer picks the side's pieces with `PaneMetadata.SideOf(lineNumber)` — not the pane's `Side`, which is meaningless when unified | A modified pair loses its word-level highlights, or both halves are highlighted from the same side's pieces | `InlineDocument.Build`, `DiffLineBackgroundRenderer.DrawWordPieces`; test `InlineDiffViewTests.A_modified_row_shows_both_of_its_lines_with_the_word_pieces_of_the_side_each_belongs_to` |
+| A block's on-screen extent is `PaneMetadata.DisplayRowsOf`: the model's rows for a side, the block's own unified lines when unified, where a modified pair takes two | The current-block border is too short and in the wrong place, and navigation scrolls to the wrong line | `PaneMetadata.DisplayRowsOf`, `InlineDiffView.SetCurrentChange`; test `InlineDiffViewTests.F7_walks_the_blocks_and_the_border_covers_the_block_own_unified_lines` |
+| Find maps every match through `InlineDocument.LineOf` and drops the ones the view does not show — the right line of a context row — then re-sorts by unified line and column | A highlight lands on the wrong line, or `SearchMatchRenderer`'s binary search misses matches because they are not in line order | `InlineDiffView.ToUnified`; tests `InlineFindTests.The_matches_are_the_side_by_side_view_own_minus_the_context_lines_it_shows_twice`, `Over_changed_rows_only_the_two_views_find_exactly_the_same_matches` |
+| The find scope is always `FindScope.Both`: the setter coerces it and `DiffFindBar.ShowScope` hides the group | A scope of one side hides matches that are on screen | `InlineDiffView.FindOptions`, `OnApplyTemplate`; test `InlineFindTests.The_scope_control_is_gone_and_the_scope_stays_both` |
+| The line numbers are the *sides'*, in two columns, and so is the strip's caret lane; the unified document's own numbering is never shown | The gutter names lines of neither file | `DiffLineNumberMargin.RenderCore`, `InlineDiffView.UpdateCaret`; test `InlineDiffViewTests.The_gutter_numbers_each_line_on_its_own_side_and_leaves_the_other_column_empty` |
+| A pane that is unified logs as `unified`, never as a side: the three pane-naming log methods take `DiffSide?` and the presenter passes `LogSide` | A log line blames the left pane for a fault in a view that has no sides | `DiffPanePresenter.LogSide`, `DiffViewLog.Pane`; test `InlineDiffViewTests.A_throwing_decorator_degrades_the_control_and_the_text_still_renders` |
+| No minimap and no connector gutter — both are two-sided — and `DiffKeyMap.UnifiedDefault()` for the keys: six bindings, with `SwitchPane` and the four copies unbound. A gesture given to one of those five is skipped and logged through `DiffViewLog.KeyCommandUnsupported`, never bound to nothing, and `CommandFor` throws `NotSupportedException` for them — the skip and the throw both read `CommandOrNull`, so they cannot disagree | A template part that cannot be fed, or a key bound to a verb this view does not have and left silently dead | `Themes/InlineDiffView.axaml`, `InlineDiffView.CommandOrNull`, `DiffKeyMap.UnifiedDefault`; test `InlineKeyMapTests.A_two_sided_verb_bound_here_is_skipped_and_logged_not_bound_to_nothing` |
+| The pane menu is the same seam with a shorter list: navigate and find, and **no** copy, save or revert — absent, because this view has no such verb, not greyed. `DiffPaneContext.Side` is **null** here, and `SourceSide` / `SourceLine` name the file the line came from | A menu offering a copy over a document that is half one file and half the other, or a context claiming a side the pane does not have | `InlineDiffView.MenuItemsFor`, `DiffPanePresenter.ContextAt`; tests `InlinePaneContextMenuTests.The_unified_context_has_no_side_and_names_the_line_own_file`, `A_verb_this_view_lacks_is_absent_from_the_menu_not_greyed_in_it` |
+| **No connector menu, no map menu and no header menu.** The first two controls do not exist here, and `CommandOrNull` answers `null` for `GoToChange` and `SelectBlock` so their entries are absent rather than greyed. The headers *do* exist — two of them, above the one pane — and raise nothing: this view is read-only, so it has neither of the two verbs a header menu is, and an empty list opens nothing | A menu on a control this view does not have; or a header menu offering to save a document that is half one file and half the other | `Themes/InlineDiffView.axaml`, `InlineDiffView.CommandOrNull`; tests `ConnectorAndMapMenuTests.The_unified_view_has_no_connector_and_no_map_to_ask`, `HeaderMenuTests.The_unified_views_headers_raise_no_menu` |
+| **Folding is the one plan-00012-era verb this view does have.** `CommandOrNull` answers `null` for `GoToChange` and `SelectBlock` because neither control exists here, but all four folding commands are present: one pane has runs of matching lines like any other and hiding them keeps no alignment between two of anything. Its runs come from `InlineDocument.Lines` with **no boundary rule** — a unified document has no padding to orphan, which `PaneMetadata` already says by yielding no padded lines for one | A boundary rule applied here, costing a row per fold for a reason that does not exist; or folding absent from the view where it is simplest | `FoldPlan.For(InlineDocument, …)`, `InlineDiffView.RefreshFolds`, `InlineDiffView.CommandOrNull`; test `FoldingOptionTests.The_unified_view_folds_its_own_runs` |
+| **A rebuild refolds, and refolds last, because here a rebuild rewrites the text.** A build never touches a side-by-side view's documents; here applying a model is what rewrites the pane's text (`ComposeUnifiedText`), and until the folds are computed again the pane's collapsed sections describe the text that was replaced. So `InlineDiffView.ApplyModel` does what `DiffBuildController.ApplyModel` does — forgets the runs the reader opened, resets the projection, calls `RefreshFolds` — with the refold after the text is composed, on every model: new sources and a changed option alike | AvaloniaEdit throws `InvalidOperationException` from the layout pass — *Line N was skipped by a VisualLineElementGenerator, but it is not collapsed* — after any rebuild with folding on, and the pane stops measuring: a stale extent and no current-block border. Or, refolded without forgetting, a run stays open because the reader opened one that began on the same line of the old model | `InlineDiffView.ApplyModel`, `InlineDiffView.ComposeUnifiedText`, `InlineDiffView.RefreshFolds`; test `FoldingOptionTests.A_unified_rebuild_keeps_the_option_and_forgets_the_runs_the_reader_opened`, over new sources and over `IgnoreCase`. The throw comes from a dispatcher job while the test awaits the build, which the runner reports apart from the test as a cleanup failure — so the test collects `Dispatcher.UIThread.UnhandledException` and asserts on it |
+
+## 8. Contributing back
+
+Anything that belongs in ClaudeForge goes there first, as a branch and pull request in the same
+working session; the plan's *Contributing back to ClaudeForge* section and the *Upstreamed to
+ClaudeForge* table in `PROGRESS.md` are the record.
+
+### Mechanics, learned the hard way
+
+**Never `git checkout` in the ClaudeForge checkout.** Another session may be working in it. Use a
+worktree instead, which leaves that checkout's `HEAD` where it was:
+
+```bash
+git -C /home/janus/c/cl/ClaudeForge worktree add <scratch-path> -b <branch> main
+```
+
+Announce the intent to the ClaudeForge session first if one is running (`ListAgents`); if none is,
+there is nothing to collide with, but the worktree rule still stands.
+
+**Whether an agent session can use SSH depends on the session, so probe it rather than assume.** On
+2026-09-08 a sandboxed session's network was host-and-port allowlisted: `github.com:443` and
+`api.github.com:443` connected, while `github.com:22`, `ssh.github.com:443` and `1.1.1.1:22` all
+timed out, so an SSH remote hung until it was killed and GitHub's port-443 SSH endpoint was no way
+around it. On 2026-09-25 a session in the desktop app reached `github.com:22`: `ssh -T` authenticated
+and `git fetch` over the `git@` remote worked. The probe bounds itself, so it needs no `timeout`,
+which macOS does not ship:
+
+```bash
+ssh -T -o BatchMode=yes -o ConnectTimeout=8 git@github.com
+```
+
+Exit 1 with *"successfully authenticated"* is a working SSH; a timeout is not. HTTPS works either
+way, so it stays the way to push — with `gh` as the credential helper, which is how ClaudeForge
+PR #44 landed:
+
+```bash
+git -c credential.helper='!gh auth git-credential' push https://github.com/JanusMael/ClaudeForge.git HEAD
+```
+
+`gh` itself is authenticated over HTTPS, so `gh pr create` and `gh api` work normally.
+
+**`main` takes a change only through a pull request, and an admin's direct push does not say it skipped
+one.** Its ruleset requires a pull request and five checks by name — `ci.yml`'s
+`Build & Test (ubuntu-latest)`, `Build & Test (windows-latest)`, `Build & Test (macos-latest)`,
+`Culture Leg (de-DE)` and `Trim Check (Release linux-x64)` — up to date with `main`, and admins bypass it
+always, so `git push origin main` from an admin's account succeeds without a word. Push a branch and merge
+its pull request. Renaming one of those jobs renames a required check, which is a ruleset edit and Brian's.
+
+**A pull request description ends at its last line** — no AI attribution trailer, the same rule
+commits follow. Say so once at the point of use when a session instruction asks for one.
+
+**`cmd | head -n; echo $?` reports `head`'s exit code, not `cmd`'s.** This produced a confidently
+wrong conclusion during the work above: an `ssh` probe that had actually failed was read as having
+succeeded, because `head` exits 0 regardless. Capture the status without a pipe, or read
+`${PIPESTATUS[0]}`. The same trap applies to any pipeline whose last stage always succeeds.
+
+### Avalonia and drivable-UI lessons go to Inspections
+
+`docs/avalonia-gotchas.md` and `docs/ai-drivable-ui.md` in `JanusMael/Bennewitz.Ninja.Inspections` are
+the one living copy of each. Inspections is XamlQuality's repository under a new name: the old name
+redirects to it, the `Bennewitz.Ninja.XamlQuality` package keeps its id, and `ListAgents` still shows
+the session working there as XamlQuality. A new Avalonia foot-gun, a lesson about driving or verifying
+a desktop UI by agent, or a correction to either document goes to that session by message, with the
+versions and the measurement or source behind it, or as an issue in that repository when no session is
+running. Keep no copy here: once a lesson lands there, what stays in this file is a pointer, plus
+whatever is specific to DiffView or to this machine. `DECISIONS.md` records why.
+
+## 9. Looking at the running app
+
+> Written when this section was 75 lines of prose about driving the demo on one Linux box, each
+> paragraph a recipe someone had rebuilt from scratch. **The instruments are committed now** — plan
+> 00023 — so this section names the verbs and keeps only what a verb cannot carry: the traps that
+> are about the machine rather than about the driver, and the judgement a frame cannot give.
+
+**`scripts/drive-demo.{sh,ps1}` drives the demo; `scripts/catch-crash.{sh,ps1}` judges a test run.**
+Both are thin wrappers over a .NET 10 file-based app, and both run on every platform here. Reach for
+them before rebuilding a driver from this prose: they carry the traps below, and `DriveDemoTests`
+holds how they read.
+
+| Verb | What it does |
+|---|---|
+| `launch [demo flags]` | Builds the demo and starts it detached, then waits for its window; prints the pid and where it logs |
+| `window` | The demo's main window |
+| `geometry <window>` | Position, size and whether it is on screen |
+| `key <chord>` | A key chord into the demo, in `xdotool`'s spelling (`ctrl+Down`, `shift+F7`) on both back ends |
+| `click <button> <x> <y> [in <window>]` | A click, in window-relative coordinates |
+| `click <button> --id <path>` | A click on the part a path of `AutomationId`s names — Windows only |
+| `drag <button> <x> <y> to <x> <y> [in <window>]` | Press, travel in steps, release from a `finally` — because a press and a jump are two positions and not a gesture. Both ends are read against the same window |
+| `mark` / `popup` | Remember the top-level windows there are, then name the one that appeared |
+| `capture <window> <out.png>` | The window's pixels |
+| `hover <x> <y>` / `hover --id <path>` | Park the pointer there and wait for a tooltip; it becomes the popup |
+| `probe <path>` | What the reader can say about that part — bounds, whether it holds the keyboard, a `RangeValue` where it has one — and **`absent` where it is not in the tree**, which is an answer rather than a failure. Windows only |
+
+Verbs chain with `then`, and what a chain learns — the mark, the popup, the pid — is kept for the
+next invocation. `--parse`, `--parse-children`, `--parse-info`, `--parse-chord` and `--parse-element`
+run nothing and print what the driver read, which is what makes it testable without a window.
+
+- **Read the demo's log before reproducing anything.** Since plan 00029 it says what was *done*, not
+  only what the control did: the machine, the window's size and scaling, each choice from the demo's
+  menu with the state it left, each command by name and where it came from, each copy a pane asked
+  for, each edit once it rests; and, from the library, raised to the demo's `Information`, where each
+  click in a pane landed, each selection a pointer made and each fold that opened. Positions and
+  counts, never text. `LogPaths.LogsDirectory` is where, and *Debug ▸ Open logs folder* opens it.
+- ⛔ **An empty log after a driven step means the step did not arrive.** It is a live file — measured
+  on Windows, a click was readable from outside the process within a second — so the log not moving
+  is the signal and it is the correct one. Reading it as a slow sink cost a session an hour here, and
+  the real cause was a click that had gone into another application entirely.
+- **`ActionLog` is built after the window's own `PaneContextMenuOpening` subscriptions**, because it
+  wraps the menu's entries for logging in that same event: built first, it misses the demo's own
+  entries (`DemoActionLogTests.A_context_menu_choice_is_written_as_its_verb_and_the_demo_s_own_entry_by_its_header`).
+- **A new demo item goes in the submenu of View its subject belongs to, with an `AutomationId` of its
+  own.** View's own rows are submenus and *Find…*, which is what keeps it shorter than its popup: a row
+  too many once scrolled the palette's entry out of it at 200%, and so out of the automation tree. An
+  entry's id is what the interactive pass finds it by, a submenu opened by its id before an entry in it
+  is clicked, and `DemoMenuTests.Every_entry_of_the_demos_menus_declares_an_id_of_its_own_unique_within_its_menu`
+  holds every entry to one.
+- **A captured window is a look, not a test.** It is one machine, one variant and one moment. The
+  snapshot frames under `Snapshots/` with their pixel assertions stay the evidence, per §5. This is
+  for the judgement a frame cannot give — whether a thing reads right at real size, in a real window,
+  at the real DPI.
+- ⭐ **A step is judged by the state it changed, not by whether its verb threw** — plan 00033.
+  `scripts/drive-demo-interactive.ps1` asserts after every step, and the rule for where to read from
+  is: **UI Automation where the tree answers, the demo's log where it does not, a frame only where
+  neither can.** The tree answers focus, presence and geometry, and — through the stock scroll bars
+  inside AvaloniaEdit's template, not through any peer of ours — the scroll offset. It answers nothing
+  about values or toggle state, so a menu item's tick and the current change index come from the log.
+  ⛔ **A reading that could not be taken is listed as *unread*, never counted as a pass**: three
+  separate times in that plan a summary reported success because nothing had been *recorded* as a
+  failure, including for a run that died after one frame of thirteen. **Absence of recorded failure is
+  not success.**
+- ⛔ **Ask before running anything that borrows the desktop, when anyone is at the machine.** The
+  driver's refusals stop it doing the *wrong* thing; nothing stops it doing the right thing to the
+  wrong person. `scripts/drive-demo-interactive.ps1` launches a window, moves the pointer and presses
+  keys, and on 2026-10-09 it did that to someone mid-sentence — four times, because each diagnosis of
+  the previous run launched another one. **`capture` needs none of this**: `PrintWindow` draws a
+  window that is behind others, so frames can be taken without touching the foreground. Reach for the
+  capture half unless the thing under judgement is a gesture.
+
+### What both back ends refuse, and why it is the whole safety story
+
+**A driver that acts where it was not aimed is worse than one that fails**, because it reports
+success. Both back ends therefore check before they act, and the two platforms arrived at that rule
+from opposite directions:
+
+- **Neither sends a click outside the window it is relative to.** Under X11 that guards a coordinate
+  the caller got wrong; on Windows it also guards a window lying *over* the demo, because an injected
+  click goes to whatever is topmost at that pixel — measured, every click went into another
+  application and the driver reported success.
+- **The Windows back end will not type unless the demo actually holds the keyboard**, because an
+  injected chord goes to whatever does: `ctrl+f` or `ctrl+s` into the person's own window does
+  something real. `SetForegroundWindow` is unreliable, so asking is not evidence of getting — and the
+  rule is **input, not incumbency**: XamlQuality measured it refused to a process that had sent no
+  input and *granted* to one that just had (2026-10-13, Avalonia 12.1.3), which is narrower than this
+  file's earlier "refused for a process that does not already hold the foreground". Either way the
+  back end checks `GetForegroundWindow` rather than trusting the call.
+- ⛔ **Neither raises the demo to satisfy those checks, and neither should.** Raising it over the
+  person's work takes *their* clicks instead — the same defect pointed the other way. ⭐ **And a raise
+  is not even useful**: an open menu lasts only while its window holds the **foreground**, so a raise
+  that changes the foreground finds the menu already closed, while a window that holds it keeps its
+  menu open through every raise there is. A window behind another needs no raise at all — a click on
+  its menu header, where the guard above finds that header uncovered, activates it and opens the menu
+  in one click. ⚠ **This file said for four plans that the raise light-dismissed the menu, which is
+  the wrong mechanism**: XamlQuality measured it (Avalonia 12.1.3) and the entry is theirs, §8.
+  Practice: open a menu once its window holds the foreground, then click the item **without raising
+  or clicking the window in between** — a click on its own **title bar** closes the menu with no
+  change of foreground.
+  The TailBlazer port, which runs about thirty of these harnesses on this estate, sends no synthetic
+  input on a shared desktop at all for this reason. A by-hand pass here is attended, so the input
+  verbs stay and an unobstructed, focused window is a **precondition the driver checks**.
+
+### On Windows
+
+- **Parts are addressed by `AutomationId`, never by name** — the names are translated into eight
+  locales. `click left --id SideBySide/LeftPane/LineNumbers`: each step is unique within the step
+  before it, which is the scope `DECISIONS.md` lays down and `fixtures/automation-ids.txt` pins. The
+  reader is `scripts/drive-demo-uia.ps1`, a script of its own because UI Automation's managed client
+  lives in the Windows Desktop framework and referencing it would make a portable driver a
+  Windows-only one.
+- ⛔ **`key` needs a `click` before it on a window nobody has touched.** Holding the foreground is not
+  the same as having something focused inside, and a chord sent into that gap reaches **the window's
+  own key bindings and not a view's** — XamlQuality's narrowing of what was recorded here as "nothing
+  at all" (2026-10-13). For this demo that is the same outcome, every chord worth driving being the
+  view's: it reads as "synthetic input does not work here", which is the expensive wrong conclusion.
+  `click left --id SideBySide/LeftPane then key ctrl+f` opens the find bar; the chord alone does not.
+- ⛔ **A running demo locks its own assemblies**, so the solution cannot rebuild while it is up —
+  `dotnet test` fails with MSB3027 naming the process. No Linux equivalent. Close it by the pid the
+  launch recorded, never by name.
+- **A part switched off is genuinely absent from the automation tree** — the map, the headers, the
+  strip, the banner's action and the find bar are hidden through `IsVisible` — so "not found" is
+  usually a part that is off rather than a part that is missing, and the driver says so.
+- **Synthetic motion raises a tooltip here**, which is what plan 00023 expected of `SendInput` and
+  the reason `hover` is a verb rather than a museum piece.
+- The capture traps are XamlQuality's now (§8): `PrintWindow` without `PW_RENDERFULLCONTENT` returns
+  an entirely black frame for an Avalonia window and reports success, and a process that has not
+  declared itself per-monitor DPI aware is answered in virtualised coordinates.
+
+### On Linux, and on this box in particular
+
+What a driver meets under X11 in general lives where §8 sends it, in Inspections'
+`docs/avalonia-gotchas.md` under *Linux platform integration*, measured on this box and checked there
+against the merged document:
+
+| What | Inspections' entry |
+|---|---|
+| A menu, a context menu and a tooltip are each a popup of their own, laid out a pass after it opens; mutter's own override windows, and the X keyboard focus a right-click leaves on one of them; accelerators that do not arrive where a click does | *Driving an Avalonia app with `xdotool`: a popup is its own X window, and accelerators do not arrive* |
+| A frame grabbed from before the action, and a black frame from a session that is not presenting | *Under X11, a grab cannot say whether an action took* |
+| `getwindowgeometry` counting a frame twice, and `xwininfo`'s free-text list of windows | *Under X11, `xdotool getwindowgeometry` counts a window frame twice, and `xwininfo` lists windows in free text* |
+
+What stays here is this machine's and the demo's.
+
+- **The session is Wayland (`XDG_SESSION_TYPE=wayland`) with XWayland at `DISPLAY=:0`, and the demo
+  is an XWayland client** — Avalonia's X11 backend — so it has a real X window that can be grabbed.
+  So does Beyond Compare, at `/usr/bin/bcompare`, which is the reference a by-hand pass compares
+  against. The demo's own window is **1100×720**.
+- ⛔ **Nothing can grab the root, and that is XWayland rather than a refusal.** Every client is
+  redirected to a Wayland surface, so the X root holds no client pixels: a root or region grab comes
+  back **solid black**. Reading that as "the compositor refuses grabs" is the mistake.
+- **`ffmpeg`'s `x11grab` by window id is what works here; ImageMagick's `import` does not**, in any
+  form, though it is installed. `XAUTHORITY` matters — without it `x11grab` reports *outside the
+  screen size 0x0*, which reads like a compositor problem and is an auth one.
+- **The main window is the one titled `DiffView Demo`, not the widest** — the F12 live-log window
+  shares the class and is wider.
+- **The driver carries the entries above.** `popup` takes the viewable window that was not there at
+  the `mark` and is more than a pixel each way, which passes over mutter's guard window, there before
+  any mark, and its 1×1; a click outside the window it is relative to is refused; positions come from
+  `xwininfo`'s absolute upper-left; and `capture` refuses a frame with no pixel brighter than black,
+  and keeps the file.
+- **A tooltip can be driven here**, whatever this file said from 2026-09-13 until **2026-09-28**,
+  when `hover` raised one on every trial; `DECISIONS.md` has the trials. A driven frame judges a
+  tooltip's layout at real size and in a locale, and the headless tests that assert its text stay the
+  evidence for the text.
+- **`xdotool` and `wmctrl` are installed, so the app can be driven and not only looked at.** This
+  section claimed the opposite for three plans; check before repeating it.
+- **The demo's flags** are `--theme`, `--variant`, `--left`, `--right`, `--unified`, `--viewer`,
+  `--edit left|right|both`, `--palette colour-blind|default`, `--culture` and `--log-level`. `--edit`
+  and `--palette` each set the same menu item the View menu does, so a flag and the menu cannot
+  disagree. `--palette` exists because the capture half drives nothing, so without it the
+  colour-blind palette — the one palette whose purpose is that some readers cannot use the other —
+  was reachable only by clicking through a menu.
+
+### When the whole session is wedged rather than not presenting
+
+A **black frame** means the session is not presenting. There is a second, worse state that looks
+similar from a distance, and on **2026-09-12** it cost a session's afternoon to work out from scratch.
+
+The signature, all four together:
+
+| Symptom | Why it misleads |
+|---|---|
+| `xdpyinfo` answers, and reports `dimensions: 0x0 pixels` | Display `:0` exists, so the usual "no display" checks all pass |
+| `ps` hangs while `cat /proc/loadavg` is instant | It blocks reading one wedged process's `/proc/<pid>/stat`. `/proc/<pid>/comm` still reads |
+| Load average climbs past 20 with `procs_running 1` and `procs_blocked 0` | Load counts `TASK_UNINTERRUPTIBLE`; `procs_blocked` counts only **iowait**. Tasks stuck on a `dma_fence` are neither running nor iowait, so they are invisible in the obvious counter |
+| SSH accepts the TCP connection and then hangs before the prompt | `sshd` authenticates, then PAM calls `systemd-logind`, which is wedged. "SSH is up" is true and useless |
+
+That is a **GPU hang**, not a display problem. Confirm it with `sudo journalctl -k` — `dmesg` is
+refused here, `kernel.dmesg_restrict` is 1 — and look for `ring <engine> timeout` followed by
+`GPU reset begin!`. If `MES(...) failed to respond` and `psp gfx command LOAD_IP_FW failed` follow,
+the device reset has itself failed and **there is no software recovery**: every outstanding
+`dma_fence` is unsignallable, so anything that touches the GPU blocks forever. A power cycle is the
+only way out and nothing is lost by taking it — the journal is persistent, so the whole failure can
+be reconstructed afterwards from `journalctl -b -1`.
+
+**Do not conclude anything about the app from this.** Its window is gone because the compositor is,
+and a run that ends this way has produced no evidence either way.
+
+The two machine-level mitigations that exist as of 2026-09-12 — a udev rule that saves the device
+coredump before it expires, and `kernel.hung_task_panic` with `kernel.panic=20` — are configuration
+of this host, not of this repository. They are documented in the `lmstudio-opencode` repo.
+
+### Two ways a grab fails that look like the app's fault
+
+Both cost time on **2026-09-13**, and the driver carries both.
+
+- **`xdotool search --class DiffView | head -1` can return an unmapped window.** The demo has two
+  matching X windows; the first is `IsUnMapped` and `x11grab` rejects it with `error_code:8` — a
+  `BadMatch`, which reads like a geometry or compositor problem and is neither. Filter on map state.
+- ⛔ **`pkill -f 'DiffView.Demo'` kills the turn, not the app.** The pattern appears in the agent
+  harness's own shell command line, so the shell matches itself and the turn ends at exit 144 — the
+  same exit code the harness's own reaping produces, which sends you looking in the wrong place.
+  Close the window instead, or kill a pid you recorded at launch.
+
+### Driving a locale
+
+`--culture <name>` sets `DiffViewLocalization.Culture` before the first window, which moves the
+library's text without touching the operating system. The demo's own chrome stays English on purpose,
+so a frame shows exactly the surface under judgement — and the status strip names the culture, which
+is how you confirm the flag took rather than assuming it.
+
+Measure before you look: `scripts/measure-menu-width.{sh,ps1}` reports each locale's widest menu
+entry against English's in display columns, a CJK glyph taking two, and the widest locale is not the
+one you expect: on 2026-09-13 German measured 100% of English's widest menu entry and Portuguese 117%.
+
+## 10. AgentBaseline
+
+`src/AgentBaseline` is plan 00034's tool, not a package: it reviews many machines' `CLAUDE.md` or `AGENTS.md`
+against one seed and saves one baseline. It hosts `SideBySideDiffView` as any host would and changes nothing in
+the library. Its window is the third subject of the `src` gates, and each of its steps' tests is held by a
+committed proof set under `tests/AgentBaseline.Tests/Mutations` — both §5.
+
+| Invariant | Failure signature if broken | Canonical source |
+|---|---|---|
+| The left's source is assigned once, in the session's constructor; cycling assigns the right alone | An equal `PaneSource` is skipped and a differing one replaces the left's `TextDocument`, so the first cycle that changes any member of the left's source loses every edit and the undo stack | `ReviewSession`'s constructor, `ReviewSession.MoveTo`; test `ReviewSessionTests.Editing_the_left_and_cycling_the_right_twice_keeps_the_edit_and_its_undo` |
+| Neither pane's source carries a path | The header's menu offers the view's `Save`, which writes a side back to its source's path — the seed machine's live file | `ReviewSession.Show` and the constructor; test `ReviewSessionTests.The_view_cannot_save_the_accumulator_over_the_seeds_own_file` |
+| A take or a drop edits the left's own document where a parse of the left's live text puts the section, and is refused unless every section it is not about comes out byte-identical | A take placed by the diff's alignment writes one rule over another, as `CopyToLeft` would over a reordered candidate | `AccumulatorEdits.Take`, `AccumulatorEdits.Drop`; test `SectionDecisionTests.Taking_a_section_from_a_reordered_candidate_leaves_every_other_section_of_the_accumulator_byte_identical` |
+| Markdig locates the headings and the text comes from the outline's own lines; a document's title is in no heading path | No heading found in a document wholly nested in a list item; one rule under two titles read as two | `MarkdownOutline.Read`; tests `MarkdownOutlineTests.A_document_wholly_nested_in_a_list_item_yields_its_headings`, `MarkdownOutlineTests.A_documents_title_is_in_no_heading_path_so_its_sections_keep_theirs_whatever_it_is_called` |
+| A section's identity is its heading path and a hash of its normalised content, its trailing blank lines left out | One rule hashed over CRLF or a list's indent never matches itself on another machine | `SectionIdentity.Of`, `SectionIdentity.HashOf`, `MarkdownSection.Content`; test `SectionIdentityTests.Line_endings_and_a_list_nesting_do_not_change_a_sections_identity` |
+| Build and tool output is pruned during the walk and counted, never descended | A walk that judges what it finds after visiting it costs the whole disk | `CorpusWalk`; test `CorpusExclusionTests.Build_output_is_counted_and_never_descended_while_everything_else_is_walked` |
+| The durable store holds taken, rejected and dropped and nothing deferred, and the session store is never written | A deferral spelled as a rejection hides a rule from every later run though nobody decided against it | `DurableStore`, `SessionStore`, `DecisionFile`; test `RestartTests.Decisions_saved_with_a_baseline_are_found_by_the_next_run_and_nothing_put_off_is_among_them` |
+| The decision file is read strictly and names its target, and the start-up refuses one written for another target | A key read wrongly answers for a rule nobody decided; a `CLAUDE.md` review begins from decisions about an `AGENTS.md` | `DecisionFile.Parse`, `Startup.Prepare`; tests `DecisionFileTests.A_decision_file_this_tool_did_not_write_is_refused_and_says_why`, `StartupTests.A_decision_file_written_for_another_target_is_refused_naming_both` |
+| Staleness is read, never marked, against what each candidate was reviewed against as it left the right pane: the candidate on the right is never stale, a section a candidate has no version of or carries as the left now holds it stales nothing, and so does a section the left has lost | Literal staleness — every take staling every candidate reviewed before it — and a save that warns about everything | `SessionStore.MoveTo`, `SessionStore.StaleIn`, `ReviewSession.Staleness`; test `StalenessTests.Taking_a_section_a_candidate_has_no_version_of_leaves_it_unstale_and_one_it_carries_differently_marks_it` |
+| A save never writes over a file the corpus read, writes LF, and goes over stale candidates only once exactly that staleness is accepted — in the window, by a second save over the same staleness and the same text | The seed machine's live file overwritten, or a stale baseline saved without a word | `BaselineOutput.Write`, `ReviewWindow.OnSave`; tests `BaselineOutputTests.A_save_never_writes_the_baseline_over_a_file_the_corpus_read`, `SaveTests.A_save_over_stale_candidates_writes_nothing_and_says_where_and_a_second_save_accepts_it` |
+| The report says each take as the save reads it — edited, removed or taken | The one line of the report that can be a quiet lie: a take edited by hand reported as the source's version | `BaselineOutput.Report`, `DurableStore.Reconcile`; test `SaveTests.The_report_says_an_edited_take_was_edited_and_a_removed_one_removed_and_the_file_names_its_target` |
+| The command line infers nothing: one corpus, named as a manifest or as a path list, and each option once | A corpus told apart by its extension, or a seed implied by the order | `Startup.Parse`; test `StartupTests.A_command_line_the_start_up_cannot_read_is_refused_and_says_why` |
+
+## 11. The directories
+
+Each top-level directory git tracks carries an `AGENTS.md` of its own, holding what only that
+directory's files show, with a `CLAUDE.md` beside it holding `@AGENTS.md`; the root's `CLAUDE.md` and
+`.github/copilot-instructions.md` point here. `scripts/repo-conventions.cs` fails while one is missing,
+which is the family's conventions in Bennewitz.Ninja.Templates, configured by `.github/repository.json`.
+
+| Directory | What it holds |
+|---|---|
+| `.github` | The workflows and `repository.json` |
+| `docs` | The hosting guide, the proof method, and the documents tools generate |
+| `fixtures` | The tests' inputs, compared byte for byte |
+| `mappings` | The theme audit's reviewed key tables |
+| `plans` | The plans, frozen once approved |
+| `reference` | ⛔ Upstream checkouts, fetched and never committed — **prune it from every search** |
+| `scripts` | The tools, each a file-based app |
+| `src` | The libraries, the demo and AgentBaseline |
+| `tests` | The test projects and their proof sets |

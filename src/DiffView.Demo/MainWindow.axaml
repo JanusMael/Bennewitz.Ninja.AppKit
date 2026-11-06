@@ -1,0 +1,167 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dv="using:Bennewitz.Ninja.DiffView"
+        x:Class="Bennewitz.Ninja.DiffView.Demo.MainWindow"
+        Title="DiffView Demo"
+        Width="1100" Height="720"
+        MinWidth="640" MinHeight="400">
+  <DockPanel>
+    <!-- Every entry carries an explicit AutomationId, its x:Name where it has one, because that is what
+         the interactive pass finds it by and an id Avalonia derives from a Name moves when the Name does.
+         Each is unique within its menu; DemoMenuTests holds every entry to both. -->
+    <Menu x:Name="MainMenu" DockPanel.Dock="Top" AutomationProperties.Name="Main menu">
+      <MenuItem AutomationProperties.AutomationId="FileMenu" Header="_File" AutomationProperties.Name="File menu">
+        <MenuItem AutomationProperties.AutomationId="OpenLeft" Header="Open _left…" Click="OnOpenLeft"
+                  AutomationProperties.Name="Open a file in the left pane" />
+        <MenuItem AutomationProperties.AutomationId="OpenRight" Header="Open _right…" Click="OnOpenRight"
+                  AutomationProperties.Name="Open a file in the right pane" />
+        <Separator />
+        <MenuItem AutomationProperties.AutomationId="SaveLeft" Header="_Save left" InputGesture="Ctrl+S" Click="OnSaveLeft"
+                  AutomationProperties.Name="Write the left pane back to its file" />
+        <MenuItem AutomationProperties.AutomationId="SaveRight" Header="Save ri_ght" Click="OnSaveRight"
+                  AutomationProperties.Name="Write the right pane back to its file" />
+        <MenuItem AutomationProperties.AutomationId="RevertLeft" Header="Re_vert left" Click="OnRevertLeft"
+                  AutomationProperties.Name="Discard the left pane's edits" />
+        <MenuItem AutomationProperties.AutomationId="RevertRight" Header="Revert r_ight" Click="OnRevertRight"
+                  AutomationProperties.Name="Discard the right pane's edits" />
+        <Separator />
+        <MenuItem AutomationProperties.AutomationId="Exit" Header="E_xit" Click="OnExit" AutomationProperties.Name="Exit" />
+      </MenuItem>
+      <!-- View's own rows are submenus, each named for what its entries change, and the one action, Find:
+           a row added here instead of to its submenu is what made this menu taller than its popup, so that
+           at 200% the palette's entry scrolled out of it and out of the automation tree. -->
+      <MenuItem AutomationProperties.AutomationId="ViewMenu" Header="_View" AutomationProperties.Name="View menu">
+        <MenuItem AutomationProperties.AutomationId="ThemeMenu" Header="_Theme"
+                  AutomationProperties.Name="The theme variant and the palette">
+          <MenuItem x:Name="VariantLight" AutomationProperties.AutomationId="VariantLight" Header="_Light" ToggleType="Radio" GroupName="variant"
+                    Click="OnVariantLight" AutomationProperties.Name="Light theme variant" />
+          <MenuItem x:Name="VariantDark" AutomationProperties.AutomationId="VariantDark" Header="_Dark" ToggleType="Radio" GroupName="variant"
+                    Click="OnVariantDark" AutomationProperties.Name="Dark theme variant" />
+          <MenuItem x:Name="VariantSystem" AutomationProperties.AutomationId="VariantSystem" Header="_System" ToggleType="Radio" GroupName="variant"
+                    Click="OnVariantSystem" AutomationProperties.Name="Follow the system theme variant" />
+          <Separator />
+          <MenuItem x:Name="ColourBlindPalette" AutomationProperties.AutomationId="ColourBlindPalette" Header="Colour-_blind palette" ToggleType="CheckBox"
+                    Click="OnToggleColourBlindPalette" AutomationProperties.Name="Use the colour-blind-safe palette" />
+        </MenuItem>
+        <!-- Which of the three controls is on screen: one choice, so no two switches can disagree
+             about it. -->
+        <MenuItem AutomationProperties.AutomationId="ControlMenu" Header="_Control" AutomationProperties.Name="Which control the demo hosts">
+          <MenuItem x:Name="EditorView" AutomationProperties.AutomationId="EditorView" Header="_Side by side, editable" ToggleType="Radio" GroupName="control"
+                    Click="OnChooseView" AutomationProperties.Name="Host the side-by-side view, which edits, copies and finds" />
+          <MenuItem x:Name="UnifiedView" AutomationProperties.AutomationId="UnifiedView" Header="_Unified (inline)" ToggleType="Radio" GroupName="control"
+                    Click="OnChooseView" AutomationProperties.Name="Show the comparison unified in one pane" />
+          <MenuItem x:Name="ViewerView" AutomationProperties.AutomationId="ViewerView" Header="Side by side, read-only _viewer" ToggleType="Radio" GroupName="control"
+                    Click="OnChooseView" AutomationProperties.Name="Host the read-only viewer: two panes, with no find, no editing and no menus" />
+        </MenuItem>
+        <MenuItem AutomationProperties.AutomationId="FoldingMenu" Header="F_olding"
+                  AutomationProperties.Name="Which runs of matching rows are folded">
+          <MenuItem x:Name="ShowAllRows" AutomationProperties.AutomationId="ShowAllRows" Header="Show _all rows" ToggleType="Radio" GroupName="folding" IsChecked="True"
+                    Click="OnShowAllRows" AutomationProperties.Name="Fold nothing: show every row" />
+          <MenuItem x:Name="ShowDifferencesOnly" AutomationProperties.AutomationId="ShowDifferencesOnly" Header="Show d_ifferences only" ToggleType="Radio" GroupName="folding"
+                    Click="OnShowDifferencesOnly" AutomationProperties.Name="Fold every run of matching rows" />
+          <MenuItem x:Name="ShowContext" AutomationProperties.AutomationId="ShowContext" Header="Show differences with _context" ToggleType="Radio" GroupName="folding"
+                    Click="OnShowContext" AutomationProperties.Name="Fold the matching runs but keep three rows around every change" />
+        </MenuItem>
+        <MenuItem AutomationProperties.AutomationId="LayoutMenu" Header="_Layout"
+                  AutomationProperties.Name="The parts around the panes, and how the panes scroll">
+          <MenuItem x:Name="ShowMinimap" AutomationProperties.AutomationId="ShowMinimap" Header="Show overview _map" ToggleType="CheckBox" IsChecked="True"
+                    Click="OnToggleShowMinimap" AutomationProperties.Name="Show the two-lane overview map beside the panes" />
+          <MenuItem x:Name="MinimapOnLeft" AutomationProperties.AutomationId="MinimapOnLeft" Header="Overview map on the le_ft" ToggleType="CheckBox" IsChecked="True"
+                    Click="OnToggleMinimapPlacement" AutomationProperties.Name="Dock the overview map outside the left pane instead of the right" />
+          <MenuItem x:Name="ShowHeaders" AutomationProperties.AutomationId="ShowHeaders" Header="Show pane _headers" ToggleType="CheckBox" IsChecked="True"
+                    Click="OnToggleShowHeaders" AutomationProperties.Name="Show the file-name headers above the panes" />
+          <MenuItem x:Name="ShowStatusStrip" AutomationProperties.AutomationId="ShowStatusStrip" Header="Show _status strip" ToggleType="CheckBox" IsChecked="True"
+                    Click="OnToggleShowStatusStrip" AutomationProperties.Name="Show the status strip below the panes" />
+          <MenuItem x:Name="ShowBanner" AutomationProperties.AutomationId="ShowBanner" Header="Show _banner" ToggleType="CheckBox" IsChecked="True"
+                    Click="OnToggleShowBanner" AutomationProperties.Name="Let the banner appear when a build fails or the files are too different to align" />
+          <Separator />
+          <MenuItem x:Name="SyncHorizontal" AutomationProperties.AutomationId="SyncHorizontal" Header="Sync hori_zontal scroll" ToggleType="CheckBox"
+                    Click="OnToggleSyncHorizontal" AutomationProperties.Name="Couple horizontal scrolling of the panes" />
+        </MenuItem>
+        <MenuItem AutomationProperties.AutomationId="TextMenu" Header="Te_xt"
+                  AutomationProperties.Name="How the panes draw their text">
+          <MenuItem x:Name="UseSyntax" AutomationProperties.AutomationId="UseSyntax" Header="S_yntax highlighting" ToggleType="CheckBox" IsChecked="True"
+                    Click="OnToggleSyntax" AutomationProperties.Name="Colour the panes from a grammar chosen by file extension" />
+          <MenuItem x:Name="ShowWhitespace" AutomationProperties.AutomationId="ShowWhitespace" Header="Show w_hitespace" ToggleType="CheckBox"
+                    Click="OnToggleShowWhitespace" AutomationProperties.Name="Draw spaces and tabs as glyphs" />
+          <MenuItem x:Name="ShowLineEndings" AutomationProperties.AutomationId="ShowLineEndings" Header="Show line _endings" ToggleType="CheckBox"
+                    Click="OnToggleShowLineEndings" AutomationProperties.Name="Draw a glyph at the end of each line" />
+          <Separator />
+          <MenuItem AutomationProperties.AutomationId="TabWidthMenu" Header="_Tab width" AutomationProperties.Name="Tab width">
+            <MenuItem x:Name="Tab2" AutomationProperties.AutomationId="Tab2" Header="_2" ToggleType="Radio" GroupName="tab"
+                      Click="OnTabWidth" Tag="2" AutomationProperties.Name="Tab width of two columns" />
+            <MenuItem x:Name="Tab4" AutomationProperties.AutomationId="Tab4" Header="_4" ToggleType="Radio" GroupName="tab" IsChecked="True"
+                      Click="OnTabWidth" Tag="4" AutomationProperties.Name="Tab width of four columns" />
+            <MenuItem x:Name="Tab8" AutomationProperties.AutomationId="Tab8" Header="_8" ToggleType="Radio" GroupName="tab"
+                      Click="OnTabWidth" Tag="8" AutomationProperties.Name="Tab width of eight columns" />
+          </MenuItem>
+          <MenuItem AutomationProperties.AutomationId="PaneFontSizeMenu" Header="Pane font si_ze" AutomationProperties.Name="Pane font size">
+            <MenuItem x:Name="FontTheme" AutomationProperties.AutomationId="FontTheme" Header="_Theme" ToggleType="Radio" GroupName="panefont" IsChecked="True"
+                      Click="OnPaneFontSize" AutomationProperties.Name="The font size the pane theme sets" />
+            <MenuItem x:Name="Font16" AutomationProperties.AutomationId="Font16" Header="1_6" ToggleType="Radio" GroupName="panefont"
+                      Click="OnPaneFontSize" Tag="16" AutomationProperties.Name="Pane font size of sixteen" />
+            <MenuItem x:Name="Font20" AutomationProperties.AutomationId="Font20" Header="_20" ToggleType="Radio" GroupName="panefont"
+                      Click="OnPaneFontSize" Tag="20" AutomationProperties.Name="Pane font size of twenty" />
+          </MenuItem>
+        </MenuItem>
+        <MenuItem AutomationProperties.AutomationId="ComparisonMenu" Header="Co_mparison"
+                  AutomationProperties.Name="Which differences the comparison counts">
+          <MenuItem x:Name="IgnoreWhitespace" AutomationProperties.AutomationId="IgnoreWhitespace" Header="Ignore _whitespace" ToggleType="CheckBox"
+                    Click="OnToggleIgnoreWhitespace" AutomationProperties.Name="Ignore whitespace differences" />
+          <MenuItem x:Name="IgnoreCase" AutomationProperties.AutomationId="IgnoreCase" Header="Ignore _case" ToggleType="CheckBox"
+                    Click="OnToggleIgnoreCase" AutomationProperties.Name="Ignore case differences" />
+        </MenuItem>
+        <Separator />
+        <MenuItem AutomationProperties.AutomationId="Find" Header="_Find…" InputGesture="Ctrl+F" Click="OnFind"
+                  AutomationProperties.Name="Open the find bar" />
+        <MenuItem AutomationProperties.AutomationId="EditingMenu" Header="_Editing"
+                  AutomationProperties.Name="Which panes take typing, and the copies between them">
+          <MenuItem x:Name="EditLeft" AutomationProperties.AutomationId="EditLeft" Header="Edit left _pane" ToggleType="CheckBox"
+                    Click="OnToggleEditLeft" AutomationProperties.Name="Let the left pane be typed into" />
+          <MenuItem x:Name="EditRight" AutomationProperties.AutomationId="EditRight" Header="Edit right pa_ne" ToggleType="CheckBox"
+                    Click="OnToggleEditRight" AutomationProperties.Name="Let the right pane be typed into" />
+          <Separator />
+          <MenuItem x:Name="CopyToLeft" AutomationProperties.AutomationId="CopyToLeft" Header="Copy to _left" Click="OnCopyToLeft"
+                    AutomationProperties.Name="Copy the selection, or the current change block, onto the left side" />
+          <MenuItem x:Name="CopyToRight" AutomationProperties.AutomationId="CopyToRight" Header="Copy to _right" Click="OnCopyToRight"
+                    AutomationProperties.Name="Copy the selection, or the current change block, onto the right side" />
+        </MenuItem>
+        <!-- The accelerators below are written from the control's key map rather than typed here, so the
+             rebind moves the labels as well as the keys. -->
+        <MenuItem AutomationProperties.AutomationId="KeyBindingsMenu" Header="_Key bindings" AutomationProperties.Name="Key bindings">
+          <MenuItem x:Name="NextChange" AutomationProperties.AutomationId="NextChange" Header="Ne_xt change" Click="OnNextChange"
+                    AutomationProperties.Name="Move to the next change block" />
+          <MenuItem x:Name="PreviousChange" AutomationProperties.AutomationId="PreviousChange" Header="Previous chan_ge" Click="OnPreviousChange"
+                    AutomationProperties.Name="Move to the previous change block" />
+          <Separator />
+          <MenuItem x:Name="RebindNavigation" AutomationProperties.AutomationId="RebindNavigation" Header="_Rebind these to Ctrl+Down / Ctrl+Up" ToggleType="CheckBox"
+                    Click="OnToggleRebindNavigation"
+                    AutomationProperties.Name="Move next and previous change off F7 onto Ctrl+Down and Ctrl+Up" />
+        </MenuItem>
+      </MenuItem>
+      <MenuItem AutomationProperties.AutomationId="DebugMenu" Header="_Debug" AutomationProperties.Name="Debug menu">
+        <MenuItem AutomationProperties.AutomationId="ShowLiveLog" Header="Show live _log (F12)" Click="OnToggleLiveLog"
+                  AutomationProperties.Name="Show live log window" />
+        <MenuItem AutomationProperties.AutomationId="OpenLogsFolder" Header="Open logs _folder" Click="OnOpenLogsFolder"
+                  AutomationProperties.Name="Open logs folder" />
+        <Separator />
+        <MenuItem AutomationProperties.AutomationId="ThrowOnUiThread" Header="_Throw on the UI thread" Click="OnThrowOnUiThread"
+                  AutomationProperties.Name="Throw a test exception on the UI thread" />
+        <MenuItem AutomationProperties.AutomationId="ThrowInUnobservedTask" Header="Throw in an _unobserved task" Click="OnThrowInUnobservedTask"
+                  AutomationProperties.Name="Throw a test exception in an unobserved task" />
+      </MenuItem>
+    </Menu>
+
+    <Border DockPanel.Dock="Bottom" Padding="8,4">
+      <TextBlock x:Name="StatusText" FontSize="12" />
+    </Border>
+
+    <!-- All three views, one showing: only the one on screen carries the sources, so the others
+         neither build nor hold a model. -->
+    <Panel>
+      <dv:SideBySideDiffView x:Name="Diff" AutomationProperties.AutomationId="SideBySide" AutomationProperties.Name="Side-by-side diff" />
+      <dv:InlineDiffView x:Name="Unified" AutomationProperties.AutomationId="Unified" IsVisible="False" AutomationProperties.Name="Unified diff" />
+      <dv:DiffViewer x:Name="Viewer" AutomationProperties.AutomationId="Viewer" IsVisible="False" AutomationProperties.Name="Read-only diff viewer" />
+    </Panel>
+  </DockPanel>
+</Window>

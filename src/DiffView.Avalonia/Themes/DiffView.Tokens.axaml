@@ -1,0 +1,161 @@
+<!--
+    The DiffView.* palette: every brush the controls use, for Light and Dark, with a per-Semi-
+    variant override wherever the contrast audit demands one. The controls never reference a
+    host theme's own keys, so they render the same under Semi, Fluent and Simple; a host
+    overrides any token by defining the same key in its own resources.
+
+    The floors these values are held to are in contrast-pairs.json beside this file and are
+    checked by `theme-audit report` against every target theme and variant (docs/theme-audit.md).
+    Row tints are translucent so selection and the current line read through them; each tint is
+    scored composited over the pane background it sits on.
+
+    Marker glyphs and kind colours follow ClaudeForge's Save Changes pills (inserted #2E7D32,
+    deleted #C62828) so DiffView reads as native inside it; the modified marker is #D96A00, a
+    darker step of the pill's Orange 700, because #F57C00 is 2.8:1 on white and Orange 800 is
+    still 2.8:1 on the gutter and 2.96:1 on Semi Desert's warm page — under the 3.0 floor for a
+    change marker. Dark uses lighter siblings of the same hues for the same reason. The status
+    family carries ClaudeForge's measured status-bar values verbatim.
+
+    DiffView.Tokens.ColorBlind.axaml is the sibling palette: the same keys, blue / vermillion /
+    purple for inserted / deleted / modified, distinguishable without hue because the marker
+    margin carries + - ~ as well.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Default">
+      <!-- Pane -->
+      <SolidColorBrush x:Key="DiffView.PaneBackgroundBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="DiffView.PaneForegroundBrush" Color="#1C1F23" />
+      <SolidColorBrush x:Key="DiffView.GutterBackgroundBrush" Color="#F3F4F6" />
+      <SolidColorBrush x:Key="DiffView.LineNumberForegroundBrush" Color="#6B7075" />
+      <SolidColorBrush x:Key="DiffView.CaretBrush" Color="#1C1F23" />
+      <SolidColorBrush x:Key="DiffView.SelectionBrush" Color="#593390FF" />
+
+      <!-- Diff kinds: row tints over the pane background -->
+      <SolidColorBrush x:Key="DiffView.InsertedBrush" Color="#262E7D32" />
+      <SolidColorBrush x:Key="DiffView.DeletedBrush" Color="#26C62828" />
+      <SolidColorBrush x:Key="DiffView.ModifiedBrush" Color="#26D96A00" />
+      <SolidColorBrush x:Key="DiffView.PaddingBrush" Color="#269E9E9E" />
+
+      <!-- Word-level highlights over a modified row -->
+      <SolidColorBrush x:Key="DiffView.WordInsertedBrush" Color="#592E7D32" />
+      <SolidColorBrush x:Key="DiffView.WordDeletedBrush" Color="#59C62828" />
+
+      <!-- Change markers (+ - ~), minimap ticks, connectors, current block -->
+      <SolidColorBrush x:Key="DiffView.MarkerInsertedBrush" Color="#2E7D32" />
+      <SolidColorBrush x:Key="DiffView.MarkerDeletedBrush" Color="#C62828" />
+      <SolidColorBrush x:Key="DiffView.MarkerModifiedBrush" Color="#D96A00" />
+      <!-- The ground each marker glyph sits on: its own colour over the pane background,
+           opaque. Over the pane rather than the gutter because that is the lighter of the
+           two, which is what keeps the glyph above its 3.0 floor. -->
+      <SolidColorBrush x:Key="DiffView.MarkerChipInsertedBrush" Color="#E6EFE6" />
+      <SolidColorBrush x:Key="DiffView.MarkerChipDeletedBrush" Color="#F8E5E5" />
+      <SolidColorBrush x:Key="DiffView.MarkerChipModifiedBrush" Color="#FAEDE0" />
+      <SolidColorBrush x:Key="DiffView.ConnectorBrush" Color="#757575" />
+      <SolidColorBrush x:Key="DiffView.GutterArrowBrush" Color="#8A6D00" />
+      <!-- The copy arrows. The outline carries the silhouette, so it is the strongest
+           contrast against the gutter; the fill sits between it and the ground, which is
+           what makes an arrow read as an object rather than a stencil. The bar across the
+           selection arrow's tail is this palette's choice: transparent where colour alone
+           tells the two arrows apart, painted where it must not have to. -->
+      <SolidColorBrush x:Key="DiffView.GutterArrowFillBrush" Color="#F0E442" />
+      <SolidColorBrush x:Key="DiffView.SelectionArrowBrush" Color="#0D47A1" />
+      <SolidColorBrush x:Key="DiffView.SelectionArrowFillBrush" Color="#1976D2" />
+      <SolidColorBrush x:Key="DiffView.SelectionArrowBarBrush" Color="Transparent" />
+      <SolidColorBrush x:Key="DiffView.ModifiedSinceLoadBrush" Color="#F57C00" />
+      <SolidColorBrush x:Key="DiffView.CurrentBlockBorderBrush" Color="#1565C0" />
+
+      <!-- Find -->
+      <SolidColorBrush x:Key="DiffView.FindMatchBrush" Color="#80FFD54F" />
+      <SolidColorBrush x:Key="DiffView.FindCurrentMatchBrush" Color="#99FF8F00" />
+
+      <!-- Headers and status strip -->
+      <SolidColorBrush x:Key="DiffView.HeaderBackgroundBrush" Color="#F3F4F6" />
+      <SolidColorBrush x:Key="DiffView.FocusAccentBrush" Color="#1565C0" />
+      <SolidColorBrush x:Key="DiffView.HeaderForegroundBrush" Color="#1C1F23" />
+      <SolidColorBrush x:Key="DiffView.MutedForegroundBrush" Color="#666666" />
+      <SolidColorBrush x:Key="DiffView.StatusBackgroundBrush" Color="#E8E8EC" />
+      <SolidColorBrush x:Key="DiffView.StatusForegroundBrush" Color="#1C1F23" />
+
+      <!-- Status family: ClaudeForge's status-bar pills -->
+      <SolidColorBrush x:Key="DiffView.StatusSuccessForegroundBrush" Color="#156321" />
+      <SolidColorBrush x:Key="DiffView.StatusSuccessBackgroundBrush" Color="#B1D5B8" />
+      <SolidColorBrush x:Key="DiffView.StatusWarningForegroundBrush" Color="#874400" />
+      <SolidColorBrush x:Key="DiffView.StatusWarningBackgroundBrush" Color="#E6C8A7" />
+      <SolidColorBrush x:Key="DiffView.StatusFailureForegroundBrush" Color="#A8071A" />
+      <SolidColorBrush x:Key="DiffView.StatusFailureBackgroundBrush" Color="#F0C1C4" />
+      <SolidColorBrush x:Key="DiffView.StatusActiveForegroundBrush" Color="#0050B3" />
+      <SolidColorBrush x:Key="DiffView.StatusActiveBackgroundBrush" Color="#B6CEEC" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Dark">
+      <!-- Pane -->
+      <SolidColorBrush x:Key="DiffView.PaneBackgroundBrush" Color="#1E1E1E" />
+      <SolidColorBrush x:Key="DiffView.PaneForegroundBrush" Color="#F0F0F0" />
+      <SolidColorBrush x:Key="DiffView.GutterBackgroundBrush" Color="#252526" />
+      <SolidColorBrush x:Key="DiffView.LineNumberForegroundBrush" Color="#8B9096" />
+      <SolidColorBrush x:Key="DiffView.CaretBrush" Color="#F0F0F0" />
+      <SolidColorBrush x:Key="DiffView.SelectionBrush" Color="#663390FF" />
+
+      <!-- Diff kinds: row tints over the pane background -->
+      <SolidColorBrush x:Key="DiffView.InsertedBrush" Color="#334CAF50" />
+      <SolidColorBrush x:Key="DiffView.DeletedBrush" Color="#33EF5350" />
+      <SolidColorBrush x:Key="DiffView.ModifiedBrush" Color="#33FFA726" />
+      <SolidColorBrush x:Key="DiffView.PaddingBrush" Color="#14FFFFFF" />
+
+      <!-- Word-level highlights over a modified row -->
+      <SolidColorBrush x:Key="DiffView.WordInsertedBrush" Color="#664CAF50" />
+      <SolidColorBrush x:Key="DiffView.WordDeletedBrush" Color="#66EF5350" />
+
+      <!-- Change markers (+ - ~), minimap ticks, connectors, current block -->
+      <SolidColorBrush x:Key="DiffView.MarkerInsertedBrush" Color="#66BB6A" />
+      <SolidColorBrush x:Key="DiffView.MarkerDeletedBrush" Color="#EF5350" />
+      <SolidColorBrush x:Key="DiffView.MarkerModifiedBrush" Color="#FFA726" />
+      <!-- The ground each marker glyph sits on: its own colour over the pane background,
+           opaque. Over the pane rather than the gutter because that is the lighter of the
+           two, which is what keeps the glyph above its 3.0 floor. -->
+      <SolidColorBrush x:Key="DiffView.MarkerChipInsertedBrush" Color="#2C3D2D" />
+      <SolidColorBrush x:Key="DiffView.MarkerChipDeletedBrush" Color="#482928" />
+      <SolidColorBrush x:Key="DiffView.MarkerChipModifiedBrush" Color="#4B3920" />
+      <SolidColorBrush x:Key="DiffView.ConnectorBrush" Color="#8B9096" />
+      <SolidColorBrush x:Key="DiffView.GutterArrowBrush" Color="#FFD54F" />
+      <!-- The copy arrows. The outline carries the silhouette, so it is the strongest
+           contrast against the gutter; the fill sits between it and the ground, which is
+           what makes an arrow read as an object rather than a stencil. The bar across the
+           selection arrow's tail is this palette's choice: transparent where colour alone
+           tells the two arrows apart, painted where it must not have to. -->
+      <SolidColorBrush x:Key="DiffView.GutterArrowFillBrush" Color="#DAA520" />
+      <SolidColorBrush x:Key="DiffView.SelectionArrowBrush" Color="#90CAF9" />
+      <SolidColorBrush x:Key="DiffView.SelectionArrowFillBrush" Color="#42A5F5" />
+      <SolidColorBrush x:Key="DiffView.SelectionArrowBarBrush" Color="Transparent" />
+      <SolidColorBrush x:Key="DiffView.ModifiedSinceLoadBrush" Color="#FFB74D" />
+      <SolidColorBrush x:Key="DiffView.CurrentBlockBorderBrush" Color="#64B5F6" />
+
+      <!-- Find -->
+      <SolidColorBrush x:Key="DiffView.FindMatchBrush" Color="#59FFB300" />
+      <SolidColorBrush x:Key="DiffView.FindCurrentMatchBrush" Color="#80FF8F00" />
+
+      <!-- Headers and status strip -->
+      <SolidColorBrush x:Key="DiffView.HeaderBackgroundBrush" Color="#2A2A2E" />
+      <SolidColorBrush x:Key="DiffView.FocusAccentBrush" Color="#64B5F6" />
+      <SolidColorBrush x:Key="DiffView.HeaderForegroundBrush" Color="#E8E8E8" />
+      <SolidColorBrush x:Key="DiffView.MutedForegroundBrush" Color="#AAAAAA" />
+      <SolidColorBrush x:Key="DiffView.StatusBackgroundBrush" Color="#111113" />
+      <SolidColorBrush x:Key="DiffView.StatusForegroundBrush" Color="#E8E8E8" />
+
+      <!-- Status family: ClaudeForge's status-bar pills -->
+      <!-- Foregrounds one step brighter than ClaudeForge's: reused as plain text on the host
+           page they are held to 7:1, and Semi Dusk's #2D3236 and Simple's #282828 pages sat
+           between 5.7:1 and 6.9:1 against the originals. Each still clears 4.5:1 on its fill. -->
+      <SolidColorBrush x:Key="DiffView.StatusSuccessForegroundBrush" Color="#6ADB88" />
+      <SolidColorBrush x:Key="DiffView.StatusSuccessBackgroundBrush" Color="#1C492A" />
+      <SolidColorBrush x:Key="DiffView.StatusWarningForegroundBrush" Color="#F7B85A" />
+      <SolidColorBrush x:Key="DiffView.StatusWarningBackgroundBrush" Color="#533B18" />
+      <SolidColorBrush x:Key="DiffView.StatusFailureForegroundBrush" Color="#FFAEAE" />
+      <SolidColorBrush x:Key="DiffView.StatusFailureBackgroundBrush" Color="#6D2B2B" />
+      <SolidColorBrush x:Key="DiffView.StatusActiveForegroundBrush" Color="#8FC8F7" />
+      <SolidColorBrush x:Key="DiffView.StatusActiveBackgroundBrush" Color="#1F4262" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

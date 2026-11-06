@@ -1,4 +1,7 @@
 <Project>
+  <!-- One pin per package, the highest any family uses (plans/00009 decision 17 in
+       Bennewitz.Ninja.Templates). A pin a package ships against is a floor its consumers inherit, so
+       a raise here reaches them at that family's next release. -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
@@ -14,31 +17,99 @@
     <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.12.1" />
   </ItemGroup>
 
-  <ItemGroup Label="UI">
+  <ItemGroup Label="Avalonia">
     <!-- ⚠ Avalonia 12.1.3 is the FLOOR every consumer inherits, and it is there on purpose. The
          release carries AvaloniaUI/Avalonia#22151, "Fix UIA selection never reaching the client on
          Windows", and the family relies on it. Only a desktop platform shows the bug: the headless
-         one never goes through Win32 marshalling, so no test here can see it. -->
+         one never goes through Win32 marshalling, so no test here can see it.
+         Avalonia.Controls.DataGrid has no 12.1.3, so it is on its newest, 12.1.2, and that is a
+         floor too: a host that references DataGrid directly needs 12.1.2 or later. Moving DataGrid
+         moves the trim baseline, so re-run the trim comparison whenever it moves. -->
     <PackageVersion Include="Avalonia" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Skia" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Themes.Simple" Version="12.1.3" />
+    <PackageVersion Include="Semi.Avalonia" Version="12.1.0.1" />
+    <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0" />
   </ItemGroup>
 
-  <ItemGroup Label="Logging">
+  <ItemGroup Label="Editor and diff">
+    <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
+    <PackageVersion Include="AvaloniaEdit.TextMate" Version="12.0.0" />
+    <PackageVersion Include="DiffPlex" Version="1.9.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="MVVM">
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="Agent baseline">
+    <!-- The markdown parse src/AgentBaseline positions sections by, as a LOCATOR only: headings,
+         levels and line spans come from it and the text comes from our own line array (plan 00034
+         decision 3). Measured against this version before it was adopted: a hand-rolled `^#` scan
+         finds 0 of 18 headings in a document wholly nested in a list item, which is one of the two
+         real candidates' actual shape. App-only: AgentBaseline is IsPackable=false, so this reaches
+         no package, neither shipped assembly and none of the gates. -->
+    <PackageVersion Include="Markdig" Version="1.4.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Logging and diagnostics">
+    <!-- A floor DiffView's packages carry. Raised from 10.0.11: Microsoft.AspNetCore.Mvc.Testing
+         10.0.12 takes this version through Microsoft.Extensions.Hosting, and central transitive
+         pinning refuses the downgrade (NU1109). -->
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Serilog" Version="4.3.1" />
+    <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
     <PackageVersion Include="Serilog.Sinks.Trace" Version="4.0.0" />
+    <!-- From the local feed (../nuget-local), packed from ClaudeForge by scripts/pack-diagnostics.*.
+         DiffView's demo alone references it, and no package carries it. -->
+    <PackageVersion Include="LayeredEditors.Avalonia.Diagnostics" Version="1.0.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Tooling">
+    <!-- The family's own rules, run as tests over what this repository ships, and the theme and
+         contrast analysis DiffView's audit runs on. Test-only: nothing shipped references them. The
+         `theme-audit` command itself is the sibling package Bennewitz.Ninja.XamlQuality.ThemeAudit,
+         installed as a dotnet tool: see docs/diffview.md. -->
+    <!-- A rule's reading here is a measurement against these versions, so a move re-opens every rule:
+         DiffView's plan 00028 renamed every rule id (XQ100n became BNXQ100n, AQ100n became BNAQ100n)
+         and changed what a rule counts as inspected. DECISIONS.md has the readings. -->
+    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.4.1029" />
+    <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.4.1026" />
+    <!-- Unicode's East Asian Width, for scripts/measure-menu-width.cs: a CJK glyph takes two columns,
+         and .NET carries no such table. Script-only: nothing the solution builds references it. -->
+    <PackageVersion Include="Wcwidth" Version="4.0.1" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
-    <!-- xunit.v3 on Microsoft.Testing.Platform — see global.json. The VSTest bridge packages are
-         deliberately absent, and so is TrxReport: nothing asks for a .trx, and it would have to
-         match the platform version xunit takes on every bump. -->
+    <!-- xunit.v3 on Microsoft.Testing.Platform: see global.json. The VSTest bridge packages are
+         deliberately absent.
+
+         ⚠ DiffView's three test projects stay on 3.2.2 through a VersionOverride in
+         tests/DiffView.Tests.props, the one package decision 17 cannot hold in one pin. Their
+         465 [AvaloniaFact] and [AvaloniaTheory] tests need Avalonia.Headless.XUnit, whose discoverer
+         fails against 4.0: docs/xunit-v3-4.md in Bennewitz.Ninja.Templates. -->
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
-    <!-- A real Avalonia application on a headless platform, for the dialog tests. Pinned to the
-         Avalonia version above: the two ship in lockstep. -->
+    <!-- A real Avalonia application on a headless platform. ⚠ Pinned to the SAME version as Avalonia
+         above: a headless platform from any other release pulls that release's Avalonia in
+         transitively, against the libraries' pin, and trips central transitive pinning. -->
     <PackageVersion Include="Avalonia.Headless" Version="12.1.3" />
-    <!-- The family's own assembly rules, run as tests over what this repository ships. -->
-    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.3.929" />
+    <PackageVersion Include="Avalonia.Headless.XUnit" Version="12.1.3" />
+    <!-- Runtime XAML loading, which the base Avalonia package deliberately leaves out because it
+         carries the XAML compiler. Test-only: DiffView's quickstart gate loads the snippet from
+         docs/diffview.md rather than a retyped copy, so the markup a reader pastes is the markup
+         under test. Nothing shipped references it. -->
+    <PackageVersion Include="Avalonia.Markup.Xaml.Loader" Version="12.1.3" />
     <!-- Starts tests/EntryPointWebProbe in process, as the web templates' own tests start theirs. -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
+    <!-- DiffView's tests only, on the Microsoft.Testing.Platform line xunit.v3 3.2.2 takes (1.9.1): a
+         newer TrxReport pins the platform above what xunit's bundled MSBuild extension can load. The
+         other families' tests dropped it: nothing asks them for a .trx. -->
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="1.9.1" />
+    <PackageVersion Include="Verify.XunitV3" Version="32.0.0" />
   </ItemGroup>
 </Project>

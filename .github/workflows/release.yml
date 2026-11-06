@@ -1,16 +1,24 @@
 name: Release
 
-# Triggered by a version tag (v1.2.3), or dispatched by hand.
+# Triggered by a version tag (v1.2.3, or <family>/v1.2.3 where .github/repository.json declares
+# families), or dispatched by hand.
 #
 # ⛔ A PUBLISHED NUGET VERSION CAN NEVER BE REPLACED. Everything this repository otherwise
 # treats as recoverable becomes permanent past the push step, so the gates below — build,
 # test, pack, and the packed-vs-declared check — all run before it, and --skip-duplicate makes
 # a re-run of a completed release a no-op rather than a failure.
+#
+# ⭐ WHAT A RELEASE PUBLISHES is resolved by scripts/release-target.cs, not by bash here: the tag or
+# the dispatch's inputs, into the version, the tag, the family and the ids. A repository without
+# families releases everything in packages.push from a v<version> tag. With families, each family
+# releases alone from <family>/v<version>, and a tag of the other kind is refused before anything
+# is built.
 
 on:
   push:
     tags:
       - 'v*.*.*'
+      - '*/v*.*.*'
   # Two dispatch modes, decided by whether `version` is filled in:
   #
   #   BLANK    credential preflight — logs in to NuGet.org and stops. Proves the trusted-
@@ -25,6 +33,9 @@ on:
     inputs:
       version:
         description: 'Version to release (e.g. 2026.3.920). LEAVE BLANK to only preflight credentials.'
+        required: false
+      family:
+        description: 'The family to release, where .github/repository.json declares families. Blank otherwise.'
         required: false
 
 env:
@@ -63,6 +74,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # Every tag, so a family's release notes start from that family's previous tag.
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
@@ -70,17 +84,28 @@ jobs:
           global-json-file: global.json
 
       # The version comes from the TAG, not from a file, so the tag and the package agree by
-      # construction rather than by someone remembering to bump both.
-      - name: Resolve version and tag
+      # construction rather than by someone remembering to bump both. Sets VERSION, TAG, FAMILY,
+      # IDS, PREVIOUS_TAG and LATEST for every step below; refuses a tag or a dispatch that names no
+      # release this repository makes, and a version that is not YYYY.Q.MMDD.
+      # NuGet.config names the sibling feed ../nuget-local, and every restore below fails on a source
+      # that does not exist. See the note in ci.yml.
+      - name: Fetch reference sources
+        run: dotnet run scripts/fetch-reference.cs
+
+      - name: Pack ClaudeForge diagnostics into the local feed
+        run: dotnet run scripts/pack-diagnostics.cs
+
+      - name: Resolve what this release publishes
         if: env.RELEASING == 'true'
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ inputs.version }}" >> $GITHUB_ENV
-            echo "TAG=v${{ inputs.version }}" >> $GITHUB_ENV
-          else
-            echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
-            echo "TAG=${GITHUB_REF_NAME}" >> $GITHUB_ENV
-          fi
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_FAMILY: ${{ inputs.family }}
+        run: >
+          dotnet run scripts/release-target.cs -- resolve
+          --event "$EVENT" --ref "$REF" --version "$INPUT_VERSION" --family "$INPUT_FAMILY"
+          --github-env "$GITHUB_ENV"
 
       # ⛔ Fail LOUDLY rather than publish nothing quietly. Without this, a tag with the variable
       # unset skips the push (which is gated on NUGET_USER) but still creates the GitHub Release
@@ -94,8 +119,9 @@ jobs:
           exit 1
 
       # ⛔ Nothing publishes from a repository missing what the family conventions prescribe: its
-      # documents, a replaced marker, a description. Runs in the preflight too, so a dispatch with
-      # the version blank reports it before a tag does. A setting that has merely drifted does not
+      # documents, a replaced marker, a description. A package page links back here, so an empty
+      # repository page is part of what ships. Runs in the preflight too, so a dispatch with the
+      # version blank reports it before a tag does. A setting that has merely drifted does not
       # stop a release; CI's `conventions` job reports that.
       - name: Refuse to release a repository the conventions reject
         env:
@@ -104,26 +130,34 @@ jobs:
 
       - name: Build
         if: env.RELEASING == 'true'
-        run: dotnet build AppServices.slnx -c Release --nologo -warnaserror -p:Version=${{ env.VERSION }}
+        run: dotnet build AppKit.slnx -c Release --nologo -warnaserror -p:Version=${{ env.VERSION }}
 
       - name: Test
         if: env.RELEASING == 'true'
-        run: dotnet test --solution AppServices.slnx --no-build -c Release
+        run: dotnet test --solution AppKit.slnx --no-build -c Release
 
+      # A family's release packs only that family's projects, found by their evaluated PackageId:
+      # another family's packages are not this release's, at this version or any other.
       - name: Pack
         if: env.RELEASING == 'true'
-        run: >
-          dotnet pack AppServices.slnx -c Release --no-build --nologo
-          -p:Version=${{ env.VERSION }}
-          --output ./packages/Release
+        run: |
+          set -euo pipefail
+          if [ -z "$FAMILY" ]; then
+            dotnet pack AppKit.slnx -c Release --no-build --nologo -p:Version="$VERSION" --output ./packages/Release
+          else
+            dotnet run scripts/release-target.cs -- projects --family "$FAMILY" --out family-projects.txt
+            while IFS= read -r project; do
+              dotnet pack "$project" -c Release --no-build --nologo -p:Version="$VERSION" --output ./packages/Release
+            done < family-projects.txt
+          fi
 
       # ⛔ The last gate before anything becomes permanent. PackagingTests already checked the
       # project files; this checks what pack ACTUALLY produced, reading each id from the <id>
       # element inside the .nuspec rather than parsing filenames. A package that appears here and
-      # in neither list stops the run.
+      # in neither list, or for a family, in some other family, stops the run.
       - name: Assert packed matches declared
         if: env.RELEASING == 'true'
-        run: dotnet run scripts/assert-packages.cs -- ./packages/Release
+        run: dotnet run scripts/assert-packages.cs -- ./packages/Release ${FAMILY:+--family "$FAMILY"}
 
       # Kept immediately before the push: the token this returns is short-lived, and a slow step
       # in between is how it expires before it is used.
@@ -147,7 +181,8 @@ jobs:
           fi
           {
             echo "### Trusted publishing verified"
-            echo "Logged in as \`$NUGET_USER\`. A \`v*.*.*\` tag will publish:"
+            echo "Logged in as \`$NUGET_USER\`. Releases from this repository publish, each id from"
+            echo "its family's tag where \`.github/repository.json\` declares families:"
             echo ""
             grep -v '^[[:space:]]*#' packages.push | grep -v '^[[:space:]]*$' | sed 's/^/- `/; s/$/`/'
             echo ""
@@ -166,18 +201,20 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # ⚠ NAMED, NEVER GLOBBED — and driven by packages.push rather than a list repeated here, so
-      # the declaration has exactly one home. A glob publishes whatever happens to be in the
-      # folder, and a published version is permanent, so the one time it picks up something
-      # unintended is the one time it cannot be undone.
+      # ⚠ NAMED, NEVER GLOBBED — and driven by IDS, which release-target.cs read from packages.push
+      # or from the family's entry, rather than a list repeated here, so the declaration has exactly
+      # one home. A glob publishes whatever happens to be in the folder, and a published version is
+      # permanent, so the one time it picks up something unintended is the one time it cannot be
+      # undone.
       - name: Push to NuGet.org
         if: env.RELEASING == 'true' && env.NUGET_USER != ''
         run: |
           set -euo pipefail
+          read -ra ids <<< "$IDS"
           targets=()
-          while IFS= read -r id; do
+          for id in "${ids[@]}"; do
             targets+=("./packages/Release/${id}.${VERSION}.nupkg")
-          done < <(grep -v '^[[:space:]]*#' packages.push | grep -v '^[[:space:]]*$')
+          done
           printf 'Pushing %s\n' "${targets[@]}"
           dotnet nuget push "${targets[@]}" \
             --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}" \
@@ -186,14 +223,25 @@ jobs:
 
       # Same list, same reason. A release asset can be deleted, so a glob here fails QUIETLY —
       # which is why it is easy to leave globbed and worth not leaving globbed.
+      #
+      # ⚠ A FAMILY'S NOTES ARE WRITTEN BY release-target.cs, never generated by GitHub, which lists
+      # every pull request merged in the repository, whichever family it touched: its commits since
+      # its previous tag that changed its projects, its README or the build every family shares.
+      # LATEST marks the release "Latest" only when no tag of any family is newer.
       - name: Create GitHub Release
         if: env.RELEASING == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          read -ra ids <<< "$IDS"
           assets=()
-          while IFS= read -r id; do
+          for id in "${ids[@]}"; do
             assets+=("./packages/Release/${id}.${VERSION}.nupkg")
-          done < <(grep -v '^[[:space:]]*#' packages.push | grep -v '^[[:space:]]*$')
-          gh release create "${TAG}" --title "${TAG}" --generate-notes "${assets[@]}"
+          done
+          notes=(--generate-notes)
+          if [ -n "$FAMILY" ]; then
+            dotnet run scripts/release-target.cs -- notes --family "$FAMILY" --previous "$PREVIOUS_TAG" --out family-notes.md
+            notes=(--notes-file family-notes.md "--latest=$LATEST")
+          fi
+          gh release create "${TAG}" --title "${TAG}" "${notes[@]}" "${assets[@]}"

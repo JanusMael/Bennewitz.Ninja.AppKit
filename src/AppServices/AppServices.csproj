@@ -5,6 +5,8 @@
     <!-- The id below is derived from the stem passed to `dotnet new bbpkg -n <Stem>`; the assembly
          name stays the bare stem, which is the convention across these repos. -->
     <PackageId>Bennewitz.Ninja.AppServices</PackageId>
+    <AssemblyProduct>AppServices</AssemblyProduct>
+    <FamilyReadme>docs/appservices.md</FamilyReadme>
     <AssemblyName>AppServices</AssemblyName>
     <Description>Default implementations of the application service contracts: shell launching, environment probing, sharing and a native error dialog. Needs an operating system, not a UI framework, so it is usable from a CLI, a service or a test.</Description>
     <PackageTags>app-services;shell;process;environment;share</PackageTags>

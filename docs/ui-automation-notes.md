@@ -1,0 +1,248 @@
+# Driving a desktop UI: what this repository has measured
+
+> **Most of this is a pointer now.** `AGENTS.md` §8 says Avalonia and drivable-UI lessons have one
+> living copy, in `JanusMael/Bennewitz.Ninja.Inspections`, which is XamlQuality's repository renamed —
+> `docs/avalonia-gotchas.md` for framework foot-guns and `docs/ai-drivable-ui.md` for driving and
+> verifying by agent. The Windows batches of 2026-09-30, 10-08, 10-09 and 10-10 **landed there on
+> 2026-10-13**, in pull requests
+> [#59](https://github.com/JanusMael/Bennewitz.Ninja.XamlQuality/pull/59),
+> [#60](https://github.com/JanusMael/Bennewitz.Ninja.XamlQuality/pull/60) and
+> [#67](https://github.com/JanusMael/Bennewitz.Ninja.XamlQuality/pull/67), several of them changed by
+> XamlQuality's own measurement, and the X11 batch of 2026-09-28 **on 2026-10-15**, in
+> [#83](https://github.com/JanusMael/Bennewitz.Ninja.Inspections/pull/83). What is left here is what
+> did **not** land: the entries nobody has re-measured, one disagreement, and whatever is specific to
+> DiffView or to one of these machines.
+>
+> ⚠ **The reduction is conditional on landing, never on sending.** Each row below was checked against
+> the merged documents rather than taken from the report of them.
+
+## The instrument
+
+`scripts/drive-demo.cs` is one .NET 10 file-based app with a platform back end, plus thin `.sh` and
+`.ps1` wrappers — plan 00023. Its verbs are `launch`, `window`, `key`, `click`, `drag`, `mark`,
+`popup`, `geometry`, `capture`, `hover` and `probe`, chained with `then`. The X11 back end drives
+through `xdotool`, `xwininfo` and `ffmpeg`; the Windows back end uses UI Automation, `SendInput` and
+`PrintWindow` directly, with `scripts/drive-demo-uia.ps1` for the one part it cannot reach.
+
+## What landed upstream, and what XamlQuality changed on the way
+
+Measured by XamlQuality in two Windows Sandbox sessions on Avalonia 12.1.3 with Fluent, one with the
+host's GPU shared and one without, from a per-monitor DPI-aware driver, with headless probes beside
+them and causes read in Avalonia's source at the tag.
+
+| What this repository measured | Outcome | Lives in |
+|---|---|---|
+| A hit-test answers from the last frame drawn | landed, **changed**: it holds on a real window too, until the next frame is composed — stale at once and after a `RequestAnimationFrame` callback, right 50 ms after it, 10 of 10. Headless, `RunJobs` alone or a render tick alone leaves it stale; `RunJobs` then a tick, or `CaptureRenderedFrame()`, settles it | `avalonia-gotchas.md` |
+| `PrintWindow` is solid black, and reports success, without `PW_RENDERFULLCONTENT` | landed, at 12.1.3 with the default `Win32PlatformOptions`, GPU shared and not. **The cause is not traced** | `avalonia-gotchas.md` |
+| Synthetic pointer motion raises a tooltip on Windows | landed, from `SetCursorPos` alone | `ai-drivable-ui.md` §5 |
+| A click must be guarded, because it goes to whatever is topmost at that pixel | landed, **changed** — see *The guard this repository should adopt* below | `ai-drivable-ui.md` |
+| `SetForegroundWindow` is unreliable, so asking is not evidence of getting | landed, **changed**: it was refused to a process that had sent **no input**, and granted to one that just had. Not, as recorded here, refused for any process that does not already hold the foreground | `ai-drivable-ui.md` |
+| Holding the foreground is not having something focused inside | landed, **narrowed**: with nothing focused, keys reach the **window's own key bindings** and not a view's; one click on the view fixes it. Not "nothing at all" | `ai-drivable-ui.md` |
+| Raising a window light-dismisses the menu it opened | landed **as a different claim**, after a third session aimed at the mechanism: *an open menu lasts only while its window holds the foreground*. A raise dismisses nothing; losing the foreground closes the menu within 15 ms, before any raise. See *The one disagreement, settled* below | `ai-drivable-ui.md` §5 |
+| A part hidden with `IsVisible=false` is genuinely absent from the tree | landed, and **absent from the raw view too** | `ai-drivable-ui.md` §8 |
+| A gesture's success is not its effect (the `drag` verb) | landed as written | `ai-drivable-ui.md` |
+| An Avalonia popup is its own top-level window | landed, **changed** — see *Where a menu entry lives* below | `ai-drivable-ui.md` |
+| A run that stops early is not a pass | landed as method | `ai-drivable-ui.md` §5, step 6 |
+| Avalonia's `MenuItem` offers no way to open or run it | landed, **changed**: no `ExpandCollapse` at 12.1.2 **or** 12.1.3, the peer being the same file in both — the one `MenuItem` with it in their survey was the window's **System** menu item, which is Windows'. A checkable `MenuItem`'s missing `Toggle` is a defect in the Windows bridge, which asks for the provider off the UI thread; a peer caching `ToggleType` on the UI thread works around it | `avalonia-gotchas.md` |
+| A by-hand driver with a person watching is a position of its own | landed as a **fifth layer**: attended real input on the person's own desktop, the window checked unobstructed and focused before every event, refusing otherwise, and never in an unattended sweep | `ai-drivable-ui.md` §4 |
+| A DPI-unaware process is handed virtualised coordinates | landed | `ai-drivable-ui/SharedDesktopHarnessJournal.md` |
+
+### Where a menu entry lives, and why this repository's reader still works
+
+XamlQuality measured the tree, and it is the opposite way round from what a reader would guess: a
+menu's **items** — in XAML, built in code, or in a context menu alike — sit under the **main
+window's** element in *both* views, while each submenu and context menu is **drawn** in a popup
+window of its own, which is the items' nearest window in the **raw** view. The XAML/run-time
+asymmetry this repository once recorded did not reproduce.
+
+`scripts/drive-demo-uia.ps1` never walks upward, so it is not exposed to the view question: it
+enumerates the process's top-level windows and walks each id path **downward** with
+`FindFirst(TreeScope.Descendants, …)`, reporting the window the path resolved under. A menu entry is
+a tree descendant of the main window, so that reader can report the **main** window for an entry
+whose pixels are in the popup — which is exactly the false refusal plan 00033 found on the
+colour-blind palette entry, and `drive-demo.cs`'s `Drawn` is what repairs it, by trusting the
+pixel's own top-level window when it belongs to the same process.
+
+### The guard that asked the pixel what the pixel was — adopted
+
+⛔ **The defect was circularity, not a missing check.** `Drawn` resolved `WindowFromPoint` then
+`GetAncestor(GA_ROOT)` for the pixel it was about to click and accepted that window whenever it
+belonged to the demo's process; `Beneath` then checked the same pixel against the answer. The expected
+window was therefore derived from the pixel being tested, so for any window of this process it agreed
+with itself and **`Beneath` could not fail**. It caught other applications — the case it was written
+for — which is exactly why the hole went unseen. What it let through was the demo's **own F12
+live-log window** lying over the target: the click went into the log window and the driver reported
+success.
+
+**Adopted 2026-10-13.** The expected window now comes from the **tree**:
+`scripts/drive-demo-uia.ps1` walks `TreeWalker.RawViewWalker` from the element to its nearest ancestor
+carrying a window handle and reports it as a tenth field, and `Drawn` reads that field. The raw view is
+load-bearing — a control-view walk passes the popup and would reintroduce plan 00033's false refusal.
+`0` means the reader could not name the window, and it is **refused rather than fallen back on**.
+
+⚠ **The second half of XamlQuality's method is declined, with a reason**: also checking that UI
+Automation's element at the point is the element itself catches "right window, wrong element", and this
+demo does not reach that state — `OverlayPopups` stays unset, so every menu, tooltip and context menu
+is a top-level window rather than an in-window overlay. It would cost a second reader round-trip per
+click, the coordinates not existing until after the first read. Revisit if `OverlayPopups` is ever set.
+
+✅ **Verified on a real window, JANUSWAX2, 2026-10-13.** The field's *reading* is headless-tested both
+ways; the raw-view **walk** needed a desktop, and got one in three readings: the guard refuses an
+obstruction **proven topmost at the click pixel** and names it; it allows the same click once the
+obstruction is gone; and a pane-menu entry reads as `in 1048780 drawn in 1049142` — found under the
+main window's element, drawn in a popup of its own — with the click on it allowed. The third is the
+only case the field changes an answer in, and it is XamlQuality's inverted finding confirmed here.
+
+⛔ **The harness that took the first of those readings reported FAIL, and the guard was not what was
+wrong.** It was DPI-unaware on a console at 200% — `1113x756` read for a `2200x1440` window, the trap
+§9 already records — and it never checked that the obstruction it built was at the pixel it clicked,
+so "allowed" was a conclusion from an unproven premise. The repaired harness measures the pixel and
+reports **UNREAD** when the premise fails. ⚠ An unexplained difference stays on the record: the
+repaired one printed `per-monitor DPI aware: False` and still read physical coordinates where the
+first, launched the same way, read virtualised ones. The verdict does not rest on it — the driver named
+the obstructing window itself.
+
+## Linux and X11 — landed upstream
+
+⭐ **The batch of 2026-09-28 landed on 2026-10-15**, in Inspections
+[#83](https://github.com/JanusMael/Bennewitz.Ninja.Inspections/pull/83), and each finding was checked
+against the merged document on `main` rather than against the message that reported it. All six are
+pointers now, into `avalonia-gotchas.md` under *Linux platform integration*:
+
+| What this repository measured | Lives in |
+|---|---|
+| A popup, a menu or a tooltip, is its own unnamed override-redirect window, found by diffing the root's children against a mark | *Driving an Avalonia app with `xdotool`: a popup is its own X window, and accelerators do not arrive* |
+| A popup opens on one layout pass and lays out on the next | the same entry |
+| Mutter keeps a screen-sized guard window and a 1×1 off screen, so a finder filters them and refuses a click outside the popup | the same entry |
+| `xwininfo`'s field labels do not translate, but the root's child list is free text | *Under X11, `xdotool getwindowgeometry` counts a window frame twice, and `xwininfo` lists windows in free text* |
+| `getwindowgeometry` counts a reparenting frame's offset twice, so positions come from `xwininfo` and a grab takes the client window | the same entry |
+| A grab that succeeds and comes back solid black is a session that is not presenting | *Under X11, a grab cannot say whether an action took* |
+
+What is this machine's — the session, the grab that works here, the demo's two windows — stays in
+`AGENTS.md` §9.
+
+### The tooltip re-measurement, which XamlQuality asked for
+
+Their `xdotool` entry recorded the **opposite**, that a tooltip cannot be driven under X11, until these
+two readings, sent 2026-10-13, landed with the rest of the batch: it now carries the ten trials of ten,
+and the earlier date's failure as never established. The readings as they were sent:
+
+| | |
+|---|---|
+| **2026-09-13** | `xdotool mousemove` onto a line number raised **no** tooltip. What made it fail was never established |
+| **2026-09-28** | The tooltip appeared on **ten trials of ten**, Avalonia 12.1.2 — the same version as the first date, the library unchanged between them |
+| Environment | xdotool 3.20160805.1, Xwayland 24.1.6, GNOME Shell 48.7; `XDG_SESSION_TYPE=wayland` with XWayland at `DISPLAY=:0`, the demo an XWayland client of Avalonia's X11 backend |
+| Method | `xdotool mousemove` to the margin, then read the popup as an override-redirect window by the root-child diff. Approached from **outside** the window, from its **far corner**, from **another line of the same margin**, and from the screen point **(5, 5)** where the older scratch script parks |
+| What appeared | The change marker's *Change 3 of 5 · +0 −0 ~1* and the line number's *Line 9 · right line 11*; in `pt-BR`, *Linha 9 · linha 11 à direita* |
+| Cross-check | The old scratch script's capture and the driver's are identical **pixel for pixel**, so the driver is not the variable |
+
+## The one disagreement, settled — and neither of us had it right
+
+**Resolved 2026-10-13 by XamlQuality, in a third Windows Sandbox session on Avalonia 12.1.3, landed
+in `ai-drivable-ui.md` §5** ([PR #73](https://github.com/JanusMael/Bennewitz.Ninja.XamlQuality/pull/73)).
+The entry reads *"An open menu lasts only while its window holds the foreground"*, and it replaces
+both earlier positions rather than choosing between them.
+
+| Claim | Who | Verdict |
+|---|---|---|
+| Raising a window **light-dismisses** the menu it opened | this repository | ⛔ **Wrong mechanism.** A window that held the foreground kept its menu open through `BringWindowToTop`, `SetForegroundWindow`, `SetWindowPos(HWND_TOP)` and `AttachThreadInput` followed by both — however the menu was opened |
+| A raise is **harmless**, so the entry can be left out | XamlQuality's first reading | ⛔ **Too strong.** When another application took the foreground, the window was deactivated and its menu closed **at once** — so a raise afterwards finds the menu already gone |
+| The qualifier is "already active" versus "not in front" | this repository's reconciliation | ⚠ **Right outcome, wrong cause.** The dividing line is the **foreground**, not the raise: the raise never dismisses anything, and no way was found to leave a menu open on a window that does not hold the foreground |
+
+So the driver's practice is unchanged and now rests on the real mechanism: **open a menu once its
+window holds the foreground, and click the item without raising or clicking the window in between.**
+
+Two things that fall out of it, both new here:
+
+- ⛔ **A click on the window's own title bar closes the menu**, with no change of foreground at all.
+  A driver must not touch the title bar between opening a menu and clicking its item.
+- ⭐ **A window behind another needs no raise.** A click on its menu header — where the obstruction
+  guard finds that header uncovered — activates the window and opens the menu in one click. Which is
+  a positive argument for *refuse rather than raise*: the raise was not merely rude, it was never
+  required.
+
+⚠ Not measured by either of us: a window covered by an **always-on-top** window, which keeps the
+foreground.
+
+## Specific to DiffView or to these machines, so it stays here
+
+- **The demo's log is a live oracle on Windows.** A click at 10:21:02.284 was readable from outside
+  the process within a second, by both `tail` and a `FileStream` opened `FileShare.ReadWrite`, the
+  directory entry's reported length matching the stream's exactly. The sink is ClaudeForge's
+  `BucketedRollingFileSink`, whose inner `Serilog.Sinks.File` is configured `buffered: false` with
+  `flushToDiskInterval: 2s`.
+- ⛔ **An empty log after a click means the click did not arrive — not that the log is slow.** This
+  cost an hour and a wrong diagnosis here: clicks into an obscured demo produced no lines, which was
+  read as buffering when the input had gone into another application entirely. **The log not moving
+  is the signal, and it is the correct one.**
+- ⛔ **A running demo locks its own assemblies**, so the solution cannot rebuild while it is up:
+  `dotnet test` fails with MSB3027/MSB3021 naming the demo's process. No Linux equivalent. Close it
+  by the pid the launch recorded, never by name — a pattern matching the demo's name also matches the
+  agent harness's own shell (`AGENTS.md` §9).
+- **Where DiffView sits on patterns.** Its peers advertise **no pattern at all**, by decision
+  (`AGENTS.md` §1): the views are `Group`, a pane `Edit`, the margins `Custom`. Pattern-driving is
+  therefore not available here, and nothing should be added merely so a driver can poke it — which is
+  the TailBlazer port's own rule. The one reading that does come through a pattern is the scroll
+  offset, off the stock scroll bars inside AvaloniaEdit's template, which are not ours.
+- **Find the app by process id and the window by title, not one or the other.** The F12 log window
+  shares the process, so a pid alone is ambiguous; two demos on one desktop share a title, so a title
+  alone is ambiguous.
+- ⛔ **Never name a PowerShell variable `$pid`** — that is the harness's own process id. XamlQuality's
+  rule; the parameter here is `-DemoProcessId`.
+
+## Not measured by either repository, and left out upstream
+
+- **`PW_CLIENTONLY | PW_RENDERFULLCONTENT` gives exactly the client area** — 1100×720 for a window
+  whose frame is 1116×759. Taking the client area is what makes `click left 88 16` mean the same
+  thing on both platforms, because under X11 the window manager's frame is a separate window.
+- **`PrintWindow` draws a window that is behind other windows**, which is what lets the capture half
+  run on a desktop someone is working at. TailBlazer reports it also works on a **locked** session
+  (their measurement, not reproduced here).
+- **A PNG can be written by hand in about 60 lines** — `ZLibStream` for the deflate, a hand-rolled
+  CRC-32, one unfiltered scanline per row, colour type 2 — so a driver needs no image dependency.
+  Verified by decoding with GDI+.
+- **The arrows and the navigation block must carry `KEYEVENTF_EXTENDEDKEY`.** They share their
+  virtual-key codes with the numeric keypad, so without the flag a `Down` can arrive as the keypad's
+  `2`.
+- **UI Automation's managed client is reachable from PowerShell 7** — `Add-Type -AssemblyName
+  UIAutomationClient` and `UIAutomationTypes` — and **not** from a portable `net10.0` file-based app,
+  because `System.Windows.Automation` lives in the Windows Desktop framework. Hence a `.ps1` beside
+  the `.cs`, the only place this repository's script convention bends.
+- **Interop trades.** `[LibraryImport]` requires `AllowUnsafeBlocks`, which a file-based app does not
+  have; `[DllImport]` needs nothing, and for a dozen flat Win32 calls it is the right trade. The
+  alternative to the PowerShell helper was hand-declaring UI Automation's COM interfaces, where
+  **vtable order is the whole contract**: the Windows SDK's own
+  `Include/<version>/um/UIAutomationClient.idl` is the authority, and the documentation lists members
+  alphabetically, which is a trap. The virtual-key codes, the `SendInput` flags and
+  `PW_RENDERFULLCONTENT` were read from `Include/<version>/um/WinUser.h` rather than recalled.
+
+## A defect that was not one, recorded so it is not "found" again
+
+This one is `Bennewitz.Ninja.AppServices`' and was never XamlQuality's.
+
+`BucketedRollingFileSink` builds its inner `Serilog.Sinks.File` logger with
+`.MinimumLevel.Information()` hard-coded, which reads like a filter that would drop a host's `Debug`
+events from the file while the Trace sink and the F12 window still showed them. **It is not.** The
+sink formats each event itself and re-emits the finished line at Information
+(`_currentLogger?.Information("{RawLine}", …)` in `Emit`), so the inner minimum never filters
+anything, and the real level is already inside the text. The outer pipeline honours
+`options.MinimumLevel` normally. Checked in `Bennewitz.Ninja.AppServices`, the live home of this
+code; ClaudeForge's copy, which DiffView still consumes as a hand-packed `1.0.1`, is identical.
+
+The lesson is about reading, not logging: **one line of a class is not the class.** The conclusion was
+drawn from the `LoggerConfiguration` alone, without reading the `Emit` twenty lines above it.
+
+## Still owed
+
+- **The macOS back end** is specified in plan 00023 and not written; its permission grants are
+  interactive and cannot be scripted. Open item 9.
+- **A by-hand pass at a scaling other than 100%** exercises less than it looks like it does. On a
+  console at 200% the demo is `2200x1440`, and the splitter and map drags press coordinates that belong
+  to a `1100x720` client. The driver refuses rather than misfiring, so the frames are still a look at
+  that scaling — but the gestures are not read. The View menu's palette entry also fell outside the
+  menu's scrolling popup there, and out of the tree: open item 19 moved View's rows into submenus and the
+  pass to opening each step by its id, which a headless run proves only until an attended one at 200%.
+- Whether `PostMessage(WM_LBUTTONDOWN/UP)` or `AttachThreadInput` can deliver a click to an unraised
+  Avalonia window is **unmeasured** — by this repository, by TailBlazer and by XamlQuality, none of
+  whom would guess. The caveats to test are that posted messages bypass hit-testing, do not move the
+  real cursor, and would change what hover and anything reading the pointer's position see.

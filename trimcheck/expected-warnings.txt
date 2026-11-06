@@ -1,0 +1,15 @@
+# ILLink warnings a trimmed publish of ScopedEditors is EXPECTED to produce, one per line, as
+# scripts/check-trim-warnings.cs normalises them. CI's `trim` job fails if the set changes in
+# EITHER direction. Blank lines and # comments are ignored.
+#
+# All three are in Avalonia.Controls.DataGrid's TypeHelper, a DEPENDENCY, not this repository's
+# code: DataGrid resolves binding paths by reflection. They are reachable only because
+# ScopedEditors.AvaloniaUI references DataGrid (DataGridCopyValueBehavior), which makes them useful
+# twice over -- accepted as known third-party hazards, and PROOF that the publish really walked
+# ScopedEditors.AvaloniaUI. If they vanish, ILLink stopped analysing it; do not just delete them.
+#
+# ⚠ Adding a line here is a decision to ship a trim hazard. Say why in the commit that adds it.
+
+IL2070: Avalonia.Controls.Utils.TypeHelper.GetPropertyOrIndexer(Type, String, Object[]&): 'this' argument does not satisfy 'DynamicallyAccessedMemberTypes.Interfaces' in call to 'System.Type.GetInterfaces()'. The parameter 'type' of method 'Avalonia.Controls.Utils.TypeHelper.GetPropertyOrIndexer(Type, String, Object[]&)' does not have matching annotations. The source value must declare at least the same requirements as those declared on the target location it is assigned to.
+IL2070: Avalonia.Controls.Utils.TypeHelper.GetPropertyOrIndexer(Type, String, Object[]&): 'this' argument does not satisfy 'DynamicallyAccessedMemberTypes.PublicConstructors', 'DynamicallyAccessedMemberTypes.PublicMethods', 'DynamicallyAccessedMemberTypes.PublicFields', 'DynamicallyAccessedMemberTypes.PublicNestedTypes', 'DynamicallyAccessedMemberTypes.PublicProperties', 'DynamicallyAccessedMemberTypes.PublicEvents' in call to 'System.Type.GetDefaultMembers()'. The parameter 'type' of method 'Avalonia.Controls.Utils.TypeHelper.GetPropertyOrIndexer(Type, String, Object[]&)' does not have matching annotations. The source value must declare at least the same requirements as those declared on the target location it is assigned to.
+IL2070: Avalonia.Controls.Utils.TypeHelper.GetPropertyOrIndexer(Type, String, Object[]&): 'this' argument does not satisfy 'DynamicallyAccessedMemberTypes.PublicProperties' in call to 'System.Type.GetProperty(String)'. The parameter 'type' of method 'Avalonia.Controls.Utils.TypeHelper.GetPropertyOrIndexer(Type, String, Object[]&)' does not have matching annotations. The source value must declare at least the same requirements as those declared on the target location it is assigned to.
