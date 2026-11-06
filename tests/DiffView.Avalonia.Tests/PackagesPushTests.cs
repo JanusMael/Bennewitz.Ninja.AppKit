@@ -1,88 +1,63 @@
-using System.Text.RegularExpressions;
+using System.Text.Json.Nodes;
 using System.Xml.Linq;
 
 namespace Bennewitz.Ninja.DiffView.Tests;
 
 /// <summary>
-/// <c>packages.push</c> says what this repository publishes: exactly what the solution packs, and exactly
-/// what each of the release's two publishing steps names.
+/// The family's ids in <c>.github/repository.json</c> are exactly what DiffView packs, and each is in
+/// <c>packages.push</c>.
 /// </summary>
 /// <remarks>
-/// <para>
 /// ⛔ <b>A published id cannot be withdrawn, only unlisted</b>, so a project made packable and left out of
-/// the file, or an id the file names and the release does not push, is found here and not on nuget.org.
-/// <c>scripts/repo-conventions.cs</c> reads the file for one thing, whether it names an id at all.
-/// </para>
-/// <para>
-/// ⚠ <b>The release still names its ids rather than reading this file</b>, which <c>DECISIONS.md</c> says
-/// why: it has never run, and this repository's move into AppKit replaces it with the template's. So three
-/// places name them, and this test is what makes them one fact. Compared as sets, because the order of
-/// the file says nothing.
-/// </para>
+/// the family, or an id the family names and nothing packs, is found here and not on nuget.org. The
+/// release takes its ids from the family through <c>scripts/release-target.cs</c>, which Templates
+/// tests, and <c>PackagingTests.The_release_workflow_names_the_packages_it_pushes</c> holds that it does.
+/// Compared as sets, because the order of either list says nothing.
 /// </remarks>
-public sealed partial class PackagesPushTests
+public sealed class PackagesPushTests
 {
-    private const string PushStep = "Push to NuGet.org";
-
-    private const string ReleaseStep = "Create GitHub Release";
-
     [Fact]
     public void The_file_names_exactly_what_the_solution_packs_and_the_release_publishes()
     {
-        string[] pushed = PushedIds();
+        string[] family = FamilyIds();
         string[] packed = [.. PackagingTests.PackableProjects().Select(PackageIdOf).Order(StringComparer.Ordinal)];
 
         Assert.True(
             packed.Length > 0,
-            "The reading found no packable project under src, so there is nothing to hold packages.push to.");
+            "The reading found no packable project under src, so there is nothing to hold the family to.");
 
         Assert.True(
-            packed.SequenceEqual(pushed),
-            $"The solution packs {string.Join(", ", packed)}, and packages.push names {string.Join(", ", pushed)}. "
+            packed.SequenceEqual(family),
+            $"DiffView packs {string.Join(", ", packed)}, and its family names {string.Join(", ", family)}. "
             + "Classify every packable project: a published id cannot be withdrawn.");
 
-        string[] release = File.ReadAllLines(Path.Combine(RepoPaths.Root, ".github", "workflows", "release.yml"));
-        foreach (string step in (string[])[PushStep, ReleaseStep])
-        {
-            string[] named = IdsNamedBy(release, step);
-            Assert.True(
-                named.Length > 0,
-                $"release.yml has no step '{step}' naming a package, so nothing is held to packages.push there.");
-
-            Assert.True(
-                named.SequenceEqual(pushed),
-                $"release.yml's step '{step}' names {string.Join(", ", named)}, and packages.push names "
-                + $"{string.Join(", ", pushed)}. The release publishes what the file says.");
-        }
+        string[] pushed = PushedIds();
+        string[] undeclared = [.. family.Except(pushed, StringComparer.Ordinal)];
+        Assert.True(
+            undeclared.Length == 0,
+            $"The family names {string.Join(", ", undeclared)}, which packages.push does not, so the release would refuse it.");
     }
 
-    /// <summary>The ids <c>packages.push</c> names, read as <c>repo-conventions</c> reads them, in ordinal order.</summary>
+    /// <summary>The ids <c>.github/repository.json</c>'s <c>diffview</c> family names, in ordinal order.</summary>
+    private static string[] FamilyIds()
+    {
+        JsonNode? root = JsonNode.Parse(File.ReadAllText(Path.Combine(RepoPaths.Root, ".github", "repository.json")));
+        JsonArray ids = root?["families"]?["diffview"]?.AsArray()
+            ?? throw new InvalidOperationException(".github/repository.json declares no diffview family.");
+
+        return [.. ids.Select(id => id!.GetValue<string>()).Order(StringComparer.Ordinal)];
+    }
+
+    /// <summary>The ids <c>packages.push</c> names, read as <c>repo-conventions</c> reads them.</summary>
     private static string[] PushedIds() =>
     [
         .. File.ReadLines(Path.Combine(RepoPaths.Root, "packages.push"))
             .Select(line => line.Trim())
-            .Where(line => line.Length > 0 && !line.StartsWith('#'))
-            .Order(StringComparer.Ordinal),
+            .Where(line => line.Length > 0 && !line.StartsWith('#')),
     ];
 
     /// <summary>A project's <c>PackageId</c>, or the assembly name it falls back to where it declares none.</summary>
     private static string PackageIdOf(string project) =>
         XDocument.Load(project).Descendants("PackageId").FirstOrDefault()?.Value.Trim()
         ?? Path.GetFileNameWithoutExtension(project);
-
-    /// <summary>The ids a step of the workflow names by their exact files, in ordinal order.</summary>
-    private static string[] IdsNamedBy(string[] workflow, string step) =>
-    [
-        .. workflow
-            .SkipWhile(line => line.Trim() != $"- name: {step}")
-            .Skip(1)
-            .TakeWhile(line => !line.TrimStart().StartsWith("- name:", StringComparison.Ordinal))
-            .Select(line => PackageFile().Match(line))
-            .Where(match => match.Success)
-            .Select(match => match.Groups["id"].Value)
-            .Order(StringComparer.Ordinal),
-    ];
-
-    [GeneratedRegex(@"\./packages/Release/(?<id>\S+?)\.\$\{\{ env\.VERSION \}\}\.nupkg")]
-    private static partial Regex PackageFile();
 }

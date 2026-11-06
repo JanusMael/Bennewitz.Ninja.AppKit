@@ -1,0 +1,171 @@
+# Working on DiffView
+
+For someone working *on* DiffView rather than *with* it; [diffview.md](diffview.md) is the guide for
+consumers. Status: **every phase of its plan is complete, the optional inline view included.** The
+plan is [plans/diffview/00001-side-by-side-diff-control.md](../plans/diffview/00001-side-by-side-diff-control.md);
+progress is in [diffview-progress.md](diffview-progress.md), decisions in
+[DECISIONS.md](../DECISIONS.md), and the cross-file contracts an agent must not break in the DiffView
+part of [AGENTS.md](../AGENTS.md).
+
+The `theme-audit` tool that began here finds the resource keys an Avalonia theme leaves undefined (the
+invisible-control cases) and the tokens below a contrast floor. It now ships from
+[Bennewitz.Ninja.Inspections](https://github.com/JanusMael/Bennewitz.Ninja.Inspections) as
+`Bennewitz.Ninja.XamlQuality.ThemeAudit`, where it works against WPF and MAUI markup too. This
+repository is one of its consumers; see [The theme audit](#the-theme-audit).
+
+## Layout
+
+| Path | What |
+|---|---|
+| `src/DiffView.Core` | Diff model: alignment, probing, search, diagnostics. No UI dependency |
+| `src/DiffView.Avalonia` | The controls and their themes |
+| `src/DiffView.Demo` | Desktop demo — Semi.Avalonia by default, Fluent or Simple by flag |
+| `src/AgentBaseline` | A tool, not a package: consolidates many machines' `CLAUDE.md` or `AGENTS.md` into one baseline — plan 00034 |
+| `tests/` | Unit, headless UI and rendered-snapshot tiers |
+| `reference/` | Read-only upstream checkouts, fetched on demand — see [reference/README.md](../reference/README.md) |
+| `fixtures/` | Test inputs, including the bundled monospace font |
+| `mappings/` | The reviewed key tables the compat dictionaries are generated from — see [The theme audit](#the-theme-audit) |
+
+## Building
+
+Requires the .NET SDK named in `global.json` and, for the demo and tests, the sibling package
+feed at `../nuget-local`:
+
+```bash
+dotnet run scripts/fetch-reference.cs
+```
+
+```bash
+dotnet run scripts/pack-diagnostics.cs
+```
+
+```bash
+dotnet build AppKit.slnx -warnaserror
+```
+
+```bash
+dotnet test --solution AppKit.slnx
+```
+
+The first command fetches the upstream sources (or finds a sibling ClaudeForge checkout); the
+second builds ClaudeForge's diagnostics library into the feed. `dotnet test` runs the fetch
+itself when a reference checkout is missing.
+
+Stopwatch tests (`Category=Perf`) stay out of the default run; their numbers are recorded in
+`PROGRESS.md`. To run them too:
+
+```bash
+dotnet test --solution AppKit.slnx -p:IncludePerfTests=true
+```
+
+CI also runs the whole suite pinned to a culture the library ships. That leg is how a test that
+asserts English text without saying it wanted English gets caught, because such a test is invisible
+on an English machine and red on a German desk:
+
+```bash
+DIFFVIEW_TEST_UI_CULTURE=de-DE dotnet test --solution AppKit.slnx
+```
+
+A test that fails only there either wants `[EnglishChrome]` — the claim that it is about the English
+words — or wants its assertion repaired. `AGENTS.md` §5 says which, and why the attribute is not an
+excuse to reach for first.
+
+The eight shipped locales are machine-generated and have **not** been read by a native speaker. That
+does not gate the first release: blocking a publish on eight volunteers has no end date, and
+`DiffViewStrings.Localization` lets a host outrank the library with a resolver of its own.
+`docs/locale-review/` holds one document per locale for exactly that review — every string beside
+what it is, what each placeholder holds, and the English it came from.
+Those documents are generated and must not be edited; a correction belongs in the matching
+`src/DiffView.Avalonia/Localization/Strings.<culture>.resx`, after which:
+
+```bash
+./scripts/gen-locale-review.sh
+```
+
+regenerates them. `--check` reports staleness instead, and `LocaleReviewTests` fails if a committed
+document stops describing the strings it was generated from.
+
+Run the demo under a different theme or variant:
+
+```bash
+dotnet run --project src/DiffView.Demo -- --theme fluent --variant dark
+```
+
+Open two files in the unified view, or in the read-only viewer — View → Control switches between
+those two and the side-by-side editor:
+
+```bash
+dotnet run --project src/DiffView.Demo -- --unified --left one.cs --right two.cs
+```
+
+```bash
+dotnet run --project src/DiffView.Demo -- --viewer --left one.cs --right two.cs
+```
+
+Consolidate several machines' `AGENTS.md` into one baseline with `AgentBaseline`, which reads a manifest or a
+path list, starts from the seed it is told, and begins from the decisions an earlier save wrote when it is
+given their file:
+
+```bash
+dotnet run --project src/AgentBaseline -- --manifest corpus.json --seed laptop --decisions AGENTS.decisions.json
+```
+
+## The theme audit
+
+The audit itself lives in [Bennewitz.Ninja.XamlQuality](https://www.nuget.org/packages/Bennewitz.Ninja.XamlQuality),
+not in this repository. It used to be `src/ThemeAudit` here; the analysis is not about DiffView, so
+it moved somewhere it can be used against any Avalonia, WPF or MAUI project and be developed and
+tested on its own. What stays here is this repository's *use* of it: `theme-audit.json`, the
+committed report, the generated compat dictionaries, and the Reference-trait tests that hold all
+three to a fresh run.
+
+`mappings/` holds the reviewed key tables those dictionaries are generated from — which Fluent or
+Simple key maps onto which Semi token, and why. The tool ships its own copies and would resolve
+`"mapping": "FluentToSemi"` against them, but this repository names the files instead: the
+committed dictionaries under `src/DiffView.Avalonia/Themes/Compat` are generated from *these*
+tables, so a change upstream cannot silently change what DiffView ships.
+
+Install the tool once:
+
+```bash
+dotnet tool install --global Bennewitz.Ninja.XamlQuality.ThemeAudit
+```
+
+`theme-audit.json` at the root names the themes (from the reference checkouts), the consumers
+and the compat dictionaries. Regenerate the dictionaries, then the report:
+
+```bash
+theme-audit compat
+```
+
+```bash
+theme-audit report
+```
+
+`--check` on either writes nothing and exits 1 when the committed output differs from a fresh
+run; the Reference-trait tests do the same. The report is [docs/theme-audit.md](theme-audit.md):
+what each theme defines per variant, what each consumer references, the undefined keys per
+(consumer, theme, variant), the contrast matrix for the `DiffView.*` tokens, and the ledger of
+the generated `Themes/Compat/*.Semi.axaml` dictionaries. The quick per-directory key count is
+still there:
+
+```bash
+theme-audit inventory reference/Semi.Avalonia/src/Semi.Avalonia/Themes/Light
+```
+
+## The parts reference
+
+[docs/template-parts.md](template-parts.md) says what each control of the library is, which template
+parts it has, the `AutomationId` a harness finds each by, and whether code looks each up by its name, which is
+what someone re-templating a control or driving one needs. `TemplatePartReferenceTests` generates it from what
+the gates read, and fails while the committed file differs, writing the fresh one beside it as
+`docs/template-parts.received.md`.
+
+A template edit regenerates it, and so may an AvaloniaEdit or XamlQuality bump:
+
+```bash
+scripts/gen-template-parts.sh
+```
+
+`scripts/gen-template-parts.ps1` does the same. It runs the test and takes the file the test wrote, so a failure
+that wrote nothing, a failed check or a broken build, moves nothing.

@@ -30,7 +30,7 @@ namespace Bennewitz.Ninja.DiffView.Tests;
 public sealed class LocaleCaveatTests
 {
     private const string Readme = "README.md";
-    private const string Guide = "docs/hosting-diffview.md";
+    private const string Guide = "docs/diffview.md";
     private const string Blurb = "src/DiffView.Avalonia/DiffView.Avalonia.csproj";
 
     /// <summary>

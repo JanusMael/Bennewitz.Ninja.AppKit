@@ -1,7 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../DiffView.Build.props" />
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <!-- An app, and src/Directory.Build.props marks libraries: nothing publishes this trimmed, and
+         its start-up uses Avalonia's runtime StyleInclude, which the trim analyzer reports. -->
+    <IsTrimmable>false</IsTrimmable>
+    <EnableTrimAnalyzer>false</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>

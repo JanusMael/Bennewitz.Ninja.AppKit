@@ -6,7 +6,7 @@ namespace Bennewitz.Ninja.DiffView.Core.Tests;
 /// <summary>
 /// Stopwatch measurements the plan asks for; excluded from the default run by the
 /// <c>Perf</c> trait and recorded in <c>PROGRESS.md</c>. Run with
-/// <c>dotnet test --solution DiffView.slnx -p:IncludePerfTests=true</c>.
+/// <c>dotnet test --solution AppKit.slnx -p:IncludePerfTests=true</c>.
 /// </summary>
 [Trait("Category", "Perf")]
 public sealed class PerfTests(ITestOutputHelper output)

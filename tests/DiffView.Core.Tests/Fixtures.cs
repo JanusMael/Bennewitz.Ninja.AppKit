@@ -9,7 +9,7 @@ namespace Bennewitz.Ninja.DiffView.Core.Tests;
 /// </summary>
 internal static class Fixtures
 {
-    private const string Marker = "DiffView.slnx";
+    private const string Marker = "AppKit.slnx";
 
     private static readonly string[] Words =
     [

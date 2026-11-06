@@ -1,0 +1,39 @@
+<Project>
+  <!-- What DiffView's three test projects set and the other families' do not, imported by each. -->
+  <Import Project="../src/DiffView.Build.props" />
+
+  <!-- Stopwatch tests carry Category=Perf and stay out of the default run; their numbers are
+       recorded in PROGRESS.md, not asserted. Run them with -p:IncludePerfTests=true. -->
+  <PropertyGroup Condition="'$(IncludePerfTests)' != 'true'">
+    <TestingPlatformCommandLineArguments>--filter-not-trait Category=Perf</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <!-- Image baselines are Linux's (LinuxBaselineAttribute): rasterization is the platform's, so a
+       frame rendered anywhere else differs without anything being wrong. Away from Linux the runner
+       filters Baseline=Linux out — a filter, never a skip inside the test — and CI prints how many.
+       -p:ExcludeLinuxBaselines=false runs them anyway; =true filters them on Linux, to see the gate. -->
+  <PropertyGroup Condition="'$(ExcludeLinuxBaselines)' == ''">
+    <ExcludeLinuxBaselines Condition="!$([MSBuild]::IsOSPlatform('Linux'))">true</ExcludeLinuxBaselines>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(ExcludeLinuxBaselines)' == 'true'">
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --filter-not-trait Baseline=Linux</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <!-- CI asks for a .trx with -p:ReportTrx=true rather than the switch itself: a solution-wide
+       switch reaches the other families' tests too, which carry no TrxReport extension, and fails
+       there. -->
+  <PropertyGroup Condition="'$(ReportTrx)' == 'true'">
+    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --report-trx</TestingPlatformCommandLineArguments>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ⚠ Pinned to the xunit.v3.extensibility.core line Avalonia.Headless.XUnit is built against
+         (3.2.2); on 4.0 its test-framework discoverer never hooks in and every [AvaloniaFact] runs as
+         a plain test without an Application, or fails at discovery. The one package the repository's
+         central pin cannot hold: docs/xunit-v3-4.md in Bennewitz.Ninja.Templates. Comes off when
+         Avalonia supports 4.x, or these tests stop using it. -->
+    <PackageReference Update="xunit.v3" VersionOverride="3.2.2" />
+    <!-- The MTP line xunit.v3 3.2.2 takes. Gives CI its .trx files. -->
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+  </ItemGroup>
+</Project>

@@ -87,7 +87,9 @@ public sealed class PackagingTests
     }
 
     /// <summary>
-    /// Plan 00018 §Phase 2: the release workflow names the packages it pushes, and never globs.
+    /// Plan 00018 §Phase 2: the release workflow pushes the ids it resolved, and never globs. Since the
+    /// move into AppKit those are the family's ids, from <c>scripts/release-target.cs</c>;
+    /// <see cref="PackagesPushTests"/> holds them to what the solution packs.
     /// </summary>
     /// <remarks>
     /// An unusual thing to assert about YAML, and the asymmetry earns it. The workflow this one was
@@ -113,8 +115,8 @@ public sealed class PackagingTests
             File.ReadLines(path).Where(line => !line.TrimStart().StartsWith('#')));
 
         Assert.DoesNotContain("*.nupkg", instructions, StringComparison.Ordinal);
-        Assert.Contains("Bennewitz.Ninja.DiffView.Core.", instructions, StringComparison.Ordinal);
-        Assert.Contains("Bennewitz.Ninja.DiffView.Avalonia.", instructions, StringComparison.Ordinal);
+        Assert.Contains("scripts/release-target.cs -- resolve", instructions, StringComparison.Ordinal);
+        Assert.Equal(2, instructions.Split("read -ra ids <<< \"$IDS\"").Length - 1);
     }
 
     /// <summary>
@@ -129,14 +131,16 @@ public sealed class PackagingTests
         string instructions = string.Join('\n', lines);
 
         // The tag is the only source of the version, and --no-build on the pack means build and
-        // pack must be told the same thing or the pack quietly ships what the build made.
-        Assert.Contains("GITHUB_REF_NAME#v", instructions, StringComparison.Ordinal);
-        Assert.Equal(2, lines.Count(line => line.Contains("/p:Version=", StringComparison.Ordinal)));
+        // pack must be told the same thing or the pack quietly ships what the build made. A family's
+        // release packs its own projects, so the pack names the version on each of its two paths.
+        Assert.Contains("scripts/release-target.cs -- resolve", instructions, StringComparison.Ordinal);
+        Assert.Contains("-p:Version=${{ env.VERSION }}", instructions, StringComparison.Ordinal);
+        Assert.Equal(2, lines.Count(line => line.Contains("dotnet pack", StringComparison.Ordinal) && line.Contains("-p:Version=\"$VERSION\"", StringComparison.Ordinal)));
     }
 
     /// <summary>
-    /// A preflight publishes nothing: the two steps that reach outside the job are guarded, and the
-    /// two dispatch modes are refused in each other's clothing.
+    /// A preflight publishes nothing: the two steps that reach outside the job are guarded on
+    /// <c>RELEASING</c>, which is false for a dispatch with no version.
     /// </summary>
     /// <remarks>
     /// <c>PROGRESS.md</c> open item 3 described the credential check as "a dispatch with the version
@@ -153,7 +157,7 @@ public sealed class PackagingTests
         string path = Path.Combine(RepoPaths.Root, ".github", "workflows", "release.yml");
         string[] lines = [.. File.ReadLines(path).Where(line => !line.TrimStart().StartsWith('#'))];
 
-        Assert.Contains("preflight:", lines.Select(line => line.Trim()));
+        Assert.Contains(lines, line => line.Contains("RELEASING: ${{ github.event_name == 'push' || inputs.version != '' }}", StringComparison.Ordinal));
 
         // Every step that leaves the job is guarded, and the credential exchange is not — the whole
         // point is that it runs. Indices rather than a substring search: the guard has to sit on
@@ -168,15 +172,9 @@ public sealed class PackagingTests
         {
             string[] body = [.. lines.Skip(at + 1).TakeWhile(line => !line.TrimStart().StartsWith("- name:", StringComparison.Ordinal))];
             Assert.True(
-                body.Any(line => line.Contains("if:", StringComparison.Ordinal) && line.Contains("inputs.preflight", StringComparison.Ordinal)),
-                $"'{step}' is not guarded on the preflight input, so a preflight dispatch would publish.");
+                body.Any(line => line.Contains("if:", StringComparison.Ordinal) && line.Contains("env.RELEASING == 'true'", StringComparison.Ordinal)),
+                $"'{step}' is not guarded on RELEASING, so a preflight dispatch would publish.");
         }
-
-        // Neither mode is inferred from the other's absence: a versionless release and a versioned
-        // preflight each stop the run rather than guessing which was meant.
-        string instructions = string.Join('\n', lines);
-        Assert.Contains("A preflight takes no version", instructions, StringComparison.Ordinal);
-        Assert.Contains("A release needs a version", instructions, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -193,11 +191,11 @@ public sealed class PackagingTests
     public void The_published_packages_declare_the_hosting_guide_as_their_readme()
     {
         Assert.True(
-            File.Exists(Path.Combine(RepoPaths.Root, "docs", "hosting-diffview.md")),
+            File.Exists(Path.Combine(RepoPaths.Root, "docs", "diffview.md")),
             "The guide is gone, so the readme both packages declare names nothing and the pack fails.");
 
         List<string> declaring = PackableProjects()
-            .Where(project => PropertiesIn(project).Contains("PackageReadmeFile"))
+            .Where(project => PropertiesIn(project).Contains("FamilyReadme"))
             .Select(Path.GetFileNameWithoutExtension)
             .OfType<string>()
             .Order(StringComparer.Ordinal)
@@ -220,10 +218,9 @@ public sealed class PackagingTests
         ?? "Debug";
 
     /// <summary>
-    /// The readme reaches the package. A <c>PackageReadmeFile</c> naming a file the project does not
-    /// actually pack fails <c>dotnet pack</c> outright — the
-    /// <c>LayeredEditors.Avalonia.Diagnostics</c> failure recorded in <c>DECISIONS.md</c> — and the
-    /// guide sits outside both project directories, so the property alone would do exactly that.
+    /// The readme reaches the package. <c>FamilyReadme</c> packs the guide as <c>README.md</c> through
+    /// the root props, and a readme the project does not actually pack fails <c>dotnet pack</c>
+    /// outright: the <c>LayeredEditors.Avalonia.Diagnostics</c> failure recorded in <c>DECISIONS.md</c>.
     /// Asserted by packing rather than by reading the csproj, because what the nuspec ends up saying
     /// is the thing nuget.org acts on.
     /// </summary>
@@ -236,7 +233,7 @@ public sealed class PackagingTests
         try
         {
             foreach (string project in PackableProjects()
-                         .Where(project => PropertiesIn(project).Contains("PackageReadmeFile")))
+                         .Where(project => PropertiesIn(project).Contains("FamilyReadme")))
             {
                 // --no-build: the suite has already built this configuration, and packing again
                 // would triple the cost of the check. A failure here prints the pack's own output.
@@ -272,7 +269,7 @@ public sealed class PackagingTests
 
                 string name = Path.GetFileName(package);
                 Assert.True(readme is not null, $"{name}'s nuspec names no readme.");
-                Assert.Equal("hosting-diffview.md", readme!.Value.Trim());
+                Assert.Equal("README.md", readme!.Value.Trim());
 
                 Assert.True(
                     archive.Entries.Any(entry => string.Equals(entry.FullName, readme.Value.Trim(), StringComparison.Ordinal)),
@@ -365,7 +362,7 @@ public sealed class PackagingTests
     internal static List<string> PackableProjects()
     {
         List<string> packable = [];
-        foreach (string project in Directory.GetFiles(Path.Combine(RepoPaths.Root, "src"), "*.csproj", SearchOption.AllDirectories))
+        foreach (string project in Directory.GetFiles(Path.Combine(RepoPaths.Root, "src"), "DiffView*.csproj", SearchOption.AllDirectories))
         {
             if (project.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 || project.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))

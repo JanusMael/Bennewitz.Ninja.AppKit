@@ -7,7 +7,7 @@ namespace Bennewitz.Ninja.DiffView.Demo;
 
 // This demo is a HARNESS for driving the controls by hand, not a sample to copy wholesale: its own
 // chrome stays English on purpose, and its flags exist for testing. Someone putting the control into
-// their own application wants docs/hosting-diffview.md instead.
+// their own application wants docs/diffview.md instead.
 //
 // Bootstrap order follows ClaudeForge's Program.cs (MIT): flags → crash handler → logging →
 // deferred flag warnings → boot inside a try that shows both dialogs and flushes the log.

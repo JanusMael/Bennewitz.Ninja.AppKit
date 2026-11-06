@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../DiffView.Tests.props" />
+
   <PropertyGroup>
     <!-- xUnit1051 wants TestContext.Current.CancellationToken passed to every call that accepts a
          token. Core's build and search take an optional token by design and the tests exercise the

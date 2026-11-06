@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../DiffView.Build.props" />
+
   <PropertyGroup>
     <Description>
       Diff model for the DiffView side-by-side control: alignment, probing, search and
@@ -8,13 +10,11 @@
     <!-- See the note in DiffView.Avalonia.csproj: the package carries the Bennewitz.Ninja prefix,
          the assembly stays unprefixed. Bennewitz.Ninja.DiffView.Avalonia depends on this one. -->
     <PackageId>Bennewitz.Ninja.DiffView.Core</PackageId>
+    <AssemblyProduct>DiffView</AssemblyProduct>
+    <FamilyReadme>docs/diffview.md</FamilyReadme>
     <PackageTags>diff;compare;text-diff;diffplex;alignment;side-by-side</PackageTags>
     <!-- Public API is documented; a missing comment is a build error (CS1591 under warnings-as-errors). -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <!-- The readme IS the hosting guide, not a second consumer-facing document to keep in step with
-         it. Plan 00018 left this unset for that reason and handed it to plan 00019. The value is the
-         file's name *inside the package*, which is why it carries no directory. -->
-    <PackageReadmeFile>hosting-diffview.md</PackageReadmeFile>
     <!-- Marked trimmable, with the trim analyzer on every build (plan 00004 in
          Bennewitz.Ninja.Templates). The mark is compiled in, and a consumer's TrimMode=partial
          publish trims only marked assemblies. The analyzer cannot see compiled XAML; the trim
@@ -26,14 +26,6 @@
   <ItemGroup>
     <PackageReference Include="DiffPlex" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <!-- What actually carries the file. The guide lives outside this project directory, so the
-         property alone packs nothing and dotnet pack fails on a readme it cannot find — the
-         LayeredEditors.Avalonia.Diagnostics failure DECISIONS.md records. PackagePath="\" is the
-         package root, which is where PackageReadmeFile looks. -->
-    <None Include="$(RepoRoot)docs/hosting-diffview.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <!-- The library's internals reach its own tests and nothing else, so it opts out of the solution's

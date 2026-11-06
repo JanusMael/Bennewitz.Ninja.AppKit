@@ -11,11 +11,22 @@
 // no family assembly is strong-named. See docs/repository-conventions.md in
 // Bennewitz.Ninja.Templates.
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AgentBaseline")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AgentBaseline.Tests")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.Abstractions")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.AvaloniaUI")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.EntryPoint")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.Logging")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DiffView.Avalonia")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DiffView.Avalonia.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DiffView.Core")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DiffView.Core.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DiffView.Demo")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EntryPointProbe")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EntryPointWebProbe")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.Abstractions")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.AvaloniaUI")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.ViewModels")]

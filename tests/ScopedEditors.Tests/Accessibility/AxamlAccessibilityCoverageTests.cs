@@ -89,7 +89,8 @@ public sealed class AxamlAccessibilityCoverageTests
     /// ⚠ The original asserted a repository-wide scan, because its root had once been hardcoded to one
     /// app's views folder and every other UI project went unguarded. This scan is narrower on purpose,
     /// one project, and that is sound only while that project holds all the markup there is. So the
-    /// last assertion looks at the whole of <c>src/</c>.
+    /// last assertion looks at the whole of this family under <c>src/</c>; each of the other families
+    /// guards its own markup.
     /// </remarks>
     [Fact]
     public void The_scan_covers_all_the_markup_not_one_hardcoded_folder()
@@ -120,7 +121,8 @@ public sealed class AxamlAccessibilityCoverageTests
         [
             .. XamlScanContext.Load(Path.Combine(PackageSources.RepoRoot(), "src")).Files
                 .Select(f => "src/" + f.RelativePath)
-                .Where(p => !p.StartsWith(PackageSources.Project + "/", StringComparison.Ordinal)),
+                .Where(p => p.StartsWith("src/ScopedEditors", StringComparison.Ordinal)
+                    && !p.StartsWith(PackageSources.Project + "/", StringComparison.Ordinal)),
         ];
 
         Assert.True(

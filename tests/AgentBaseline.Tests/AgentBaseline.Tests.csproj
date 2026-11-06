@@ -1,4 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="../DiffView.Tests.props" />
+
   <ItemGroup>
     <!-- Step 5's review drives a real SideBySideDiffView in a headless window, as the library's own
          tests do: Skia so text is laid out, and Semi as the base theme, the intended host's. -->

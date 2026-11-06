@@ -4,6 +4,8 @@
     <IsPackable>true</IsPackable>
     <AssemblyName>ScopedEditors.AvaloniaUI</AssemblyName>
     <PackageId>Bennewitz.Ninja.ScopedEditors.Avalonia</PackageId>
+    <AssemblyProduct>ScopedEditors</AssemblyProduct>
+    <FamilyReadme>docs/scopededitors.md</FamilyReadme>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <Description>Avalonia views, converters and behaviours for scoped property editors: the editor wrapper, drag-and-drop, focus and DataGrid behaviours, JSON highlighting, linkified text, and an opt-in Semi.Avalonia theme bundle.</Description>
     <PackageTags>avalonia;editors;converters;behaviors;semi-avalonia</PackageTags>

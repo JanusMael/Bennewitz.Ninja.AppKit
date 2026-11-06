@@ -17,7 +17,7 @@ Steps 1 and 2 are account-level and have to be done by the nuget.org account own
 ### 1 · Add the `NUGET_USER` variable
 
 ```bash
-gh variable set NUGET_USER --body <your-nuget.org-profile-name> --repo JanusMael/Bennewitz.Ninja.AppServices
+gh variable set NUGET_USER --body <your-nuget.org-profile-name> --repo JanusMael/Bennewitz.Ninja.AppKit
 ```
 
 ⭐ **A variable, not a secret.** Trusted publishing carries nothing to leak — this is the
@@ -46,11 +46,11 @@ ids you publish:
 |---|---|
 | Policy owner | your individual account, **not** an organization |
 | Repository Owner | `JanusMael` |
-| Repository | `Bennewitz.Ninja.AppServices` |
+| Repository | `Bennewitz.Ninja.AppKit` |
 | Workflow File | `release.yml` |
 | Environment | **leave blank** |
 | Scopes | **Publish new packages** *and* **Publish new versions of existing packages** |
-| Glob Patterns | patterns covering every id in `packages.push` — and matching nothing in `packages.local` |
+| Glob Patterns | `Bennewitz.Ninja.AppServices*`, `Bennewitz.Ninja.ScopedEditors*` and `Bennewitz.Ninja.DiffView*`: a pattern per family, covering every id in `packages.push` — and matching nothing in `packages.local` |
 
 ⛔ **ONE policy, never one per package id.** nuget.org mints one API key per token exchange, scoped
 to **one** matching policy. Two policies matching the same repository and workflow means one is
@@ -93,6 +93,9 @@ leading zero dropped. `2026.3.920` is 20 September 2026, in Q3.
 ⚠ **Day resolution means ONE release per calendar day.** A second tag on the same date collides with
 a version that can never be replaced, and the recovery is to wait for tomorrow.
 
+The release refuses a version of any other shape, and one whose quarter is not its date's:
+`2026.3.1001` is refused, because 1 October is in the fourth quarter.
+
 ⛔ **A published version is permanent.** It cannot be replaced, re-pushed, or corrected — only
 superseded by a higher one, or unlisted.
 
@@ -102,22 +105,35 @@ superseded by a higher one, or unlisted.
 
 ### 4 · Tag and push
 
+This repository releases three families, `appservices`, `scopededitors` and `diffview`, as
+`.github/repository.json` declares them. Each releases alone, from a tag naming it in lower case:
+
 ```bash
-git tag -a v2026.3.920 -m "Bennewitz.Ninja.AppServices 2026.3.920"
-git push origin v2026.3.920
+git tag -a scopededitors/v2026.3.920 -m "scopededitors 2026.3.920"
+git push origin scopededitors/v2026.3.920
 ```
 
-The version comes from the tag (`v` stripped), so the tag and the package agree by construction
-rather than by remembering to bump a file.
+The version comes from the tag (everything after `/v`), so the tag and the packages agree by
+construction rather than by remembering to bump a file. The release publishes only that family's
+ids, packs only the projects that produce them, and writes the GitHub release's notes from the
+family's own commits since its previous tag, marking it "Latest" unless a tag of any family is
+newer. AppServices' previous tag may be a bare `v…` one, from before the merge. A bare `v…` tag is
+refused before anything is built.
 
 ⓘ A release can also be started from the Actions tab — **Release** → *Run workflow* → **enter the
-version** — which is the path to use when a tag already exists. Filling the version in is what
-separates a release from the preflight; leaving it blank never publishes.
+version and the family** — which is the path to use when a tag already exists. Filling the version
+in is what separates a release from the preflight; leaving it blank never publishes, and a version
+without a family is refused. `docs/repository-conventions.md` in Bennewitz.Ninja.Templates lists
+what `check` holds a repository with families to.
+
+ⓘ Releases before the three families met here kept their tags: AppServices' as `v…`, and
+ScopedEditors' renamed `scopededitors/v…` when its history was imported. DiffView had released
+nothing.
 
 ### 5 · Watch the run
 
 ```bash
-gh run watch --repo JanusMael/Bennewitz.Ninja.AppServices --exit-status
+gh run watch --repo JanusMael/Bennewitz.Ninja.AppKit --exit-status
 ```
 
 Every gate runs **before** the push, because the push is the irreversible part: build, the full
@@ -173,6 +189,11 @@ thing at a time and re-run the preflight, which costs nothing:
 4. **The scope allows publishing new packages.**
 5. **A single policy's patterns cover every id** in `packages.push`.
 6. **The policy shows no pending or inactive warning** in the UI.
+7. **The policy's Repository is this repository's current name.** A policy keeps the name the
+   repository had when the policy was saved, beside its id. After `Bennewitz.Ninja.XamlQuality` was
+   renamed `Bennewitz.Ninja.Inspections`, on 2026-10-29, its policy still showed the old name with the
+   unchanged id, and the login failed with this 401 until the policy was edited to the new name. This
+   repository was renamed from `Bennewitz.Ninja.AppServices`, so its policy needed the same edit.
 
 ⚠ **Order matters, and this list used to start at what is now step 2.** On 2026-09-21 the
 `Bennewitz.Ninja.Templates` first release burned six preflight runs working down the policy

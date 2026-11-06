@@ -51,7 +51,7 @@ const string Preamble = """
 
 bool check = args.Contains("--check", StringComparer.Ordinal);
 
-if (!File.Exists("DiffView.slnx"))
+if (!File.Exists("AppKit.slnx"))
 {
     Console.Error.WriteLine("gen-strings: run me from the repository root.");
     return 2;

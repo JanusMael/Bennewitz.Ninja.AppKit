@@ -120,7 +120,7 @@ static int RunSuite(List<string> extra, string logPath)
     };
     start.ArgumentList.Add("test");
     start.ArgumentList.Add("--solution");
-    start.ArgumentList.Add("DiffView.slnx");
+    start.ArgumentList.Add("AppKit.slnx");
     foreach (string a in extra)
     {
         start.ArgumentList.Add(a);
@@ -148,7 +148,7 @@ static int? Discover(List<string> extra)
         RedirectStandardOutput = true,
         RedirectStandardError = true,
     };
-    foreach (string a in (string[])["test", "--solution", "DiffView.slnx", "--no-build", "--list-tests"])
+    foreach (string a in (string[])["test", "--solution", "AppKit.slnx", "--no-build", "--list-tests"])
     {
         start.ArgumentList.Add(a);
     }

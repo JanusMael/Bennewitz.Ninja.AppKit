@@ -151,7 +151,7 @@ one worktree and 8.8 in four.
 
 The method is not specific to this repository; five things in the script are:
 
-- `Repo.Root` finds the repository by `DiffView.slnx`;
+- `Repo.Root` finds the repository by `AppKit.slnx`;
 - `Source` carries untracked files from `src`, `tests`, `scripts`, `fixtures` and this repository's root
   build files;
 - `Judge` reads the output of Microsoft.Testing.Platform, and the class filter is xUnit v3's

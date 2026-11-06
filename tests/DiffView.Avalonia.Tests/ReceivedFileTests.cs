@@ -33,7 +33,11 @@ public sealed class ReceivedFileTests
     /// </summary>
     private const string MarkupItem = "AvaloniaXaml";
 
-    /// <summary>Every project directly under <c>src</c> that holds markup, by its path from the root.</summary>
+    /// <summary>
+    /// Every DiffView project directly under <c>src</c> that holds markup, by its path from the root: the
+    /// ones importing <c>src/DiffView.Build.props</c>, which sets the exclusion. Only this family's gates
+    /// write received files.
+    /// </summary>
     public static TheoryData<string> MarkupProjects
     {
         get
@@ -42,7 +46,9 @@ public sealed class ReceivedFileTests
             foreach (string directory in Directory.EnumerateDirectories(RepoPaths.Source("src")).Order(StringComparer.Ordinal))
             {
                 string[] found = Directory.GetFiles(directory, "*.csproj");
-                if (found.Length == 1 && MarkupUnder(directory).Any())
+                if (found.Length == 1
+                    && File.ReadAllText(found[0]).Contains("DiffView.Build.props", StringComparison.Ordinal)
+                    && MarkupUnder(directory).Any())
                 {
                     projects.Add(Path.GetRelativePath(RepoPaths.Root, found[0]).Replace('\\', '/'));
                 }

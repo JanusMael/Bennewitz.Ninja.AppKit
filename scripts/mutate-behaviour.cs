@@ -1439,7 +1439,7 @@ internal static class Repo
     {
         for (DirectoryInfo? dir = new(Directory.GetCurrentDirectory()); dir is not null; dir = dir.Parent)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "DiffView.slnx")))
+            if (File.Exists(Path.Combine(dir.FullName, "AppKit.slnx")))
             {
                 return dir.FullName;
             }
@@ -1653,7 +1653,7 @@ internal static class Source
     /// carried from anywhere; an untracked file elsewhere — a draft beside the plans — never leaves here.
     /// </summary>
     private static readonly string[] Scope =
-        ["src", "tests", "scripts", "fixtures", "Directory.Build.props", "Directory.Packages.props", "global.json", "NuGet.config", "DiffView.slnx"];
+        ["src", "tests", "scripts", "fixtures", "Directory.Build.props", "Directory.Packages.props", "global.json", "NuGet.config", "AppKit.slnx"];
 
     /// <summary>
     /// The tree this checkout's working state would commit as — HEAD, every tracked change, and each

@@ -5,7 +5,7 @@ using Bennewitz.Ninja.DiffView.Core;
 namespace Bennewitz.Ninja.DiffView.Tests;
 
 /// <summary>
-/// The checks plan 00019 puts in front of <c>docs/hosting-diffview.md</c>: every API name the guide
+/// The checks plan 00019 puts in front of <c>docs/diffview.md</c>: every API name the guide
 /// prints resolves against the shipped surface, and the quickstart it tells a stranger to paste
 /// parses, declares the namespace the library actually has, and runs.
 /// </summary>
@@ -24,7 +24,7 @@ namespace Bennewitz.Ninja.DiffView.Tests;
 internal static class HostingGuideGate
 {
     /// <summary>Where the guide lives, once phase 2 writes it.</summary>
-    public const string DocumentPath = "docs/hosting-diffview.md";
+    public const string DocumentPath = "docs/diffview.md";
 
     /// <summary>
     /// A backticked dotted token whose first segment is PascalCase — <c>SideBySideDiffView.LeftSource</c>,

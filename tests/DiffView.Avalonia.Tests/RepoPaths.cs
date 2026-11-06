@@ -6,7 +6,7 @@ namespace Bennewitz.Ninja.DiffView.Tests;
 /// </summary>
 internal static class RepoPaths
 {
-    private const string Marker = "DiffView.slnx";
+    private const string Marker = "AppKit.slnx";
 
     public static string Root => FindRoot();
 

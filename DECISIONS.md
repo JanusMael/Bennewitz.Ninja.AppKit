@@ -67,7 +67,7 @@ to 1.9.1 for the same reason (2.4.0 pulled the platform to 2.4.0 and xunit's bun
 extension failed to load `IDataConsumer`). The .NET 10 SDK no longer runs xunit v3 through the
 VSTest bridge, so `global.json` carries `"test": { "runner": "Microsoft.Testing.Platform" }`,
 `Microsoft.NET.Test.Sdk` and `xunit.runner.visualstudio` are absent, and the command is
-`dotnet test --solution DiffView.slnx` (`--report-trx` for CI). Verify's xunit v3 package is
+`dotnet test --solution AppKit.slnx` (`--report-trx` for CI). Verify's xunit v3 package is
 `Verify.XunitV3`. Serial execution of the Avalonia tests comes from `xunit.runner.json`
 (`parallelizeTestCollections: false`) — the assembly attribute for it is obsolete in newer xunit.
 
@@ -145,7 +145,7 @@ Tests that measure carry `[Trait("Category", "Perf")]`. `tests/Directory.Build.p
 `TestingPlatformCommandLineArguments` to `--filter-not-trait Category=Perf` unless
 `IncludePerfTests` is `true`, and `dotnet test` in Microsoft.Testing.Platform mode honours the
 property, so the default run and CI skip them and
-`dotnet test --solution DiffView.slnx -p:IncludePerfTests=true` runs them. Their numbers are read
+`dotnet test --solution AppKit.slnx -p:IncludePerfTests=true` runs them. Their numbers are read
 from the test output (the `.trx` report carries it) and recorded in `PROGRESS.md`.
 
 ## Diagnostics package 1.0.1: the pack script stamps the version, the pin follows the fix
@@ -2660,13 +2660,13 @@ call to the lazy `Status` getter. See §*"The release was necessary and not suff
 
 ## The guide is the package readme, and the file lives outside both projects
 
-`PackageReadmeFile` is `hosting-diffview.md` on both packable projects — the hosting guide itself,
+`PackageReadmeFile` is `diffview.md` on both packable projects — the hosting guide itself,
 not a second consumer-facing document kept in step with it. Plan 00018 left the property unset for
 exactly that reason and handed it here.
 
 The guide sits at `docs/`, outside both project directories, so the property alone packs nothing and
 `dotnet pack` fails on a readme it cannot find — the `LayeredEditors.Avalonia.Diagnostics` failure
-recorded further up this file. A `None Include="$(RepoRoot)docs/hosting-diffview.md" Pack="true"
+recorded further up this file. A `None Include="$(RepoRoot)docs/diffview.md" Pack="true"
 PackagePath="\"` item is what actually carries it, and `PackageReadmeFile` names the file as it
 appears **inside** the package, which is why it carries no directory.
 
@@ -3797,7 +3797,7 @@ hosting guide's id-table test as a change of its own.
 
 ## The hosting guide's id table is held to the fixture, and its menu row to the rule it states
 
-`docs/hosting-diffview.md` lists every `AutomationId` a host searches for, by part and by the scope that
+`docs/diffview.md` lists every `AutomationId` a host searches for, by part and by the scope that
 makes each one unique, and the list is written by hand. Nothing compared it with
 `fixtures/automation-ids.txt`, which `AccessibilityCoverageTests` holds to the code both ways — though the
 fixture's own header says the guide tells a host the same ids. The table stays in the guide rather than
@@ -3986,7 +3986,7 @@ the library exposes no formatting culture of its own.
 API one.** .NET separates UI culture from formatting culture deliberately, and the configuration
 this produces — translated words with the reader's own number habits — is one a person can genuinely
 want. A `FormatCulture` beside `Culture` would be new public surface, a behaviour change for every
-existing host, and a second way to express something the framework already expresses. `docs/hosting-diffview.md`
+existing host, and a second way to express something the framework already expresses. `docs/diffview.md`
 says so under *Localization happens whether you ask or not*, names the two sites, and points a host
 who wants them to agree at `CultureInfo.DefaultThreadCurrentCulture`.
 

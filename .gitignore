@@ -5,3 +5,29 @@ packages/
 *.user
 .vs/
 .idea/
+
+# Build output
+publish/
+TestResults/
+test-results/
+*.nupkg
+*.snupkg
+*.suo
+*.swp
+
+# Read-only upstream checkouts fetched on demand by scripts/fetch-reference.*
+# from reference/sources.json. Only the files named below are versioned. A file
+# pattern rather than `reference/*/`, because a checkout linked in from elsewhere is a
+# symlink, and to git a symlink is a file that a directory pattern does not match.
+reference/*
+!reference/README.md
+!reference/sources.json
+!reference/Directory.Packages.props
+!reference/AGENTS.md
+!reference/CLAUDE.md
+
+# Verify: a .received file is a mismatch under review, never a commit.
+*.received.*
+
+# Logs the demo writes when launched from the repository
+logs/

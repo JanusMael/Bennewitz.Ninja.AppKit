@@ -17,10 +17,11 @@ public sealed class DocumentationCitationTests
     private static readonly string[] Documents =
     [
         "PROGRESS.md", "AGENTS.md", "DECISIONS.md", "CHANGELOG.md", "README.md",
+        "docs/diffview-progress.md", "docs/diffview-development.md",
         // The hosting guide is read by people who cannot check it. Its API names are held to a
         // stricter gate than this one — HostingGuideTests resolves them against the shipped
         // surface — but a test name it cites is this file's business, like every other document's.
-        "docs/hosting-diffview.md",
+        "docs/diffview.md",
     ];
 
     /// <summary>
@@ -116,7 +117,7 @@ public sealed class DocumentationCitationTests
     private const int DocumentFloor = 15;
 
     /// <summary>The directories whose every authored document may cite a section.</summary>
-    private static readonly string[] SectionCitingDirectories = ["docs", "plans"];
+    private static readonly string[] SectionCitingDirectories = ["docs", "plans", "plans/diffview"];
 
     /// <summary>
     /// Every <c>§N</c> that names a section of <c>AGENTS.md</c> names one that exists. Plan 00023

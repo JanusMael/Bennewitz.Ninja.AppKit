@@ -214,8 +214,13 @@ public sealed class AccessibilityCoverageTests
     /// </remarks>
     private static string AllRoot => RepoPaths.Source("src");
 
-    /// <summary>Everything the findings assertion covers: the library, the demo and the baseline tool.</summary>
-    private static XamlScanContext ScanAll() => XamlScanContext.Load(AllRoot);
+    /// <summary>
+    /// Everything the findings assertion covers: the library, the demo and the baseline tool. The other
+    /// families' markup under <c>src</c> is left out, and their own tests guard it. A list given to
+    /// <c>Load</c> replaces its default rather than adding to it, so <c>bin</c> and <c>obj</c> are named.
+    /// </summary>
+    private static XamlScanContext ScanAll() =>
+        XamlScanContext.Load(AllRoot, ["bin", "obj", "AppServices.AvaloniaUI", "ScopedEditors.AvaloniaUI"]);
 
     /// <summary>The markup this repository ships, as a subject of the scan above.</summary>
     private static XamlScanContext LibraryWithin(XamlScanContext all) =>

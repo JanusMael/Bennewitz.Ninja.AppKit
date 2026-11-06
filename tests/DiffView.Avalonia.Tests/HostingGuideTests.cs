@@ -9,7 +9,7 @@ using Bennewitz.Ninja.DiffView.Tests.Composite;
 namespace Bennewitz.Ninja.DiffView.Tests;
 
 /// <summary>
-/// Plan 00019 §Phase 1: the gates that land before <c>docs/hosting-diffview.md</c> is written.
+/// Plan 00019 §Phase 1: the gates that land before <c>docs/diffview.md</c> is written.
 /// </summary>
 /// <remarks>
 /// Each check is first shown catching a document broken in exactly that one way, the way

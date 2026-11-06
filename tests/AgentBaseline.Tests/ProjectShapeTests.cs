@@ -13,7 +13,7 @@ namespace Bennewitz.Ninja.AgentBaseline.Tests;
 /// </remarks>
 public sealed class ProjectShapeTests
 {
-    private const string Solution = "DiffView.slnx";
+    private const string Solution = "AppKit.slnx";
     private const string AppProject = "src/AgentBaseline/AgentBaseline.csproj";
     private const string TestProject = "tests/AgentBaseline.Tests/AgentBaseline.Tests.csproj";
 

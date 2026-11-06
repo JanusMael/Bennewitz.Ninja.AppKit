@@ -3,7 +3,7 @@
 A trimmed publish of every shipped assembly, run by CI's `trim` job. It is the only check that reads
 compiled XAML: Avalonia's XAML compiler weaves IL into `ScopedEditors.AvaloniaUI` after Roslyn, so
 the trim analyser that runs on every build never sees it. Nothing here ships, and `TrimCheck.csproj`
-is not in `ScopedEditors.slnx`.
+is not in `AppKit.slnx`.
 
 | File | What it is |
 |---|---|

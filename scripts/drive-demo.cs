@@ -564,7 +564,7 @@ internal static class Repo
     {
         for (DirectoryInfo? dir = new(Directory.GetCurrentDirectory()); dir is not null; dir = dir.Parent)
         {
-            if (File.Exists(Path.Combine(dir.FullName, "DiffView.slnx")))
+            if (File.Exists(Path.Combine(dir.FullName, "AppKit.slnx")))
             {
                 return dir.FullName;
             }

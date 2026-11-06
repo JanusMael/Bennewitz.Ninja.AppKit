@@ -55,7 +55,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-const string Solution = "DiffView.slnx";
+const string Solution = "AppKit.slnx";
 const string TestProject = "tests/DiffView.Avalonia.Tests/DiffView.Avalonia.Tests.csproj";
 
 const string A11yGate = "tests/DiffView.Avalonia.Tests/AccessibilityCoverageTests.cs";
