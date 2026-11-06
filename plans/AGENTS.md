@@ -18,3 +18,5 @@ taking a number; two sessions picking "the next one" is how a number gets used t
 | What actually happened goes in `PROGRESS.md`, under the plan's drift section | The plan stays the promise; the work state says how the promise was kept |
 | A materially different approach is a new number whose status line says `Supersedes NNNNN` | The old plan stays as it was approved |
 | A link inside an approved plan that stops resolving is left alone | Its links are specification. A dead one records drift, which a fix would hide |
+
+New plans for either family continue the sequence here.

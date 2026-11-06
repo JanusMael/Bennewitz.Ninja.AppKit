@@ -10,7 +10,7 @@
     ⛔ Every assembly is ROOTED. Without that, ILLink removes whatever this empty program does not
     call, and code that has been removed cannot warn, so a clean result would mean nothing.
 
-    Not part of ScopedEditors.slnx: it is a publish, not a test, and nothing ships from it.
+    Not part of AppKit.slnx: it is a publish, not a test, and nothing ships from it.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>

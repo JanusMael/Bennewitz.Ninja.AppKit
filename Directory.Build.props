@@ -16,10 +16,11 @@
     <!-- Bennewitz.Ninja.AutoVersioning source generator: version stamps computed at build time. -->
     <GenerateAutoVersionedAssemblyInfo>true</GenerateAutoVersionedAssemblyInfo>
     <AssemblyCompany>Bennewitz.Ninja</AssemblyCompany>
-    <AssemblyProduct>AppServices</AssemblyProduct>
+    <!-- The repository's product, for every project that names none: AutoVersioning fails one without
+         a product (BAUTOVERSIONING03). A package family's packages set their family's in their csproj. -->
+    <AssemblyProduct>AppKit</AssemblyProduct>
     <CopyrightHolder>Brian Bennewitz</CopyrightHolder>
     <CommitSha Condition="'$(CommitSha)' == ''">$(GITHUB_SHA)</CommitSha>
-    <!-- PublicVersion is defaulted in Directory.Build.targets, where Version already has its value. -->
   </PropertyGroup>
 
   <!-- Package metadata shared by every packable project. Without a licence expression a package is
@@ -29,8 +30,8 @@
   <PropertyGroup>
     <Authors>Brian Bennewitz</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/JanusMael/Bennewitz.Ninja.AppServices</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/JanusMael/Bennewitz.Ninja.AppServices</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/JanusMael/Bennewitz.Ninja.AppKit</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/JanusMael/Bennewitz.Ninja.AppKit</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
@@ -71,8 +72,17 @@
   </ItemGroup>
 
   <!-- The README travels inside every package, so nuget.org shows the same text the repository
-       does. Packable projects only: a test project with no README is not a packaging error. -->
-  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+       does. Packable projects only: a test project with no README is not a packaging error.
+
+       In a repository with package families, each family's packages carry the family's README
+       instead: docs/<stem>.md, which each of its projects names in FamilyReadme, beside its
+       family's AssemblyProduct. Packed as README.md, so nuget.org shows the family's page, not the
+       repository's. Items are evaluated after every property, so the csproj's value is the one read
+       here. `repo-conventions check` fails a family's package that names another file, or none. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true' and '$(FamilyReadme)' == ''">
     <None Include="$(RepoRoot)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(IsPackable)' == 'true' and '$(FamilyReadme)' != ''">
+    <None Include="$(RepoRoot)$(FamilyReadme)" Pack="true" PackagePath="README.md" Visible="false" />
   </ItemGroup>
 </Project>

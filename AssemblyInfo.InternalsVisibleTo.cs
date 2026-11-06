@@ -19,3 +19,7 @@
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.Tests")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EntryPointProbe")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EntryPointWebProbe")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.Abstractions")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.AvaloniaUI")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.ViewModels")]

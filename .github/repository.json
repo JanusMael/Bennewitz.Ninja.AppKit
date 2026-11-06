@@ -1,22 +1,42 @@
 {
-  "description": "Application services for desktop apps — shell launching, environment probing, sharing, dialogs and logging — behind contracts a test can fake without a UI toolkit. Ships as Bennewitz.Ninja.AppServices, .Abstractions, .Logging, .Avalonia and .EntryPoint.",
+  "description": "Building blocks for .NET desktop apps, in two families: AppServices for shell launching, environment probing, sharing, dialogs and logging; ScopedEditors for schema-driven property editors. Ships as Bennewitz.Ninja.AppServices and .ScopedEditors packages.",
   "homepage": "",
   "topics": [
-    "csharp",
-    "dotnet",
-    "nuget",
     "avalonia",
+    "csharp",
     "desktop",
-    "serilog",
-    "dialogs"
+    "dialogs",
+    "dotnet",
+    "mvvm",
+    "nuget",
+    "property-editor",
+    "serilog"
   ],
   "requiredChecks": [
-    "build",
+    "build (ubuntu-latest)",
+    "build (windows-latest)",
+    "build (macos-latest)",
     "pack",
     "conventions",
     "aot-linux",
-    "aot-windows"
+    "aot-windows",
+    "trim"
   ],
   "content": [],
-  "undocumented": {}
+  "undocumented": {},
+  "families": {
+    "appservices": [
+      "Bennewitz.Ninja.AppServices.Abstractions",
+      "Bennewitz.Ninja.AppServices.EntryPoint",
+      "Bennewitz.Ninja.AppServices",
+      "Bennewitz.Ninja.AppServices.Logging",
+      "Bennewitz.Ninja.AppServices.Avalonia"
+    ],
+    "scopededitors": [
+      "Bennewitz.Ninja.ScopedEditors.Abstractions",
+      "Bennewitz.Ninja.ScopedEditors.ViewModels",
+      "Bennewitz.Ninja.ScopedEditors.Avalonia"
+    ]
+  },
+  "bareTags": "appservices"
 }

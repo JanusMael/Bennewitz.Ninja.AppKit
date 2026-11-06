@@ -150,8 +150,8 @@ public sealed class PackageMetadataTests
         // left in it is published as permanently as one in a nuspec. 2026.3.923 shipped exactly that,
         // "TODO: one paragraph saying what this package does", on all seven ids across the two
         // repositories, because the checks above read the project files and never the README.
-        string readme = Path.Combine(RepoRoot(), "README.md");
-        Assert.True(File.Exists(readme), "README.md is missing, and every packable project packs it.");
+        string readme = Path.Combine(RepoRoot(), "docs", "scopededitors.md");
+        Assert.True(File.Exists(readme), "docs/scopededitors.md is missing, and every packable project of this family packs it.");
 
         List<string> placeholders =
         [
@@ -163,7 +163,7 @@ public sealed class PackageMetadataTests
 
         Assert.True(
             placeholders.Count == 0,
-            "README.md still carries the template's placeholder text, and it is packed into every "
+            "docs/scopededitors.md still carries the template's placeholder text, and it is packed into every "
             + "package:\n  " + string.Join("\n  ", placeholders));
     }
 
@@ -175,7 +175,7 @@ public sealed class PackageMetadataTests
             .Trim();
 
     private static IReadOnlyList<string> ProjectFiles() =>
-        [.. Directory.GetFiles(Path.Combine(RepoRoot(), "src"), "*.csproj", SearchOption.AllDirectories)];
+        [.. Directory.GetFiles(Path.Combine(RepoRoot(), "src"), "ScopedEditors*.csproj", SearchOption.AllDirectories)];
 
     private static string RepoRoot()
     {

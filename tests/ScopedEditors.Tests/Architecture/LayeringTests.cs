@@ -54,7 +54,7 @@ public sealed class LayeringTests
     /// Name fragments belonging to another repository. ⚠ The two families share no edge — measured,
     /// not assumed — so either could be versioned or abandoned without touching the other.
     /// </summary>
-    internal static readonly string[] ForeignFamilies = ["AppServices", "LayeredEditors", "ClaudeForge", "AgentForge"];
+    internal static readonly string[] ForeignFamilies = ["AppServices", "DiffView", "LayeredEditors", "ClaudeForge", "AgentForge"];
 
     [Fact]
     public void Every_tier_named_here_actually_exists()

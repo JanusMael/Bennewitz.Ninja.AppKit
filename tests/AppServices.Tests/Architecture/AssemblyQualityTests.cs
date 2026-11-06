@@ -165,7 +165,7 @@ public sealed class AssemblyQualityTests
 
     private static string[] LoadProjectNames() =>
     [
-        .. Directory.GetFiles(Path.Combine(RepoRoot(), "src"), "*.csproj", SearchOption.AllDirectories)
+        .. Directory.GetFiles(Path.Combine(RepoRoot(), "src"), "AppServices*.csproj", SearchOption.AllDirectories)
             .Select(Path.GetFileNameWithoutExtension)
             .Select(n => n!)
             .Order(StringComparer.Ordinal),

@@ -1,4 +1,7 @@
 <Project>
+  <!-- One pin per package, the highest either family uses (plans/00009 decision 17 in
+       Bennewitz.Ninja.Templates). A pin a package ships against is a floor its consumers inherit, so
+       a raise here reaches them at that family's next release. -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
@@ -14,12 +17,22 @@
     <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.12.1" />
   </ItemGroup>
 
-  <ItemGroup Label="UI">
+  <ItemGroup Label="Avalonia">
     <!-- ⚠ Avalonia 12.1.3 is the FLOOR every consumer inherits, and it is there on purpose. The
          release carries AvaloniaUI/Avalonia#22151, "Fix UIA selection never reaching the client on
          Windows", and the family relies on it. Only a desktop platform shows the bug: the headless
-         one never goes through Win32 marshalling, so no test here can see it. -->
+         one never goes through Win32 marshalling, so no test here can see it.
+         Avalonia.Controls.DataGrid has no 12.1.3, so it is on its newest, 12.1.2, and that is a
+         floor too: a host that references DataGrid directly needs 12.1.2 or later. Moving DataGrid
+         moves the trim baseline, so re-run the trim comparison whenever it moves. -->
     <PackageVersion Include="Avalonia" Version="12.1.3" />
+    <PackageVersion Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+    <PackageVersion Include="Semi.Avalonia" Version="12.1.0" />
+    <PackageVersion Include="Semi.Avalonia.DataGrid" Version="12.1.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="MVVM">
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
   </ItemGroup>
 
   <ItemGroup Label="Logging">
@@ -28,16 +41,22 @@
     <PackageVersion Include="Serilog.Sinks.Trace" Version="4.0.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Tooling">
+    <!-- The family's own rules, run as tests over what this repository ships. Test-only: nothing
+         shipped references them. A rule's reading here is a measurement against these versions, so
+         a move re-opens every rule. -->
+    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.4.1029" />
+    <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.4.1026" />
+  </ItemGroup>
+
   <ItemGroup Label="Testing">
-    <!-- xunit.v3 on Microsoft.Testing.Platform — see global.json. The VSTest bridge packages are
-         deliberately absent, and so is TrxReport: nothing asks for a .trx, and it would have to
-         match the platform version xunit takes on every bump. -->
+    <!-- xunit.v3 on Microsoft.Testing.Platform: see global.json. The VSTest bridge packages are
+         deliberately absent. -->
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
-    <!-- A real Avalonia application on a headless platform, for the dialog tests. Pinned to the
-         Avalonia version above: the two ship in lockstep. -->
+    <!-- A real Avalonia application on a headless platform. ⚠ Pinned to the SAME version as Avalonia
+         above: a headless platform from any other release pulls that release's Avalonia in
+         transitively, against the libraries' pin, and trips central transitive pinning. -->
     <PackageVersion Include="Avalonia.Headless" Version="12.1.3" />
-    <!-- The family's own assembly rules, run as tests over what this repository ships. -->
-    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.3.929" />
     <!-- Starts tests/EntryPointWebProbe in process, as the web templates' own tests start theirs. -->
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.12" />
   </ItemGroup>

@@ -3,6 +3,8 @@
     <OutputType>Library</OutputType>
     <IsPackable>true</IsPackable>
     <PackageId>Bennewitz.Ninja.AppServices.EntryPoint</PackageId>
+    <AssemblyProduct>AppServices</AssemblyProduct>
+    <FamilyReadme>docs/appservices.md</FamilyReadme>
     <AssemblyName>AppServices.EntryPoint</AssemblyName>
     <Description>One entry point for console, web and desktop apps: an unhandled exception is reported on stderr and exits 1, a usage error exits 2, Ctrl+C exits 130, --version prints the release version, and the app's log is flushed on every exit. References nothing beyond the framework, and is native AOT compatible.</Description>
     <PackageTags>entry-point;main;exit-codes;native-aot;app-services</PackageTags>

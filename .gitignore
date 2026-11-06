@@ -5,3 +5,12 @@ packages/
 *.user
 .vs/
 .idea/
+
+# Build output
+publish/
+TestResults/
+test-results/
+*.nupkg
+*.snupkg
+*.suo
+*.swp
