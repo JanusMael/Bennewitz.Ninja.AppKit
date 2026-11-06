@@ -52,10 +52,11 @@ they settled a rule, `DECISIONS.md`. Newest first:
 | **PR #14** | `HostingGuideTests.The_guides_id_table_names_exactly_the_ids_the_fixture_pins` holds `docs/diffview.md`'s `AutomationId` table to `fixtures/automation-ids.txt` both ways, and its menu row to the rule the row states; open item 15 closes | *The hosting guide's id table, held to the fixture* |
 | **PR #15** | Plan 00031: a fold follows its lines and keeps the name it was collapsed under, so an edit under the editor's folds no longer breaks the layout before its re-diff lands; open item 12 closes | *Plan 00031 phases* |
 
-**No pull request is open, and none will be while the AppKit import runs.** Templates began its `plans/00009`
-step 8 on 2026-11-06 from `main` at PR #45: an open pull request blocks it and each later merge costs it a
-re-verify, so on Brian's word of that day nothing merges until it finishes, and what is ready waits on its branch
-(item 29). #2, the last one open, was closed the same day, item 24 having superseded it.
+**What waited for the AppKit import landed after it.** Templates began its `plans/00009` step 8 on 2026-11-06
+from `main` at PR #45 and finished it the same day. Nothing merged while it ran, on Brian's word of that day,
+because an open pull request blocked it and each later merge cost it a re-verify; item 19's change and item 29
+landed here afterwards. #2, the last pull request open on DiffView's own repository, was closed the same day, item
+24 having superseded it.
 
 **Plans 00001, 00003–00031 and 00033 are complete and closed**, plan 00034 is in progress
 (below), and plan 00002 was rejected on its own review before any code was written. **Plan 00032 is parked on
@@ -1240,7 +1241,7 @@ wording.
     class rather than one menu; per `AGENTS.md` §8 it is a lesson for Inspections first.
 
     ✅ **Both answered by the attended run, 2026-11-06, exit 0.** `scripts/drive-demo-interactive.ps1` at
-    `-ExpectScaling 2` over `0ca1d54` and the change below, on JANUSWAX2, the demo itself reporting *Window:
+    `-ExpectScaling 2` over PR #45 and the change below, on JANUSWAX2, the demo itself reporting *Window:
     1100×720 at scaling 2*: every step took, every assertion held, nothing went unread, and the frames were read
     against what they are named for. View's nine rows fit a 416×656 popup with nothing scrolled, and a click on
     `ThemeMenu` under `SendInput` opened its submenu in a popup of its own, where the palette's entry was ticked.
@@ -1372,6 +1373,10 @@ wording.
 
     ⭐ **Decided 2026-10-22, by Brian: XamlQuality** — `DECISIONS.md`, *The converged mutation runner is a
     dotnet tool from XamlQuality*. ⛔ The move itself starts only on his word.
+
+    ⭐ **Taken on by Inspections on 2026-11-06, by Brian's decision of that day**, as a numbered plan of its own
+    after its plans 00005 and 00006. It will read `scripts/mutate-behaviour.cs`, `docs/mutation-proofs.md` and
+    `AGENTS.md` §5 from `main` when it starts, so what item 27 learns reaches it only once item 27 has landed.
     ⭐ **It starts after item 27, Brian, 2026-11-06**, that item's results going to Inspections first, on his word.
 
     ⭐ **Sent 2026-10-30, on Brian's word, and received.** DiffView's part was a brief to the Inspections
@@ -1512,15 +1517,35 @@ wording.
     `DiffView.Core`, `DiffView.Avalonia` and the demo's publish each do. The Templates session was told on
     2026-11-06, on Brian's word, and what `plans/00004` step 8 waits on instead is its own to read.
 
-29. **Two small fixes, held until the AppKit import finishes — Brian, 2026-11-06.** `README.md` calls `NUGET_USER`
-    a repository secret where `release.yml` reads a repository variable, and `PublicVersion`'s line in
-    `Directory.Build.props` reads `$(Version)` before anything has set it, so it belongs in
-    `Directory.Build.targets`, nothing else naming it. Neither is made yet. Item 19's change and this record sit
-    on `fix/the-pass-finds-its-drags`, local, and land with them. The three literal `TargetType` readings in
-    `AccessibilityCoverageTests` stay, by the same choice of his.
+29. **Two small fixes — Brian, 2026-11-06.** ✅ **Done, the import having made one of them.** The README called
+    `NUGET_USER` a repository secret where `release.yml` reads a repository variable. That section did not survive
+    the move, `docs/publishing.md` says variable, and `DECISIONS.md`, which said secret too, carries a superseded
+    marker now. `PublicVersion`'s line in `Directory.Build.props` read `$(Version)` before the SDK had given it a
+    default, so a local build recorded no public version at all, the comment beside it saying 1.0.0, and a
+    release's global property hid that. The import moved it to `Directory.Build.targets` on its own measurement,
+    which left nothing holding it there: `PublicVersionTests` reads both builds through MSBuild's evaluation, red
+    against the line as DiffView had it, and `Mutations/public-version.json` proves it. The three literal
+    `TargetType` readings in `AccessibilityCoverageTests` stay, by the same choice of his.
 
-Items 3, 9 and 10 are Brian's own, item 16 is shelved, item 26 is backlogged, and items 29, 27 and 23 wait for the
-AppKit import, in that order. **Every other open item was scheduled by Brian
+30. **Plan 00030's local reading retires with XamlQuality's next release — Inspections, 2026-11-06.** Its PR #123
+    gives `TemplatePartRule.ReadParts` an entry for a themed control whose code declares no part, so `DiffStatusStrip`
+    and `DiffPaneHeader`, which `TemplatePartReferenceTests` reads from their themes in the scan's markup, come from the
+    reading itself: over this code, 13 controls where it found 11, the 59 lookups unchanged. The release is Brian's to
+    call, from an `xamlquality/` tag, and the pin that takes it drops the local reading and regenerates
+    `docs/template-parts.md`.
+
+31. **The move left two proof sets behind — found 2026-11-06, on running what item 19's change owed.**
+    `received-files.json` edited `Directory.Build.props`, and the exclusion is in `src/DiffView.Build.props` now.
+    `packages-push.json` named the release's two publishing steps, which take their ids from
+    `scripts/release-target.cs` now. A set whose edit matches nothing refuses to run, so neither could, and nothing
+    said so: CI dry-checks no set. ✅ `received-files.json` follows its line. `packages-push.json` holds the family in
+    `.github/repository.json` to what DiffView packs and to `packages.push`: the three mutations of the steps' lists
+    went with the lists, and a mutation that added an id to `packages.push` moved to the family, because that file
+    holds every family's ids and a stranger in it is no longer `PackagesPushTests`' to find. All 22 of what this
+    branch owed ran as declared here.
+
+Items 3, 9 and 10 are Brian's own, item 16 is shelved, item 26 is backlogged, items 27 and 23 come next, in that
+order, and item 30 waits for a release. **Every other open item was scheduled by Brian
 on 2026-10-30**: item 24 conforms on its branch, `apply` and the new required check left to Brian, and item
 14 follows it; items 19, 20 and 21 are done together on `chore/the-small-items`, stacked on it, with item
 19's attended run at 200% made on 2026-11-06; and item 23's brief went to the Inspections repository. Item 25 came the

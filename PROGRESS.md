@@ -16,9 +16,9 @@ moving is not a reason to release one (decision 21).
 2. **AppServices' and ScopedEditors' next releases** carry the raised floors below, and are each a
    family release, `appservices/v…` and `scopededitors/v…`, on the maintainer's word when the family
    next changes.
-3. **DiffView's held work:** the local branch and open item 27, which waited for this move.
-   [`docs/diffview-progress.md`](docs/diffview-progress.md) is DiffView's whole work state, moved here
-   unchanged, with its Resume, its open items and its running history.
+3. **DiffView's open item 27**, its mutation harnesses' builds, which waited for this move.
+   [`docs/diffview-progress.md`](docs/diffview-progress.md) is DiffView's whole work state, moved here,
+   with its Resume, its open items and its running history.
 
 ## What the merge changed for consumers
 
