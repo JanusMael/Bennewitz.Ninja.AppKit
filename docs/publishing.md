@@ -50,7 +50,7 @@ ids you publish:
 | Workflow File | `release.yml` |
 | Environment | **leave blank** |
 | Scopes | **Publish new packages** *and* **Publish new versions of existing packages** |
-| Glob Patterns | `Bennewitz.Ninja.AppServices*`, `Bennewitz.Ninja.ScopedEditors*` and `Bennewitz.Ninja.DiffView*`: a pattern per family, covering every id in `packages.push` — and matching nothing in `packages.local` |
+| Glob Patterns | `Bennewitz.Ninja.AppServices*`, `Bennewitz.Ninja.ScopedEditors.*` and `Bennewitz.Ninja.DiffView.*`: a pattern per family, covering every id in `packages.push` — and matching nothing in `packages.local` |
 
 ⛔ **ONE policy, never one per package id.** nuget.org mints one API key per token exchange, scoped
 to **one** matching policy. Two policies matching the same repository and workflow means one is
