@@ -1,8 +1,8 @@
 {
   // A received file written beside a project's markup is handed to no markup compiler: the one line of
-  // the root Directory.Build.props that adds **/*.received.* to DefaultItemExcludes, which the Avalonia
-  // package's own glob honours, read back through MSBuild's evaluation of every project under src that
-  // holds markup. Every edit but the blinding one is to that props file, so each run rebuilds the graph.
+  // src/DiffView.Build.props that adds **/*.received.* to DefaultItemExcludes, which the Avalonia package's
+  // own glob honours, read back through MSBuild's evaluation of every DiffView project under src that holds
+  // markup. Every edit but the blinding one is to that props file, so each run rebuilds the graph.
   //
   //   dotnet run scripts/mutate-behaviour.cs -- --set tests/DiffView.Avalonia.Tests/Mutations/received-files.json
   //
@@ -16,7 +16,7 @@
   "mutations": [
     {
       "name": "a received file is globbed as markup",
-      "file": "Directory.Build.props",
+      "file": "src/DiffView.Build.props",
       "old": "<DefaultItemExcludes>$(DefaultItemExcludes);**/*.received.*</DefaultItemExcludes>",
       "new": "",
       "killer": "A_received_file_beside_the_markup_is_not_handed_to_the_markup_compiler",
@@ -24,7 +24,7 @@
     },
     {
       "name": "only a received file at a project's own root is left out",
-      "file": "Directory.Build.props",
+      "file": "src/DiffView.Build.props",
       "old": ";**/*.received.*<",
       "new": ";*.received.*<",
       "killer": "A_received_file_beside_the_markup_is_not_handed_to_the_markup_compiler",
@@ -33,7 +33,7 @@
     },
     {
       "name": "the exclusion is spelled for Verify's frames alone",
-      "file": "Directory.Build.props",
+      "file": "src/DiffView.Build.props",
       "old": ";**/*.received.*<",
       "new": ";**/*.received.png<",
       "killer": "A_received_file_beside_the_markup_is_not_handed_to_the_markup_compiler",
@@ -50,7 +50,7 @@
     },
     {
       "name": "the exclusion's patterns are listed the other way round",
-      "file": "Directory.Build.props",
+      "file": "src/DiffView.Build.props",
       "old": "$(DefaultItemExcludes);**/*.received.*",
       "new": "**/*.received.*;$(DefaultItemExcludes)",
       "expect": "green",

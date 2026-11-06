@@ -7,7 +7,7 @@ namespace Bennewitz.Ninja.DiffView.Tests;
 /// A gate's rejected output is never a source: no <c>*.received.*</c> file is handed to the markup
 /// compiler. <c>ReferenceAuditTests</c> writes <c>&lt;name&gt;.received.axaml</c> beside a stale compat
 /// dictionary in <c>src/DiffView.Avalonia/Themes/Compat</c>, and the Avalonia package globs every
-/// <c>**/*.axaml</c> under a project, so until the root <c>Directory.Build.props</c> left them out a stray
+/// <c>**/*.axaml</c> under a project, so until <c>src/DiffView.Build.props</c> left them out a stray
 /// one failed run left there was compiled and embedded — measured, with the build naming it nowhere — and
 /// the library would have packed it.
 /// </summary>
