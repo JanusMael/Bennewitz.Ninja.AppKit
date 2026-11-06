@@ -16,7 +16,7 @@ development stays in Bennewitz.Ninja.DiffView, which is not archived.
 **Next, in order:**
 1. **AppServices' and ScopedEditors' next releases** are each a family release, `appservices/v…` and
    `scopededitors/v…`, on the maintainer's word when the family next changes. The policy names this
-   repository and the blank-version preflight logged in, run `42296189806`.
+   repository and the blank-version preflight logged in, run `42300352526`.
 
 ## What the merge changed for consumers
 
@@ -79,6 +79,6 @@ Built on a branch, in a fresh clone of AppServices at `0c2dfae`, importing Scope
 - **AppServices and ScopedEditors run on Windows and macOS in CI for the first time**, in the one
   `build` matrix.
 - **`git filter-repo` strips commit signatures**, so ScopedEditors' commit hashes changed although only
-  its tags were renamed. `.git/filter-repo/commit-map` in the import clones maps them.
+  its tags were renamed. Its archived repository keeps the original commits.
 - **nuget.org's policy cannot change its repository.** The rename needed a new policy naming AppKit,
   and AppServices' old one deleted.
