@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <IsPackable>true</IsPackable>
+    <PackageId>Bennewitz.Ninja.ScopedEditors.Abstractions</PackageId>
+    <AssemblyName>ScopedEditors.Abstractions</AssemblyName>
+    <Description>The scope and override model for schema-driven editing of structured data: editor schemas, scopes, values, workspaces, and the severity model that annotates them. Framework-free.</Description>
+    <PackageTags>abstractions;editors;scopes;schema;severity</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- ⛔ NO REFERENCES, DELIBERATELY. This is the package a test or a non-UI host consumes, so it
+       reaches nothing — the same property AppServices.Abstractions protects in the other family.
+       ⭐ The severity model lives here rather than with app services because measurement put it
+       here: ViewModels and .Avalonia use it, and the AppServices family uses none of it. -->
+</Project>
