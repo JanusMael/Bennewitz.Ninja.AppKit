@@ -1,0 +1,755 @@
+using System.Globalization;
+using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Platform;
+using Avalonia.Platform.Storage;
+using Avalonia.Styling;
+using Bennewitz.Ninja.DiffView;
+using Bennewitz.Ninja.DiffView.Core;
+using Bennewitz.Ninja.LayeredEditors.Avalonia.Diagnostics;
+using Serilog;
+
+namespace Bennewitz.Ninja.DiffView.Demo;
+
+public sealed partial class MainWindow : Window
+{
+    private string? _note;
+    private PaneSource? _left;
+    private PaneSource? _right;
+
+    public MainWindow()
+    {
+        InitializeComponent();
+
+        Diff.LoggerFactory = DemoLogging.Factory;
+        Diff.BuildCompleted += (_, _) => UpdateStatus();
+        Diff.BuildFailed += (_, _) => UpdateStatus();
+        Diff.RenderFault += (_, _) => UpdateStatus();
+
+        Unified.LoggerFactory = DemoLogging.Factory;
+        Unified.BuildCompleted += (_, _) => UpdateStatus();
+        Unified.BuildFailed += (_, _) => UpdateStatus();
+        Unified.RenderFault += (_, _) => UpdateStatus();
+
+        Viewer.LoggerFactory = DemoLogging.Factory;
+        Viewer.BuildCompleted += (_, _) => UpdateStatus();
+        Viewer.BuildFailed += (_, _) => UpdateStatus();
+        Viewer.RenderFault += (_, _) => UpdateStatus();
+
+        // --unified or --viewer starts in that view; the Control submenu is the same choice.
+        ShowView(DebugFlags.View);
+
+        // --edit left|right|both starts a side editable, through the same two menu items, so
+        // there is one switch per side rather than a flag and a menu that can disagree. The
+        // names here are the XAML items'; the flags' are DebugFlags'.
+        EditLeft.IsChecked = DebugFlags.EditLeft;
+        EditRight.IsChecked = DebugFlags.EditRight;
+        Diff.LeftReadOnly = !DebugFlags.EditLeft;
+        Diff.RightReadOnly = !DebugFlags.EditRight;
+
+        // --palette colour-blind, through that same menu item and for the same reason. The toggle
+        // underneath is App.UseColourBlindPalette, and setting it here instead would leave the menu
+        // showing one palette while the window drew the other.
+        ColourBlindPalette.IsChecked = DebugFlags.ColourBlindPalette;
+        App.UseColourBlindPalette(DebugFlags.ColourBlindPalette);
+
+        RefreshGestureLabels();
+
+        // A host's own entry, through the amend shape: inserted after the control's copy items so
+        // that its position is something the demo can be looked at to check. Both views that have
+        // menus, because the seam is the same one on each; the viewer opens none to amend.
+        Diff.PaneContextMenuOpening += OnPaneContextMenuOpening;
+        Unified.PaneContextMenuOpening += OnPaneContextMenuOpening;
+        Diff.HeaderContextMenuOpening += OnHeaderContextMenuOpening;
+
+        // After the demo's own menu entries are added, so that choosing one of those is logged too,
+        // and before the window opens or any template applies, so that it sees the panes and the
+        // first size. Kept alive by the handlers it registers on this window and its views.
+        _ = new ActionLog(this, MainMenu, Diff, Unified);
+
+        // The sides load when the window opens, so a host of the window — the smoke snapshot
+        // test — can configure the control between construction and the first build.
+        Opened += OnOpened;
+        UpdateStatus();
+    }
+
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        Opened -= OnOpened;
+        LoadPanes();
+        UpdateStatus();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.F12)
+        {
+            AvaloniaDiagnostics.ToggleLiveLogWindow();
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyDown(e);
+    }
+
+    /// <summary>
+    /// Loads the two sides — the files named by <c>--left</c> / <c>--right</c>, or the bundled
+    /// small fixture — into the composite, which builds on its worker and reports every state
+    /// in its own strip. A file that cannot be read falls back to the fixture and says so here
+    /// and in the log.
+    /// </summary>
+    private void LoadPanes()
+    {
+        _left = LoadSource(DebugFlags.LeftPath, "left.txt");
+        _right = LoadSource(DebugFlags.RightPath, "right.txt");
+        ApplySources();
+    }
+
+    /// <summary>
+    /// Hands the sources to the view that is on screen and takes them away from the others, so
+    /// only one of the three builds, holds a model and keeps two documents alive. The views off
+    /// screen are emptied first, so no moment has two of them holding the sources.
+    /// </summary>
+    private void ApplySources()
+    {
+        DemoView view = CurrentView;
+        if (view != DemoView.SideBySide)
+        {
+            Diff.LeftSource = null;
+            Diff.RightSource = null;
+        }
+
+        if (view != DemoView.Unified)
+        {
+            Unified.LeftSource = null;
+            Unified.RightSource = null;
+        }
+
+        if (view != DemoView.Viewer)
+        {
+            Viewer.LeftSource = null;
+            Viewer.RightSource = null;
+        }
+
+        switch (view)
+        {
+            case DemoView.Unified:
+                Unified.LeftSource = _left;
+                Unified.RightSource = _right;
+                break;
+            case DemoView.Viewer:
+                Viewer.LeftSource = _left;
+                Viewer.RightSource = _right;
+                break;
+            default:
+                Diff.LeftSource = _left;
+                Diff.RightSource = _right;
+                break;
+        }
+    }
+
+    /// <summary>The view on screen, read off the Control submenu, which is the one place it is kept.</summary>
+    private DemoView CurrentView =>
+        UnifiedView.IsChecked ? DemoView.Unified
+        : ViewerView.IsChecked ? DemoView.Viewer
+        : DemoView.SideBySide;
+
+    /// <summary>Ticks one view's entry in the Control submenu and puts that view, and only it, on screen.</summary>
+    private void ShowView(DemoView view)
+    {
+        EditorView.IsChecked = view == DemoView.SideBySide;
+        UnifiedView.IsChecked = view == DemoView.Unified;
+        ViewerView.IsChecked = view == DemoView.Viewer;
+        Diff.IsVisible = view == DemoView.SideBySide;
+        Unified.IsVisible = view == DemoView.Unified;
+        Viewer.IsVisible = view == DemoView.Viewer;
+    }
+
+    private PaneSource LoadSource(string? path, string fixtureFileName)
+    {
+        if (path is not null)
+        {
+            try
+            {
+                return PaneSource.FromFile(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _note = $"could not read {path}: {ex.Message}";
+                Log.Error(ex, "Could not read {Path}; showing the bundled sample instead", path);
+            }
+        }
+
+        using Stream stream = AssetLoader.Open(new Uri($"avares://DiffView.Demo/Fixtures/small/{fixtureFileName}"));
+        using StreamReader reader = new(stream);
+        return new PaneSource(reader.ReadToEnd()) { Title = fixtureFileName };
+    }
+
+    private async void OnOpenLeft(object? sender, RoutedEventArgs e)
+    {
+        await OpenIntoAsync(DiffSide.Left);
+    }
+
+    private async void OnOpenRight(object? sender, RoutedEventArgs e)
+    {
+        await OpenIntoAsync(DiffSide.Right);
+    }
+
+    /// <summary>
+    /// Picks a file and loads it into one side. Reading goes through <see cref="PaneSource.FromFile"/>,
+    /// so the encoding and a binary payload are detected there; a read failure is reported in
+    /// the composite's status lane and the log, with the path.
+    /// </summary>
+    private async Task OpenIntoAsync(DiffSide side)
+    {
+        IReadOnlyList<IStorageFile> files;
+        try
+        {
+            files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = side == DiffSide.Left ? "Open the left file" : "Open the right file",
+                AllowMultiple = false,
+            });
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or PlatformNotSupportedException)
+        {
+            Log.Warning(ex, "The file picker is not available on this platform");
+            Status().SetFailure("The file picker is not available here.");
+            return;
+        }
+
+        string? path = files.Count == 0 ? null : files[0].TryGetLocalPath();
+        if (path is null)
+        {
+            return;
+        }
+
+        try
+        {
+            PaneSource source = PaneSource.FromFile(path);
+            if (side == DiffSide.Left)
+            {
+                _left = source;
+            }
+            else
+            {
+                _right = source;
+            }
+
+            ApplySources();
+
+            Log.Information("Opened {Path} into the {Side} pane ({Length} bytes)", path, side, source.Text.Length);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Log.Error(ex, "Could not read {Path}", path);
+            Status().SetFailure($"Could not read {path}: {ex.Message}");
+        }
+    }
+
+    private void OnExit(object? sender, RoutedEventArgs e)
+    {
+        Close();
+    }
+
+    private void OnVariantLight(object? sender, RoutedEventArgs e)
+    {
+        SetVariant(ThemeVariant.Light);
+    }
+
+    private void OnVariantDark(object? sender, RoutedEventArgs e)
+    {
+        SetVariant(ThemeVariant.Dark);
+    }
+
+    private void OnVariantSystem(object? sender, RoutedEventArgs e)
+    {
+        SetVariant(ThemeVariant.Default);
+    }
+
+    private void OnToggleColourBlindPalette(object? sender, RoutedEventArgs e)
+    {
+        App.UseColourBlindPalette(ColourBlindPalette.IsChecked);
+        UpdateStatus();
+    }
+
+    /// <summary>
+    /// Puts the chosen view on screen. The options travel with the switch, and only the view on
+    /// screen keeps the sources, so nothing is built twice.
+    /// </summary>
+    private void OnChooseView(object? sender, RoutedEventArgs e)
+    {
+        ShowView(ReferenceEquals(sender, UnifiedView) ? DemoView.Unified
+            : ReferenceEquals(sender, ViewerView) ? DemoView.Viewer
+            : DemoView.SideBySide);
+        ApplySources();
+        UpdateStatus();
+    }
+
+    // ── Editing (plan 00003) ───────────────────────────────────────────────────────────────
+    //
+    // The unified view and the viewer stay read-only whatever these say: the unified document is
+    // composed from both sides, so half its lines belong to one file and half to the other, and
+    // the viewer has no editing to switch on.
+
+    private void OnToggleEditLeft(object? sender, RoutedEventArgs e)
+    {
+        Diff.LeftReadOnly = !EditLeft.IsChecked;
+        UpdateStatus();
+    }
+
+    private void OnToggleEditRight(object? sender, RoutedEventArgs e)
+    {
+        Diff.RightReadOnly = !EditRight.IsChecked;
+        UpdateStatus();
+    }
+
+    private void OnCopyToLeft(object? sender, RoutedEventArgs e) => Copy(DiffSide.Left);
+
+    private void OnCopyToRight(object? sender, RoutedEventArgs e) => Copy(DiffSide.Right);
+
+    /// <summary>
+    /// The selection when there is one and the current block otherwise — the rule the gutter's
+    /// arrows and the copy chord both follow, so the menu cannot promise one and deliver the other.
+    /// </summary>
+    private void Copy(DiffSide side)
+    {
+        if (CurrentView == DemoView.Viewer)
+        {
+            Note("The viewer copies nothing: it has no arrows and no copy verbs.");
+            return;
+        }
+
+        if (!Diff.CanCopyToward(side))
+        {
+            Note(Diff.CurrentChangeIndex < 0
+                ? $"Nothing to copy onto the {side} side — select some lines, or press {Gesture(DiffCommand.NextChange)} to pick a change block."
+                : $"Cannot copy onto the {side} side: it is read-only.");
+            return;
+        }
+
+        Diff.CopyToward(side);
+        UpdateStatus();
+    }
+
+    private void OnNextChange(object? sender, RoutedEventArgs e) => Navigate(next: true);
+
+    private void OnPreviousChange(object? sender, RoutedEventArgs e) => Navigate(next: false);
+
+    /// <summary>
+    /// The walk, on whichever view is on screen. The viewer binds no key, so for it these two
+    /// entries stand in for the F7 and Shift+F7 the other two views answer.
+    /// </summary>
+    private void Navigate(bool next)
+    {
+        switch (CurrentView)
+        {
+            case DemoView.Unified when next:
+                Unified.NextChange();
+                break;
+            case DemoView.Unified:
+                Unified.PreviousChange();
+                break;
+            case DemoView.Viewer when next:
+                Viewer.NextChange();
+                break;
+            case DemoView.Viewer:
+                Viewer.PreviousChange();
+                break;
+            default:
+                if (next)
+                {
+                    Diff.NextChange();
+                }
+                else
+                {
+                    Diff.PreviousChange();
+                }
+
+                break;
+        }
+
+        UpdateStatus();
+    }
+
+    /// <summary>
+    /// Rebinding, in code, on the control — which is all plan 00009 offers and all it means to.
+    /// Both views take the same two changes, and the menu's accelerators are written back from
+    /// <c>GestureFor</c> afterwards, so the labels move with the keys instead of going stale.
+    /// </summary>
+    private void OnToggleRebindNavigation(object? sender, RoutedEventArgs e)
+    {
+        KeyGesture? forward = RebindNavigation.IsChecked ? new KeyGesture(Key.Down, KeyModifiers.Control) : new KeyGesture(Key.F7);
+        KeyGesture? back = RebindNavigation.IsChecked ? new KeyGesture(Key.Up, KeyModifiers.Control) : new KeyGesture(Key.F7, KeyModifiers.Shift);
+
+        foreach (DiffKeyMap map in (DiffKeyMap[])[Diff.KeyMap, Unified.KeyMap])
+        {
+            map[DiffCommand.NextChange] = forward;
+            map[DiffCommand.PreviousChange] = back;
+        }
+
+        RefreshGestureLabels();
+        Note($"Next change is now on {Gesture(DiffCommand.NextChange)}.");
+    }
+
+    /// <summary>Writes the menu's accelerators from the key map, which is the only place they live.</summary>
+    private void RefreshGestureLabels()
+    {
+        NextChange.InputGesture = Diff.GestureFor(DiffCommand.NextChange);
+        PreviousChange.InputGesture = Diff.GestureFor(DiffCommand.PreviousChange);
+        CopyToLeft.InputGesture = Diff.GestureFor(DiffCommand.CopyToLeft);
+        CopyToRight.InputGesture = Diff.GestureFor(DiffCommand.CopyToRight);
+    }
+
+    private string Gesture(DiffCommand command)
+    {
+        return Diff.GestureFor(command)?.ToString() ?? "nothing";
+    }
+
+    /// <summary>
+    /// What a host does with the pane menu: read what was clicked, and add an entry of its own.
+    /// It goes after the control's copy items where there are any, and at the top otherwise —
+    /// which is the unified view, where those verbs do not exist to insert after.
+    /// </summary>
+    private void OnPaneContextMenuOpening(object? sender, DiffPaneContextMenuEventArgs e)
+    {
+        int after = e.Items.ToList().FindLastIndex(i => i.Verb is DiffCommand.CopyToLeft or DiffCommand.CopyToRight
+            or DiffCommand.CopyBlockToLeft or DiffCommand.CopyBlockToRight);
+
+        DiffPaneContext context = e.Context;
+        e.Items.Insert(after + 1, new DiffMenuItem
+        {
+            Header = "What did I click?",
+            Command = new DemoCommand(() => Note(Describe(context))),
+        });
+    }
+
+    /// <summary>The context in one line, which is the point of the entry above.</summary>
+    /// <remarks>
+    /// A null <c>Side</c> used to mean the unified view and nothing else. Since plan 00012 it also
+    /// means a surface that belongs to neither pane — the connector, and the map's marker column
+    /// between its two lanes — so the two have to be told apart or this reports "unified" in the
+    /// side-by-side view. That is what it did the first time the connector's menu was driven by
+    /// hand, which is the sort of thing only driving it by hand finds.
+    /// </remarks>
+    private static string Describe(DiffPaneContext context)
+    {
+        string side = context.Side is { } s ? s.ToString().ToLowerInvariant()
+            : context.IsUnified ? "unified"
+            : "neither side";
+        string block = context.Block is { } b ? $"change {b.Index + 1}" : "no change";
+        string selection = context.SelectedLines is { } lines ? $"{lines.Count} line(s) selected" : "no selection";
+        return $"{context.Region} · {side} · line {context.LineNumber} (source line {context.SourceLine?.ToString(CultureInfo.InvariantCulture) ?? "—"}) · {block} · {selection}";
+    }
+
+    /// <summary>
+    /// The header's menu is the plan's second context type, so the demo reads that one too —
+    /// otherwise it would demonstrate half the seam and a host would have only the pane's shape
+    /// to copy.
+    /// </summary>
+    private void OnHeaderContextMenuOpening(object? sender, DiffHeaderContextMenuEventArgs e)
+    {
+        DiffHeaderContext context = e.Context;
+        e.Items.Add(DiffMenuItem.Separator());
+        e.Items.Add(new DiffMenuItem
+        {
+            Header = "What did I click?",
+            Command = new DemoCommand(() => Note(Describe(context))),
+        });
+    }
+
+    /// <summary>A header's context in one line. No line number on it to report — that is the point.</summary>
+    private static string Describe(DiffHeaderContext context)
+    {
+        string state = context.IsDirty ? "unsaved edits" : "saved";
+        return $"header · {context.Side.ToString().ToLowerInvariant()} · {context.Title} · {context.Detail ?? "—"} · {state}";
+    }
+
+    /// <summary>The demo's own command type; the library's is internal, as a host's would be its own.</summary>
+    private sealed class DemoCommand(Action execute) : ICommand
+    {
+        public event EventHandler? CanExecuteChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public bool CanExecute(object? parameter) => true;
+
+        public void Execute(object? parameter) => execute();
+    }
+
+    private void OnSaveLeft(object? sender, RoutedEventArgs e) => Save(DiffSide.Left);
+
+    private void OnSaveRight(object? sender, RoutedEventArgs e) => Save(DiffSide.Right);
+
+    private void Save(DiffSide side)
+    {
+        SaveOutcome outcome = Diff.Save(side);
+        Note(outcome switch
+        {
+            SaveOutcome.Saved => $"Saved the {side} side.",
+            SaveOutcome.NotDirty => $"The {side} side has no unsaved edits.",
+            SaveOutcome.NoPath => $"The {side} side did not come from a file.",
+            SaveOutcome.ChangedOnDisk => $"The {side} side changed on disk; nothing was written.",
+            _ => $"The {side} side could not be saved; the strip says why.",
+        });
+    }
+
+    private void OnRevertLeft(object? sender, RoutedEventArgs e) => Revert(DiffSide.Left);
+
+    private void OnRevertRight(object? sender, RoutedEventArgs e) => Revert(DiffSide.Right);
+
+    private void Revert(DiffSide side)
+    {
+        Diff.Revert(side);
+        Note($"Reverted the {side} side to its source.");
+    }
+
+    private void Note(string text)
+    {
+        _note = text;
+        UpdateStatus();
+    }
+
+    private void OnToggleIgnoreWhitespace(object? sender, RoutedEventArgs e)
+    {
+        Diff.IgnoreWhitespace = IgnoreWhitespace.IsChecked;
+        Unified.IgnoreWhitespace = IgnoreWhitespace.IsChecked;
+        Viewer.IgnoreWhitespace = IgnoreWhitespace.IsChecked;
+    }
+
+    private void OnToggleIgnoreCase(object? sender, RoutedEventArgs e)
+    {
+        Diff.IgnoreCase = IgnoreCase.IsChecked;
+        Unified.IgnoreCase = IgnoreCase.IsChecked;
+        Viewer.IgnoreCase = IgnoreCase.IsChecked;
+    }
+
+    private void OnToggleSyncHorizontal(object? sender, RoutedEventArgs e)
+    {
+        // The two views with two panes; the unified view has one to scroll.
+        Diff.SyncHorizontalScroll = SyncHorizontal.IsChecked;
+        Viewer.SyncHorizontalScroll = SyncHorizontal.IsChecked;
+    }
+
+    private void OnToggleSyntax(object? sender, RoutedEventArgs e)
+    {
+        // The bundled fixture is .txt, which no grammar claims: open a .cs or .json file, or pass
+        // --left / --right, to see this do anything.
+        Diff.UseSyntaxHighlighting = UseSyntax.IsChecked;
+        Unified.UseSyntaxHighlighting = UseSyntax.IsChecked;
+        Viewer.UseSyntaxHighlighting = UseSyntax.IsChecked;
+    }
+
+    private void OnShowAllRows(object? sender, RoutedEventArgs e) => SetFolding(null);
+
+    private void OnShowDifferencesOnly(object? sender, RoutedEventArgs e) => SetFolding(0);
+
+    private void OnShowContext(object? sender, RoutedEventArgs e) => SetFolding(DiffKeyMap.DefaultContextRows);
+
+    /// <summary>
+    /// All three views, because the option is each view's and the demo switches between them with
+    /// the comparison already loaded.
+    /// </summary>
+    private void SetFolding(int? contextRows)
+    {
+        Diff.UnchangedContextRows = contextRows;
+        Unified.UnchangedContextRows = contextRows;
+        Viewer.UnchangedContextRows = contextRows;
+    }
+
+    private void OnToggleShowMinimap(object? sender, RoutedEventArgs e)
+    {
+        // The unified view has no minimap, so this reaches the two views with two panes only.
+        Diff.ShowMinimap = ShowMinimap.IsChecked;
+        Viewer.ShowMinimap = ShowMinimap.IsChecked;
+    }
+
+    private void OnToggleShowHeaders(object? sender, RoutedEventArgs e)
+    {
+        Diff.ShowHeaders = ShowHeaders.IsChecked;
+        Unified.ShowHeaders = ShowHeaders.IsChecked;
+        Viewer.ShowHeaders = ShowHeaders.IsChecked;
+    }
+
+    private void OnToggleShowStatusStrip(object? sender, RoutedEventArgs e)
+    {
+        Diff.ShowStatusStrip = ShowStatusStrip.IsChecked;
+        Unified.ShowStatusStrip = ShowStatusStrip.IsChecked;
+        Viewer.ShowStatusStrip = ShowStatusStrip.IsChecked;
+    }
+
+    private void OnToggleShowBanner(object? sender, RoutedEventArgs e)
+    {
+        Diff.ShowBanner = ShowBanner.IsChecked;
+        Unified.ShowBanner = ShowBanner.IsChecked;
+        Viewer.ShowBanner = ShowBanner.IsChecked;
+    }
+
+    private void OnToggleMinimapPlacement(object? sender, RoutedEventArgs e)
+    {
+        MinimapPlacement placement = MinimapOnLeft.IsChecked ? MinimapPlacement.Left : MinimapPlacement.Right;
+        Diff.MinimapPlacement = placement;
+        Viewer.MinimapPlacement = placement;
+    }
+
+    private void OnToggleShowWhitespace(object? sender, RoutedEventArgs e)
+    {
+        Diff.ShowWhitespace = ShowWhitespace.IsChecked;
+        Unified.ShowWhitespace = ShowWhitespace.IsChecked;
+        Viewer.ShowWhitespace = ShowWhitespace.IsChecked;
+    }
+
+    private void OnToggleShowLineEndings(object? sender, RoutedEventArgs e)
+    {
+        Diff.ShowLineEndings = ShowLineEndings.IsChecked;
+        Unified.ShowLineEndings = ShowLineEndings.IsChecked;
+        Viewer.ShowLineEndings = ShowLineEndings.IsChecked;
+    }
+
+    private void OnTabWidth(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string tag } && int.TryParse(tag, CultureInfo.InvariantCulture, out int width))
+        {
+            Diff.TabWidth = width;
+            Unified.TabWidth = width;
+            Viewer.TabWidth = width;
+        }
+    }
+
+    /// <summary>
+    /// A size, or the pane theme's own when the item carries no tag. Changing it re-primes the
+    /// padded rows, which is what keeps the two panes' extents equal across a font change.
+    /// </summary>
+    private void OnPaneFontSize(object? sender, RoutedEventArgs e)
+    {
+        double paneFont = sender is MenuItem { Tag: string tag } && double.TryParse(tag, CultureInfo.InvariantCulture, out double size)
+            ? size
+            : double.NaN;
+        Diff.PaneFontSize = paneFont;
+        Unified.PaneFontSize = paneFont;
+        Viewer.PaneFontSize = paneFont;
+    }
+
+    private void OnFind(object? sender, RoutedEventArgs e)
+    {
+        // The control's own Ctrl+F does this too; the item is here so the feature is findable. The
+        // viewer has no find at all — plan 00021 left it out on purpose — so the item says so
+        // rather than doing nothing.
+        switch (CurrentView)
+        {
+            case DemoView.Unified:
+                Unified.OpenFind();
+                break;
+            case DemoView.Viewer:
+                Note("The viewer has no find: switch to the side-by-side or the unified view to search.");
+                break;
+            default:
+                Diff.OpenFind();
+                break;
+        }
+    }
+
+    /// <summary>The status lane of the view on screen, which is where the demo's own notes go.</summary>
+    private StatusController Status()
+    {
+        return CurrentView switch
+        {
+            DemoView.Unified => Unified.Status,
+            DemoView.Viewer => Viewer.Status,
+            _ => Diff.Status,
+        };
+    }
+
+    private void OnToggleLiveLog(object? sender, RoutedEventArgs e)
+    {
+        AvaloniaDiagnostics.ToggleLiveLogWindow();
+    }
+
+    private async void OnOpenLogsFolder(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(LogPaths.LogsDirectory);
+            await Launcher.LaunchUriAsync(new Uri(LogPaths.LogsDirectory));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Log.Warning(ex, "Could not open the logs folder {LogDirectory}", LogPaths.LogsDirectory);
+        }
+    }
+
+    private void OnThrowOnUiThread(object? sender, RoutedEventArgs e)
+    {
+        // Lands in Dispatcher.UIThread.UnhandledException: logged with a stack, fatal-error dialog shown.
+        throw new InvalidOperationException("Deliberate test exception from Debug → Throw on the UI thread.");
+    }
+
+    private void OnThrowInUnobservedTask(object? sender, RoutedEventArgs e)
+    {
+        // The faulted task is dropped on purpose; its exception surfaces through
+        // TaskScheduler.UnobservedTaskException once the task is finalized, which the forced
+        // collection below brings forward from "eventually" to "now".
+        _ = Task.Run(() => throw new InvalidOperationException("Deliberate test exception from Debug → Throw in an unobserved task."));
+        _ = ForceFinalizationAsync();
+    }
+
+    private static async Task ForceFinalizationAsync()
+    {
+        await Task.Delay(500);
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+    }
+
+    private void SetVariant(ThemeVariant variant)
+    {
+        if (Application.Current is { } application)
+        {
+            application.RequestedThemeVariant = variant;
+        }
+
+        UpdateStatus();
+    }
+
+    private void UpdateStatus()
+    {
+        ThemeVariant requested = Application.Current?.RequestedThemeVariant ?? ThemeVariant.Default;
+        VariantLight.IsChecked = requested == ThemeVariant.Light;
+        VariantDark.IsChecked = requested == ThemeVariant.Dark;
+        VariantSystem.IsChecked = requested == ThemeVariant.Default;
+
+        // No machine-specific text in the rendered status: the snapshot tests compare this window
+        // across machines. The diff's own state, counts and timings live in its status strip; the
+        // logs path is one hover away, in the Debug menu, and in the log itself. A note carries a
+        // path only when a flag named one, which no snapshot does.
+        string palette = ColourBlindPalette.IsChecked ? "colour-blind" : "default";
+        string layout = CurrentView switch
+        {
+            DemoView.Unified => "unified",
+            DemoView.Viewer => "viewer",
+            _ => "side by side",
+        };
+        string note = _note is null ? string.Empty : $"   ·   {_note}";
+        string editable = (EditLeft.IsChecked, EditRight.IsChecked) switch
+        {
+            (true, true) => "both",
+            (true, false) => "left",
+            (false, true) => "right",
+            _ => "neither",
+        };
+        string dirty = (Diff.IsDirty(DiffSide.Left), Diff.IsDirty(DiffSide.Right)) switch
+        {
+            (true, true) => "   ·   unsaved: both",
+            (true, false) => "   ·   unsaved: left",
+            (false, true) => "   ·   unsaved: right",
+            _ => string.Empty,
+        };
+        StatusText.Text = $"Theme: {DebugFlags.Theme}   ·   Variant: {requested} (actual {ActualThemeVariant})   ·   Palette: {palette}   ·   View: {layout}   ·   Editable: {editable}   ·   Culture: {DebugFlags.Culture?.Name ?? "(machine)"}{dirty}{note}   ·   F12: live log";
+        ToolTip.SetTip(StatusText, $"Logs: {LogPaths.LogsDirectory}");
+    }
+}

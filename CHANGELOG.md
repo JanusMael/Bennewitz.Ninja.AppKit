@@ -1,0 +1,864 @@
+# Changelog
+
+All notable changes to DiffView are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
+[Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+
+- **`docs/template-parts.md`, a reference the code writes** — plan 00030. Every control the library defines, its
+  template parts with their elements and `AutomationId`s, and whether code looks each part up by its name, which
+  is what someone re-templating a control or driving one needs. `TemplatePartReferenceTests` generates it from what
+  the gates read, `BNXQ1003`'s reading through `TemplatePartRule.ReadParts` among them, and fails while the committed
+  file differs, so it cannot go stale. `scripts/gen-template-parts` rewrites it, and the hosting guide links to it.
+- **`AgentBaseline`, plan 00034's consolidation tool** — `src/AgentBaseline`, not a package. `agent-baseline
+  --manifest <file>` or `--list <file>`, with `--seed <label>` and `--decisions <file>`, reviews many machines'
+  `CLAUDE.md` or `AGENTS.md` against one seed: the seed on the left as an accumulator edited by hand, each other
+  candidate on the right in turn by F8 and Shift+F8, and take, leave, drop and defer acting on the section at a
+  pane's caret. A take or a drop edits the accumulator where its own parse puts the section and is refused if it
+  would change anything else, so a reordered candidate cannot write one rule over another. The corpus is read
+  from a manifest or a path list, normalised — a document nested in a list item unwrapped, line endings LF, the
+  raw bytes kept — and pruned as it is walked: build and tool output never descended, copies of our own
+  documents named, pointer files counted. A save writes the baseline as LF to a new path, never one the corpus
+  read, with a provenance report and a decision file beside it that a later run begins from. A candidate is
+  stale only where the accumulator moved under a version of its own after the candidate was reviewed, and a save
+  over stale candidates is made twice, the first saying where.
+- Plan 00027 — the locale caveat reaches the consumer. `Bennewitz.Ninja.DiffView.Avalonia`'s package
+  description now says it **ships eight machine-generated locales, which apply without
+  configuration**: the blurb is what nuget search results and the package sidebar show, and it had
+  said nothing about localization, so a package could be chosen without ever learning that installing
+  it localizes the control with nothing asked of the host. The full caveat stays in the readme
+  rendered beneath it, which already carried it.
+- `LocaleCaveatTests` holds the caveat's eleven places in agreement — the blurb, `README.md`,
+  `docs/hosting-diffview.md` and the eight locale files' headers — asserting that each states the
+  translations are machine-generated and unreviewed, and that **none** of them claims native review
+  gates the release, which it stopped doing on 2026-09-18. The README had told its public readers
+  otherwise for three and a half weeks and nothing caught it.
+
+### Changed
+
+- **`packages.push` says what this repository publishes.** `PackagesPushTests` holds it to what the solution
+  packs and to what each of the release's two publishing steps names, so a project made packable and left
+  unclassified fails the suite rather than surprising nuget.org, where an id cannot be withdrawn.
+- **The family's conventions at Templates' `2026.4.1103`.** `scripts/repo-conventions.cs` is that release's copy,
+  which also checks that markdown is checked out as LF and that a trimming repository's family packages are
+  trimmable; DiffView meets both. `VSTHRD101` and `VSTHRD110` now fail the build in every project and script: an
+  async lambda given where a void delegate is expected, which ends the process on a throw, and a task nobody
+  awaits, which loses the failure. Neither fires here today. The analyzer package is private, so no package
+  carries it.
+- **The overview map docks left by default.** `SideBySideDiffView.MinimapPlacement`, which `DiffViewer`
+  shares, was registered with no default, so the enum's zero, `Right`, was the default; it is registered as
+  `Left` now, and a host that wants the map on the right sets `MinimapPlacement="Right"`. Nothing else about
+  the map moves with it: the left lane is still the left file, and the current-block marker and the find
+  ticks still face the panes. The demo's *Overview map on the left* starts ticked, to agree with the views it
+  switches.
+- **The quality packages move to XamlQuality `2026.4.1026` and AssemblyQuality `2026.4.1029`, and
+  `BNAQ1005` is adopted.** Test-only, as before. Every rule of both was read at the old pins and the new over
+  one commit first: no rule id moved, and none of the readings the gates rest on did. `AssemblyQualityTests`
+  now holds each library to granting its internals to its own tests alone, which `src/AGENTS.md`'s first rule
+  says and nothing checked — a library that takes the solution's generated grants still compiles. `BNXQ1010`
+  and `BNAQ1006` are declined, the first having nothing here to read and the second nothing here it could
+  fail on. `--guards` lists 88, and a full `scripts/mutate-gates` run carries 123 mutations.
+- **The accessibility gate accounts for a third markup-bearing project under `src`.** `AgentBaseline`,
+  plan 00034's consolidation tool, has a review window now, and `AccessibilityCoverageTests` holds its
+  markup as a subject with a floor of its own, beside the library's and the demo's; both of the gate's
+  accountings gained its term, and `scripts/mutate-gates` carries a mutation that trips each new reading
+  first, so `--guards` lists 82 and a full run carries 116 mutations. Step 1's tripwire, which failed the
+  moment that window's first markup landed and said to pay for it in the same change, is retired.
+- **`scripts/mutate-behaviour` proves any project's tests, from a set committed beside them.** A set
+  under `tests/<project>/Mutations/`, read with `--set`, names its test project and test files and
+  each mutation's edit, the test that must fail under it and the words it must fail with; a full run
+  fails while any declared test was killed by no mutation, and a kill by another test, a failure in
+  other words, or a test host that died with nothing failed by name each read as what they are rather
+  than as a kill. `--check` proves every edit applies once and every killer is declared, running
+  nothing, and a key the set's types do not know is refused rather than skipped. Each edit is reverted
+  from a snapshot of the file's bytes, so a set runs over uncommitted work. A test no mutation can
+  reach is marked `// inert-at-pin: <package> <version>`, as the gates' are, and excused while the set's
+  pins hold that version; a moved pin, a marker in no test and a kill of a marked test each fail the
+  run instead. The proofs of plan 00034's
+  steps were scripts re-made in each session's scratchpad; they are sets now, and so is the harness's
+  own.
+- **`scripts/mutate-behaviour --parallel <n>` runs mutation sets in `n` worktrees at once, over
+  uncommitted work.** The checkout's state is written as a git tree through a temporary index and loaded
+  into each worktree, so nothing is committed; each worktree runs every `n`th mutation of each set, and
+  the shards are judged as one run per set, refused unless every mutation is there exactly once over
+  that one tree. `--owed <ref>` runs only the sets a change since that ref owes, several `--set` run one
+  after another, and a mutation's build skips the restore and, when the mutation names its killer, runs
+  only the set's own test classes — which `--list` now prints for each mutation. Over the five sets
+  proving `AgentBaseline`, the same 176 mutations each time, a run took 40.2 minutes one at a time
+  before the trims, 32.8 in one worktree with them and 16.5 in four. `docs/mutation-proofs.md` describes
+  the method.
+- **Every committed mutation set carries a green control, and `scripts/mutate-behaviour` refuses a set
+  without one.** Corpus, ingest, review-session and section-decisions each gained one — an edit
+  equivalent by a stated law, in the file most of the set's mutations edit — so a test that fails under
+  every mutation of its set shows as `unexpected-red` under the control instead of reading as killed by
+  each of the others. A set holding red mutations and no green one is a setup fault, judged on the whole
+  set rather than on the part a shard or `--only` chose.
+- `scripts/mutate-behaviour` gives every build and test run it starts `AVALONIA_TELEMETRY_OPTOUT=1`: the
+  collector Avalonia's build task starts before each compile once kept a `--parallel` worktree for three
+  quarters of an hour after its build, and the harness had to leave that worktree behind.
+- `docs/ui-automation-notes.md` is the pointer it was written to become. The Windows driving batches
+  this repository measured landed in `Bennewitz.Ninja.XamlQuality`'s `docs/avalonia-gotchas.md` and
+  `docs/ai-drivable-ui.md` on 2026-10-13, so the staged copy of each is replaced by a row naming where
+  it lives and what XamlQuality's own measurement changed about it. ⛔ The **X11 batch has not
+  landed**, so that section is not a pointer and the copy here is still the only one — the reduction
+  is conditional on landing, never on sending, and each row was checked against the merged documents
+  rather than against the report of them.
+- `AGENTS.md` §9 corrects three claims that came back narrower: `SetForegroundWindow` turns on having
+  **sent input** rather than on already holding the foreground; a chord into an unfocused window
+  reaches the **window's own** key bindings rather than nothing at all; and *raising light-dismisses a
+  menu*, which XamlQuality could not reproduce, is kept with its missing qualifier — their trial raised
+  an **already-active** window, where a raise changes no foreground, and the only reason to raise is
+  that the window is not in front. §9 also gains the `drag` verb, which the driver has had since the
+  verb table was last written.
+- **`scripts/drive-demo` stops asking the pixel what the pixel is.** Its click guard derived the
+  expected window from `WindowFromPoint` on the very pixel it was about to click and accepted it for
+  any window of the demo's process, after which the obstruction check tested that same pixel against
+  it — circular, so the check **could not fail** for a window of this process. It caught other
+  applications, the case it was written for, which is why the hole survived review; what it let
+  through was the demo's **own F12 live-log window** standing in for a menu popup, with the click
+  going into the log and the driver reporting success. The expected window now comes from the tree:
+  `scripts/drive-demo-uia.ps1` walks `TreeWalker.RawViewWalker` to the element's nearest ancestor
+  carrying a window handle and reports it as a tenth field, which the driver reads and which it
+  **refuses when the reader answers `0`** rather than falling back. The raw view is load-bearing — a
+  menu's items sit under the main window's element in both tree views, so a control-view walk passes
+  the popup and would reintroduce the false refusal plan 00033 fixed. XamlQuality's correction, open
+  item 17; their second check is declined with a reason in `DECISIONS.md`. **Verified by an attended
+  run on a real Windows desktop**, in three readings: the guard refuses an obstruction proven topmost
+  at the click pixel and names it, allows the same click once it is gone, and reads a pane-menu entry
+  as drawn in a popup of its own while found under the main window's element — the one case the new
+  field changes an answer in.
+- **`scripts/drive-demo-interactive.ps1` exits with its verdict instead of always 0.** It had no
+  `exit` statement at all, so it returned 0 with a failure list — and the harness that wrapped it for
+  the verification above read that 0 and announced a pass over four failed assertions and one unread
+  reading, which is this script's own lesson told back to it from outside. The code now carries the
+  same three outcomes its summary already distinguished: `0` everything held, `1` something did not
+  hold, `2` nothing failed but a reading was never taken, `3` the pass did not finish — ordered so the
+  weakest claim wins. Continuing past a bad step stays the design; exiting 0 was an accident of there
+  being no statement. Proven by running the pass from a session with no desktop, where it now exits 1.
+- **A menu is not dismissed by raising its window — it lasts only while that window holds the
+  foreground.** `AGENTS.md` §9 had said for four plans that raising the demo before clicking a menu
+  entry light-dismisses the menu, and that is the wrong mechanism: XamlQuality measured that a window
+  *holding* the foreground keeps its menu open through every raise there is, while losing the
+  foreground closes it within 15 ms, before any raise — so a raise finds the menu already gone. The
+  practice is unchanged and now rests on the cause: open a menu once its window holds the foreground
+  and click the item without raising **or clicking the window** in between, a click on its own title
+  bar closing the menu with no change of foreground. ⭐ And a window behind another needs no raise at
+  all: a click on its uncovered menu header activates it and opens the menu in one click, which makes
+  *refuse rather than raise* a positive rule rather than a polite one.
+- The three affected claims and the inverted menu-tree finding are recorded in `DECISIONS.md`.
+  the instruction *"Do not ship a release on these without a speaker of the language reading them"* —
+  a decision lifted on 2026-09-18 that was still standing, as an imperative, in all eight files.
+
+- Plan 00033 — the by-hand pass's steps can fail. `scripts/drive-demo-interactive.ps1` judged each of
+  its twelve steps by whether the driver verb threw, so a splitter drag that moved nothing and a click
+  that was refused both reported success. Every step now asserts the state it was supposed to change,
+  reading **UI Automation where the tree answers, the demo's log where it does not**: which pane holds
+  the keyboard, a menu's entries by id and their absence after a dismiss, the find bar absent and
+  present either side of Ctrl+F, pane width across the splitter drag, the scroll bar's `RangeValue`
+  across the map drag, and from the log both that a navigation command fired and where it landed. A
+  reading that could not be taken is reported **unread** and never counted as a pass. `drive-demo`
+  gains a `probe <path>` verb for this, which treats an absent part as an answer; its reader reports
+  whether a part holds the keyboard and a `RangeValue` where it has one, and distinguishes a part that
+  is absent from a demo that has gone. Proven by re-breaking the defects it was built for: a drag that
+  ends where it began and a hover over a part with no tooltip fail exactly those two assertions and no
+  others.
+
+- The demo logs where a navigation landed — `Now at change 2 of 429` — after the command that moved
+  it, from the keyboard and from a pane menu alike, and **unconditionally**, so a *Next* at the last
+  change says it moved nothing rather than saying nothing at all.
+
+- The demo takes `--palette colour-blind|default`, so the colour-blind palette can be reached without
+  driving a menu. It sets the same menu item the View menu sets, as `--edit` does, and the summary
+  line names it.
+
+- Plan 00026 — a UI Automation harness can find every part of the library. Each control it defines
+  has an automation peer of its own, a control element of the type it is to a person — the three
+  views `Group`, a pane `Edit`, a header `Header`, the find bar `ToolBar`, the status strip
+  `StatusBar`, the overview map `ScrollBar`, the connector gutter and a pane's two margins `Custom` —
+  advertising no pattern; a pane answers for the keyboard focus its text area holds. Every part
+  carries an explicit `AutomationId`, which no culture changes, unique within the part that owns it:
+  `LeftPane`, `Gutter`, `FindQuery` and the rest, listed in the hosting guide. `DiffMenuItem.AutomationId`
+  is new: an entry takes its verb's name unless one is set, and an entry a host adds sets its own.
+
+- Plan 00023 phase 4 — `scripts/drive-demo` drives the demo on **Windows** as well as under X11, with
+  the same verbs, so a by-hand pass written on one platform runs on the other. It finds a part by its
+  `AutomationId` rather than by a coordinate — `click left --id SideBySide/LeftPane/LineNumbers`,
+  each step of the path unique within the step before it — through `scripts/drive-demo-uia.ps1`,
+  because UI Automation's managed client cannot be referenced from a portable app. Input is
+  `SendInput` and capture is `PrintWindow`, so no tool has to be installed. It **refuses** a click
+  that would land on another window and a chord sent while the demo does not hold the keyboard,
+  rather than acting where it was not aimed, and it never raises the demo over whatever the person is
+  doing. The macOS back end stays specified and unwritten: its permission grants are interactive.
+
+- Plan 00023 phase 3 — `--detach` on `scripts/run-demo.sh` (`-Detach` on `run-demo.ps1`), which
+  starts the demo in a session of its own through the driver's `launch` and returns once its window
+  is up; and `scripts/measure-menu-width.{cs,sh,ps1}`, which reports each shipped locale's widest menu
+  entry against English's in display columns, a CJK glyph taking two.
+- Plan 00023 phase 2 — `scripts/drive-demo.{cs,sh,ps1}`, a driver for the running demo under X11:
+  `launch` starts it detached, and `window`, `geometry`, `key`, `click`, `mark` / `popup`, `capture`
+  and `hover` drive it and look at it, chained with `then`. It finds its windows by what they are
+  rather than where they are, reads `xwininfo` the same under any locale, and refuses a click outside
+  its window and a black frame. The Windows back end is plan 00023's phase 4.
+
+- Plan 00028 — `BNAQ1004` over both shipped assemblies, internal types included: no namespace
+  carries a segment that shadows the root namespace of an assembly it references. It replaces the
+  hand-rolled test plan 00017 wrote, and also sees a shadow of a root reached only through a
+  forwarding facade, which that test missed.
+
+- Plan 00029 — `DiffViewLogCategories.Interaction`: where a click in a pane landed (the text, the
+  number margin, the change markers or the padding above a line), the selection a pointer finished,
+  and each fold that opened, written once per gesture at `Debug` — positions and counts, never text.
+  A host at `Information` is told none of it; enabling the one category is the whole switch.
+- In the demo, a log that says what was done: the machine by host name, the window's size and
+  scaling, each menu choice with the state it left, each command by name and where it came from,
+  each copy a pane asked for and each edit once it rests, with the library's interaction lines
+  raised to the demo's `Information`.
+
+- Plan 00021 — `DiffViewer`, the side-by-side view without the verbs: the editor's panes, gutters,
+  overview map, headers, banner and status strip over the same model, and no find, no context menus,
+  no copy arrows, no save or revert and no key bindings. Navigation stays — `CurrentChangeIndex`,
+  the four walks and their commands — and so do folding, the map's jump and all four chrome
+  toggles. It is `SideBySideDiffView`'s sibling rather than a subclass, sharing an internal
+  controller, so no reference to it reaches a verb it lacks; every property the two have in common
+  is the editor's own registration, so one owner-qualified setter in a comma-union selector styles
+  both. The hosting guide says which of the three controls to reach for, how far the viewer's
+  read-only guarantee goes, and the nine pseudo-classes a host can style on.
+- `DiffFindBarTheme`, `DiffPaneHeaderTheme` and `DiffStatusStripTheme`: the find bar's, the pane
+  header's and the status strip's control themes, each a compiled dictionary merged by its own
+  control.
+- In the demo, View ▸ Control, which puts the editor, the unified view or the viewer on screen, and
+  a `--viewer` flag beside `--unified`.
+
+- Plan 00025 — static-analysis gates, each proven able to fail: `XQ1002` interactive automation names
+  over an element set derived from the assembly, with a runtime walk that checks every declared
+  interactive part on screen; `XQ1003` template parts; `XQ1004` fixed grid slots; `AQ1002` and
+  `AQ1003`, keeping DiffPlex off `DiffView.Core`'s public surface and every UI framework out of its
+  references; `AQ1001` defaulted cancellation tokens; and a gate on the dependencies
+  `DiffView.Core`'s package declares.
+- `scripts/mutate-gates.{cs,sh,ps1}`, the committed mutation harness that proves every assertion in
+  those gates able to fail first. CI runs the harness's `--guards` check on Linux.
+- `mutate-gates --parallel <n>`, which runs every mutation in `n` worktrees cut from `HEAD` at once and
+  judges them as one run, refusing a merge that is not every mutation exactly once; it never edits the
+  checkout. Four worktrees took 11.5 minutes on the Windows box, against 27.8 sequential.
+- `catch-crash --expect auto`, which takes the suite's size from `dotnet test --list-tests` instead
+  of a number someone wrote down.
+- `LeftHeaderName` and `RightHeaderName` on both views, so each pane header carries an automation
+  name — `Header.Left.Name` and `Header.Right.Name`, translated in all eight shipped locales. The
+  demo's menu bar is named too.
+
+- Plan 00022 — `ShowHeaders`, `ShowStatusStrip` and `ShowBanner` on both views, each on by default,
+  so a host can switch the pane headers, the status strip and the banner off the way `ShowMinimap`
+  already switches the overview map. Switching one off takes what it carries: the headers carry the
+  header context menu and the focus accent, the strip carries the transient message lane, the save
+  outcomes and the caret position, and the banner carries the only in-control way to retry a failed
+  build or force an alignment — both verbs stay available as commands.
+- `InlineDiffView.HeadersPart`, and `BannerPart` on both views, with the unified view now looking up
+  the headers grid its theme had always named.
+- Three View-menu entries in the demo for the new toggles, beside the overview map's.
+
+- Plan 00001 — the side-by-side diff control on Avalonia 12, AvaloniaEdit and DiffPlex — with
+  its adversarial review and the ClaudeForge reuse analysis.
+- Repository scaffolding: solution, central package management, the local feed, reference
+  sources with on-demand fetching, CI workflow, and the `theme-audit` tool's first command
+  (`inventory`).
+- Phase 1, the virtual-padding spike: six headless tests under `tests/DiffView.Avalonia.Tests/Spike`
+  proving zero-width `DrawableTextRun` padding, caret movement across it, height priming,
+  text-band selection and caret drawing, 1:1 scroll sync, and the priming cost; the go and the
+  facts the presenter is built on are in `DECISIONS.md`.
+- `PixelProbe`, for pixel assertions on captured frames.
+- Stopwatch tests carry `Category=Perf` and stay out of the default `dotnet test` run;
+  `-p:IncludePerfTests=true` includes them.
+- Phase 2, the theme-key audit: `theme-audit report` and `theme-audit compat` over a JSON
+  configuration (`theme-audit.json`), inventorying Fluent, Simple and Semi as Avalonia resolves
+  them — Default fallback, inheritance, `StyleInclude`, linked files, code providers, brush
+  opacity — scanning consumers for undefined keys, scoring contrast pairs against each variant's
+  own surfaces, and writing `docs/theme-audit.md`; `--check` is the drift test.
+- The reviewed Fluent→Semi and Simple→Semi mappings and the generated
+  `Themes/Compat/FluentKeys.Semi.axaml` / `SimpleKeys.Semi.axaml`, which let a control templated
+  for Fluent or Simple (AvaloniaEdit's search panel) resolve every key under all six Semi variants.
+- `Themes/DiffView.Tokens.axaml`, the `DiffView.*` palette for Light and Dark, its colour-blind
+  sibling, the contrast contract in `contrast-pairs.json`, `SemiThemeVariants`, and the resource
+  URIs on `DiffViewResources`.
+- Reference-trait tests: the committed report and dictionaries equal a fresh run; every token
+  resolves under all ten targets; the AvaloniaEdit gaps are exactly the known ones; a
+  `TextEditor` with its search panel renders under each Semi variant with the compat dictionary.
+- `scripts/pack-theme-audit.*`, packing the tool as `Bennewitz.Ninja.ThemeAudit` 1.1.0.
+- Phase 3, the core model: `PaneSource` (bytes decoded by BOM, strict UTF-8, then Latin-1;
+  binary detected on the bytes), `TextProbe`, `LineSplitter`, `DiffOptions`, the similarity
+  gate, `DiffDocumentBuilder` producing a source-indexed `SideBySideDocument` (per-side lines,
+  aligned rows, change blocks with per-side line ranges, derived padding) with diagnostics and
+  warnings, `WordDiffCache` for lazily computed LRU-cached word-level pieces, and `DiffSearch`
+  over `IPaneText` with scope, whole-word, regex (non-backtracking first), a match cap and a
+  timeout. Tests for the seven invariants, every failure path, the cache and the search;
+  `Perf` measurements for the 10k and 200k pairs and the gate.
+- `fixtures/small`, the committed small pair; larger pairs are generated from a seed in the tests.
+- Phase 4, the pane presenter: `DiffPanePresenter` over the pane's source document, with the
+  padding mechanism lifted from the spike (`PaddingRun`, `PaddingElement`,
+  `PaddingElementGenerator`, `PaddingHeightPrimer`), `PaneMetadata` (bounds-checked,
+  version-stamped, 1-based), `DiffLineBackgroundRenderer` (row tints, hatched padding),
+  `DiffSelectionRenderer` and `DiffCaretRenderer` over text bands, `DiffLineNumberMargin` and
+  `ChangeMarkerMargin`, `DiffBrushes` with fallbacks, the fault boundary (`RenderFault`,
+  `RenderFaultEventArgs`, `IsDegraded`, `Faults`), the caret-column normalisation after `Home`
+  twice, `DiffViewStrings`, `DiffViewLogCategories`; the presenter's control themes in
+  `Themes/DiffPanePresenter.axaml`, merged into the control's own resources; the
+  `DiffView.MonospaceFontFamily` token.
+- `AGENTS.md`, the fact-shaped cross-file contracts, starting with the presenter's.
+- The demo shows two presenters over the bundled small fixture, or over the files named by
+  `--left` and `--right`, fed from one Core build; the status bar carries the diff counts.
+- Headless, pixel and snapshot tests for the presenter under all ten theme targets;
+  `PresenterHost`, `ThemeSwap` and `ThemeTargets` as shared fixtures.
+
+- Phase 5, the composite control: `SideBySideDiffView` with headers, banner, panes and status
+  strip; `DiffPaneHeader` (title, detail line, binary / empty / identical badge);
+  `DiffStatusStrip` (state pill, stale marker, progress after 100 ms, counts, changes, build
+  time, options, caret position, transient lane with dismiss); the state machine `Empty` /
+  `Building` / `Ready` / `Degraded` / `Failed` with the error, too-different and identical
+  banners and their Retry and Force actions; the latest-wins build worker with cancellation;
+  `ScrollSync` with equalised horizontal bars; `StatusController` and `StatusKind` lifted from
+  ClaudeForge onto `TimeProvider`; `DiffViewLog` as the one log formatter under the four
+  `DiffViewLogCategories`; `DiffViewStrings` behind every string of the new surface;
+  `DiffPanePresenter.PaneScrollViewer`; the compiled `SideBySideDiffViewTheme` and
+  `DiffViewColorBlindPalette`; the four 7:1 page pairs in `contrast-pairs.json` and the
+  brightened Dark status foregrounds.
+- The demo hosts the composite, opens files into either side through the file picker, toggles
+  ignore-whitespace, ignore-case, horizontal sync and the colour-blind palette, and loads its
+  sides on `Opened`.
+- Headless tests for every Phase 5 done-when item, `StatusControllerTests` on a fake clock,
+  snapshots of the headers and strip in both variants and both palettes plus the identical and
+  error banners; `CompositeHost`, `FakeTimeProvider` and `CapturingLoggerFactory` as fixtures.
+
+- Phase 6, word-level highlights: `WordDiffLookup` reads a modified row's two lines from the
+  live documents and asks `WordDiffCache` on the row's first frame; `DiffLineBackgroundRenderer`
+  draws a rectangle per changed piece over the row through the visual line's column mapping,
+  in `DiffView.WordInsertedBrush` / `WordDeletedBrush`; the composite creates one lookup per
+  build result, bound to that build's options, and `DiffPanePresenter.WordDiffLookup` takes it;
+  the change-marker margin's tooltip names a line too long for word-level pieces; the
+  `WordDiff.Skipped` string.
+- Headless tests for the rectangle geometry and the render-only cache, the one-megabyte single
+  line without pieces and its tooltip, the ignore-whitespace toggle and the word-diff modes;
+  a snapshot of modified rows with only their changed words highlighted, in both variants.
+
+- Phase 7, navigation and overview: `CurrentChangeIndex` with `NextChange` / `PreviousChange` /
+  `FirstChange` / `LastChange` and `SwitchPane` commands, F7 / Shift+F7 / F6 default key
+  bindings, the current-block border in both panes, "change i of n" in the strip and the
+  end-of-changes notices; `DiffMinimap` (pixel buckets by strongest kind, viewport rectangle,
+  current-change mark, click-to-jump, row tooltip); `ChangeConnectorGutter` (a polygon per
+  visible block joining the sides' extents, the current block outlined, click selects, drag
+  resizes through `SplitRatio`, block tooltip); tooltips on line numbers (the counterpart line)
+  and markers (the block summary); `PaneMetadata.OtherLine` / `BlockAt`;
+  `DiffPanePresenter.CurrentBlock`; `ScrollToRow`; the navigation, side, kind and tooltip strings.
+- Headless tests for navigation and the keys, the minimap's mapping on a 200k-line fixture and
+  its click, the connector polygons with click and drag, and the tooltips; a snapshot of the
+  minimap, connectors and the current-block border in both variants.
+- Phase 8, find: `DiffFindBar` (query box, Match case / Whole word / Regex / Changed rows only
+  toggles, L / R / Both scope, "match i of n (L a · R b)", previous / next / close, and an
+  inline line for a bad pattern or a truncated result); `SearchMatchRenderer` per pane on
+  `KnownLayer.Selection`, above the row fills and below the selection, with the current match in
+  its own brush; `IsFindBarOpen`, `FindQuery`, `FindOptions`, `FindResult`,
+  `CurrentFindMatchIndex`, the `OpenFind` / `CloseFind` / `FindNext` / `FindPrevious` commands
+  and the `FindCompleted` event on the composite; Ctrl+F (pre-filled from the selection), F3 /
+  Shift+F3, Enter / Shift+Enter and Escape; searches debounced on `TimeProvider`, latest-wins,
+  cancelled by every change and run off the UI thread above 2,000 rows over `DocumentPaneText`
+  snapshots; match ticks in the minimap; the find count and scope in the status strip;
+  `DiffView.Find` logging that carries counts and the query's length but never the query.
+- Headless tests for the find keys and focus, the row-then-side walk, the scope, a bad pattern,
+  the `MaxMatches` cap on a 10k-line fixture, a search completing while the UI thread holds a
+  document in an update, and the highlight layering; a snapshot of the bar and the highlights in
+  both variants; the sentinel log test gained the find leg Phase 5 left owing.
+- The demo's View menu opens the find bar (Ctrl+F).
+
+- Phase 9, syntax highlighting: `SyntaxHighlighting` installs `AvaloniaEdit.TextMate` on a pane,
+  choosing the grammar from `DiffPanePresenter.SyntaxFileName`'s extension — the composite gives
+  it each side's `PaneSource.Path`, or its `Title` — with the TextMate theme following
+  `ActualThemeVariant` (Dark+ / Light+); `UseSyntaxHighlighting` on the presenter and on the
+  composite, on by default; `DiffPanePresenter.SyntaxLanguageId`; an extension no grammar claims
+  is plain text and not a failure, and a grammar that will not install turns itself off, leaves
+  the diff highlighting untouched and puts the control in `Degraded` with the language named
+  (`RenderFaultEventArgs.Subject`, the `RenderFault.OnSubject` string); `DiffView.Syntax` logging
+  that carries the language and the extension, never text; the demo's View menu toggles it.
+- Headless tests for the unclaimed extension, a source with no name at all, the path and title
+  routes, the theme following the variant, the toggle, and a grammar that will not install;
+  snapshots of a C# and a JSON pair colourised under the diff backgrounds in both variants, and
+  the pixel assertion that an inserted row keeps its fill with the token colours over it;
+  `fixtures/json`, `SyntaxProbe` and `CompositeHost.PumpUntilAsync` as fixtures.
+
+- Phase 10, scale, visibility and accessibility: `ShowWhitespace`, `ShowLineEndings` and
+  `TabWidth` on the presenter and the composite, written onto the editor's `TextEditorOptions`
+  and re-applied when a host replaces them; `PaneFontSize` and `PaneFontFamily`, which leave the
+  pane theme's own when unset and re-prime when they change; the focused pane accented under its
+  header on a new `DiffView.FocusAccentBrush` (in both palettes, in `contrast-pairs.json` and in
+  the regenerated `docs/theme-audit.md`); the demo's View menu gaining whitespace, line endings,
+  tab width and pane font size.
+- Headless tests for the view options, the tab width, the pane font and family, the
+  mixed-line-ending notice, per-pane copy with read-only holding against paste and typing, the
+  focus accent and F6, and a runtime sweep of every decorator's automation name; a snapshot of
+  the options and the accent in both variants; `ScalePerfTests` measuring the 200,000-line pair
+  and the one-megabyte line from build to scroll, with the numbers in `PROGRESS.md`.
+
+- Phase 11, the unified (inline) view: `InlineDocument`, the unified line table over a
+  `SideBySideDocument` — a context row once, a change block's removals before its additions, a
+  modified pair keeping its kind on both halves so the word diff survives, and a map back from a
+  side's line to the unified one; `InlineDiffView`, one `DiffPanePresenter` over a document
+  composed from both sides, read-only, with the renderers, margins, banner, find bar, status strip
+  and state machine unchanged, a line-number column per side (a context line filling both), block
+  navigation over unified lines, and no minimap, connector gutter or F6; `DiffPanePresenter.IsUnified`
+  and `InlineDocument`, `PaneMetadata.Unified` / `SideOf` / `DisplayRowsOf`, and
+  `DiffFindBar.ShowScope`; the demo hosts both views, switched by View → Unified (inline) view or
+  the `--unified` flag.
+- Headless and unit tests for the composed text, the change counts against the side-by-side
+  view's, the kinds and the absence of padding, the two-column gutter, word pieces on both halves
+  of a modified pair, block navigation and the current-block border, a binary side, a throwing
+  decorator, an option change, the caret lane, the find scope collapsing, the matches the unified
+  view drops and the ones it keeps, and a snapshot of the unified view in both variants.
+
+- Plan 00003, in-pane editing: clearing `LeftReadOnly` / `RightReadOnly` lets a pane take typing,
+  paste, undo and redo — no layer turned out to rely on the document being immutable, and the
+  bounds-checked `PaneMetadata` absorbs a document that has run ahead of the model.
+  `LiveReDiff` / `ReDiffDelay` / `ReDiffNow()` rebuild on a debounce from the pane's live text
+  while the source keeps the encoding, path and title a save writes back with; the previous model
+  stays on screen until the new one lands, the `TextDocument`, caret, selection, scroll offset and
+  undo stack all survive the rebuild, and the matches an edit invalidated are dropped.
+  `IsEdited(side)`, `IsDirty(side)`, `CanSave(side)`, `Save(side)`, `Revert(side)` and the
+  `SaveOutcome` enum (`Saved`, `NotDirty`, `NoPath`, `ChangedOnDisk`, `Failed`); `PaneWriter` in
+  Core, which round-trips the encoding, its byte-order mark and the file's line endings, and a
+  `(LastWriteTimeUtc, Length)` stamp that catches someone else's write and follows our own.
+  `CanCopyBlock` / `CopyBlock` / `CopyCurrentBlock` replace the target's lines over the ranges
+  `ChangeBlock` already carries, through the editor's own document so one undo takes a copy back;
+  `CopyToLeftCommand` / `CopyToRightCommand` on Alt+Left and Alt+Right, and the per-block copy
+  arrows on a new `DiffView.GutterArrowBrush` — drawn in the connector column then, see *Changed*.
+  `ModifiedLines(side)`, maintained from `TextDocument.Changed` so a mark shifts with the text an
+  edit above it moved rather than with the line number, drawn as a bar down the marker margin on a
+  new `DiffView.ModifiedSinceLoadBrush`; `DiffPaneHeader.IsDirty` with its `:dirty` pseudo-class
+  and `PART_Dirty` marker; the strip's lane naming the sides holding unsaved edits; the
+  `Header.Dirty`, `Marker.ModifiedSinceLoad`, `CopyArrow.Tooltip`, `Status.Dirty` and `Save.*`
+  strings.
+- The demo's File menu saves and reverts either side (Ctrl+S for the left), its View menu makes
+  either pane editable, and its status line names the editable sides and the unsaved ones.
+- Headless and unit tests for typing beside a read-only neighbour, typing past what the model
+  knows without a fault, the rebuild's survivors, the debounce and its coalescing, live re-diff
+  turned off, a replaced document that stops arming re-diffs, dirty against edited, every
+  `SaveOutcome`, a copy at either end of a document and under undo, a read-only target refusing,
+  the marks moving with their text and clearing on a revert, and the tooltip on a line the diff
+  has nothing to say about; `PaneWriterTests` round-tripping marked and unmarked UTF-8, UTF-16 LE
+  and BE, UTF-32 and a Latin-1 fallback byte for byte; `EditScalePerfTests` measuring the 200k
+  pair's re-diff, the twenty keystrokes that coalesce into one build and what the escape hatch
+  saves, with the numbers in `PROGRESS.md`; and `EditingSnapshotTests`, the frame in both variants
+  carrying an edit's bar, the header's marker and the strip's lane at once.
+
+- Plan 00004, copy arrows in the panes: `PaneMetadata.BlockAtRow(row)`, which answers for a padded
+  row that has no line to look a block up by, and `ChangeBlock.LinesFor(side)`; the two paths that
+  reach a block the side has no lines in — the padding above the line that follows it, and, past
+  the last line, the trailing padding a walk over the visual lines never gets to; the anchored
+  row's tooltip, carrying the number the arrow stands in for and what it would do; `CopyArrowGlyph`,
+  extracted so the column and the margin drew one arrow rather than two; and
+  `DiffLineNumberMargin.LastColumnRight`, exposed because an arrow's own bounds cannot show that it
+  is where the numbers are — a glyph that strayed would report the place it strayed to. Where the
+  arrows moved to is under *Changed*, and what the connector column gave up under *Removed*.
+- Headless, pixel and snapshot tests for the side that offers an arrow and the row it sits on, the
+  numbers it hides and the ones it leaves alone, a side editable before the template applies, both
+  one-sided-block paths, the width the arrow costs (none, which is the premise of drawing over the
+  number), the click that copies against the click that only moves the caret, the tooltip, and the
+  connector column with both sides editable carrying no arrow pixels at all; `CopyArrowSnapshotTests`,
+  six frames over an editable pair, the same pair read-only and a one-sided block in both variants,
+  with the direction asserted by which half of the zone the glyph's head fills.
+
+- Plan 00005, change-marker chips: `DiffBrushes.MarkerChipFor(kind)` and its `DiffBrush` entries,
+  the accessor a margin reaches for the chip's colour; and the chip's shape rules — one code path
+  for a run and for a lone row, symmetric about the margin's centre, stopping exactly where the
+  modified-since-load bar begins so an edited line inside a changed block paints both, and no
+  rounded end where the run carries on past the viewport, the rectangle running a full row beyond
+  the edge instead. The chips, their tokens and the glyphs drawn on them are under *Changed*.
+- Headless and snapshot tests for the chips being exactly the runs the margin reported, a lone
+  row's badge against a five-row band, a run scrolled past both edges, the glyph's centring weighed
+  as ink either side of the chip's centre line — which the reported rectangles cannot show — the
+  chip stopping at the bar, and the margin not growing; `MarkerGlyphTests` pinning the vocabulary
+  and weighing each marker's ink against a floor, which is the property the new glyphs exist for;
+  and `MarkerChipSnapshotTests`, four frames over two cases in both variants.
+
+- Plan 00006, copying a selection: `SideBySideDiffView.CanCopySelection(DiffSide)` and
+  `CopySelection(DiffSide)` send a pane's selected **whole lines** to the other side, over the rows
+  those lines occupy — the other side's lines in the same rows are replaced, and where it has none
+  there at all the copy inserts between them, as a one-sided block's copy already did; a selection
+  that ends on the next line's first column stops above it. `DiffPanePresenter.SelectedLines` and
+  `CopySelectionRequested`; a selection arrow drawn in the number cell of the selection's first
+  line on new `DiffView.SelectionArrowBrush` / `SelectionArrowFillBrush` /
+  `SelectionArrowBarBrush`, taking that cell from a block arrow that wants it, with its own
+  tooltip and the hand cursor. Alt+Left and Alt+Right go on copying the current block.
+- A copy arrow is drawn as an outlined shape rather than a flat silhouette, on a new
+  `DiffView.GutterArrowFillBrush`, and the selection arrow may carry a bar across its tail — drawn
+  on every frame and seen only where `DiffView.SelectionArrowBarBrush` has a colour, which the
+  colour-blind palette gives it and the default palette leaves transparent, so a host changes one
+  key rather than forking the glyph.
+- Four `contrast-pairs.json` pairs scoring each arrow's outline and fill against the gutter
+  background. Arrows had never been scored at all: the block arrow had been drawn there since
+  plan 00003 with nothing holding it to a floor.
+- Headless, pixel and snapshot tests for the selection copy: the arrow's row, its colours, the
+  contested cell, the whole-line rule at both ends, the aligned-row copy, the insertion over
+  padding, the click and the tooltip; and `SelectionArrowSnapshotTests`, twelve frames over three
+  cases in both variants and both palettes — the colour-blind ones being the only committed
+  evidence of the tail bar.
+
+- Plan 00007, the overview map: `DiffMinimap` draws **two lanes**, one per side, a bucket inking a
+  lane only where that side has a line in the rows it covers — so a deletion inks the left lane and
+  notches the right, an insertion does the reverse, and a modification inks both.
+  `KindOfBucket(bucket, DiffSide)`, `LaneAt`, `ViewportBounds` and `DiffMinimap.MapWidth` are new;
+  `KindOfBucket(bucket)` keeps its meaning as the stronger of the two lanes. A press inside the
+  viewport box drags it and scrolls continuously where a press outside jumps, and the wheel over
+  the map scrolls the panes. `SideBySideDiffView.ShowMinimap` turns the column off, defaulting on,
+  and the demo's View menu carries it as Show overview map. The column is 22 px — a marker column
+  the current block moved into, two lanes, the gap and the margin — and `Auto`, so hiding it gives
+  the width back to the panes.
+- Plan 00008, docking the overview map: `SideBySideDiffView.MinimapPlacement` puts the map
+  outside either pane, over an `Auto` slot at each end of the panes grid — the empty one takes no
+  width. The map's **lanes do not follow the dock**, because a lane names a file and not an edge;
+  the current-block marker and the find ticks do, through one `DiffMinimap.MirrorEdges` flag that
+  says which of the map's own edges faces the panes. The demo's View menu carries it as Overview
+  map on the left.
+- Plan 00009, key bindings a host can change: `DiffCommand` names the controls' verbs and
+  `DiffKeyMap` says which key each is on — assign a gesture to rebind, `null` to unbind, and a
+  command the default leaves unbound takes one the same way. `SideBySideDiffView.KeyMap` and
+  `InlineDiffView.KeyMap` each hold one, `GestureFor` is the read side, and `CommandFor` hands out
+  the command behind a verb. **Only the bindings a control created are replaced** when the map
+  changes, so a `KeyBinding` a host added to the public collection survives; `DiffKeyBindings` is
+  the one implementation of that rule, and of the warning when two commands land on one gesture,
+  held by both views. The unified view defaults to `DiffKeyMap.UnifiedDefault()` — the same six
+  gestures with `SwitchPane` and the four copies unbound — and a gesture given to one of those
+  five is skipped and logged through `DiffViewLog.KeyCommandUnsupported` rather than left dead
+  without a word.
+- The demo's View menu carries **Key bindings**, a submenu whose accelerators are written from
+  `GestureFor` rather than typed into the XAML, with a toggle that moves navigation to
+  Ctrl+Down / Ctrl+Up on both views — so the labels move along with the keys.
+- Headless tests for the pinned defaults, rebinding and the old key going quiet, unbinding with the
+  command still callable, binding a command with no default, a host's own binding surviving a
+  rebuild, a cleared collection staying cleared, two commands on one gesture, the unified view's
+  smaller default, a two-sided verb skipped and logged there, and the copy chord against both the
+  selection and the block.
+- Plan 00010, the pane context menu: a right-click — or Shift+F10, or the Menu key — opens a menu
+  of what the control can do to the line under the pointer, on by default in both views.
+  **`DiffPaneContext` is the part that matters**: a public description of what was clicked, carrying
+  the region, the side (**null** in the unified view, which has none), the line and the line's own
+  number on its own file, the row, the `ChangeBlock`, and the selection. Without it nothing outside
+  the library could describe a click at all, because `PaneMetadata` is internal.
+  `SideBySideDiffView.PaneContextMenuOpening` and `InlineDiffView.PaneContextMenuOpening` hand over
+  that context and a mutable item list to amend; `PaneContextMenu` replaces the menu outright and
+  suppresses the event, and either way the context arrives as the menu's `DataContext`. Accelerators
+  are read from `GestureFor`, so a rebind moves them. `DiffPanePresenter.SelectedLines` is now
+  public.
+- The menu's entries are copy-the-selection, copy-the-change, next and previous change, find, save
+  and revert — **all present on every open**, enabled or not, so that a host's "insert after this
+  item" means the same thing every time. A verb the *view* does not have is **absent** rather than
+  greyed: the unified view has no copy, no save and no revert at all, because a greyed entry would
+  promise a state that does not exist. The block entry copies the block **under the pointer**.
+- The demo's pane menu carries an entry of its own, inserted through the opening event, which reports
+  what was clicked in the status strip.
+- Headless tests for the context over changed, unchanged and unmodelled lines; the caret and
+  selection surviving a right-click; the keyboard resolving to the caret; the shape holding still
+  across a selection change; absent-versus-disabled; the replacement menu; accelerators following the
+  key map; and the icon column staying aligned with a solid square in one slot.
+- `StringCatalogueTests`, adapted from ClaudeForge's `LocalizationParityTests`: every declared key
+  has English text, every key reaches the host's resolver, and no two constants name one key —
+  without which a key added with no default renders as its own name.
+- `scripts/run-demo.sh` and `scripts/run-demo.ps1`, which run the demo on a pair with plenty of
+  changes and print what is worth trying by hand.
+- Headless, pixel and snapshot tests for the lanes against the model, the combined reading against
+  the single-lane one, the toggle on both wiring paths, the drag against the jump, the wheel, the
+  lane-naming tooltip, and `MinimapSnapshotTests` — a left-only block in both variants and both
+  palettes, the drawing asserted against the buckets the map reports.
+- Plan 00013, folding unchanged rows: `UnchangedContextRows` on both views collapses the runs of
+  matching rows behind a placeholder, keeping a configurable number of rows around every change.
+  `null` — the default — folds nothing, `0` hides every matching row, and `n` keeps `n`; those are
+  Beyond Compare's *Show All*, *Show Differences* and *Show Context* as one property rather than a
+  flag and a count, which together could express a state with no meaning. A click on a placeholder
+  gives its run back. The commands `ShowAllRows`, `ShowDifferencesOnly`, `ShowContext` and
+  `ExpandFold` arrive in the key map **unbound**, and the three modes appear on the pane's text
+  menu, both margins and the connector — last on each, and absent from the overview map's, which
+  plan 00012 kept short on purpose.
+- The panes stay row-aligned under a fold because a fold is a **row** range projected onto each
+  side's lines rather than a line range read off a document, and because a row is foldable only if
+  collapsing its lines removes that row's height and nothing else — padding is height *on* a line,
+  so a line at a run's edge can be carrying rows the fold does not cover. Hiding what *differs* —
+  Beyond Compare's *Show Same* — is deliberately not here: a change block is lines on one side and
+  padding on the other, and padding has no line to collapse.
+- Walking a find match into a folded run opens that run, in both views: a match the reader is being
+  taken to has to be a match they can see. Chosen over excluding folded matches from the count,
+  because a count that changes when you fold describes the view rather than the file. The menu's
+  *"Show the rows hidden here"* means the run under the **pointer**, as every other menu entry in
+  the library does, while the unbound `ExpandFold` gesture means the run at the caret — the only
+  run a keyboard can name. Navigation needed nothing: a fold covers only unchanged rows, and a
+  change block has none.
+- The demo takes `--edit left|right|both`, so a side starts editable without a drive through the
+  View menu, and its View menu carries the three folding modes as a radio group.
+- `RowProjection`, one place where a model row becomes a visible row and a pixel. The connector
+  gutter and the overview map converted rows to pixels by multiplying by the line height, an
+  equation only accidentally true, and the map now buckets the document that is on screen so its
+  viewport box cannot point where the viewport is not.
+- Plan 00012, the context menus beyond the pane: a right-click anywhere the control draws now opens
+  a menu about what is under the pointer. The two gutters, the connector column, the overview map
+  and the headers, through the same two extensibility shapes plan 00010 built — an opening event
+  carrying the context and a mutable item list, and a property that replaces the menu outright.
+  `DiffPaneRegion` gains `ConnectorGutter` and `OverviewMap`; each control builds its context from
+  the hit-test it already performs for its own left-click, and **a right-click navigates nothing**:
+  the connector does not jump and the map does not scroll. Off every polygon the connector opens no
+  menu at all, because the empty column is the splitter and every entry that menu has is about a
+  block.
+- `DiffHeaderContext`, a public sibling record — `Side`, `Title`, `Detail`, `IsDirty`, `IsReadOnly`
+  — with `SideBySideDiffView.HeaderContextMenuOpening` and `HeaderContextMenu` beside the pane's
+  pair, and `HeaderContextAt(side)` for a host writing its own. A header's subject is a side and its
+  file with no line at all, so it is a second context type rather than a sixth region over a
+  synthetic line; `DiffPaneContext` is untouched. Both types go through the one menu implementation,
+  so the contexts differ and the menu's behaviour cannot. The header's menu is save and revert and
+  nothing else — no copy and no navigate, a header not being a position. The unified view raises no
+  header menu: it has two headers but, being read-only, neither of the verbs one would offer.
+- `DiffCommand.GoToChange` and `DiffCommand.SelectBlock`, both **present in the key map and unbound**
+  rather than absent from it. A menu entry carries the block that was clicked, as the copy entries
+  already did; a gesture — if a host binds one — means the current block, which is the only reading
+  a keyboard has. Selecting from the connector selects in **both** panes, because the block spans
+  both files, and a side the block has no lines in has its selection cleared rather than left
+  standing. The unified view answers `null` for both, so they are absent from its menus.
+- The icon column plan 00010 reserved is filled, from the vocabulary already on screen: the copy
+  entries carry the gutter's own arrow — the same geometry, now shared rather than redrawn —
+  pointing the way the text would travel, and the entries about a change carry the change-marker
+  margin's own `+`, `−` and `≠` for that change's kind, as strokes. Both follow the inherited
+  `TextElement.Foreground`, so a theme or variant swap carries them and a disabled row greys its
+  icon with its label. Navigate, find, save, revert, *go to this row* and *hide the overview map*
+  carry none, having no mark in that vocabulary. 00010's alignment assertion is unchanged; its
+  stand-in square moved to an entry the control leaves null, so a host's own icon is still proved to
+  land in the same column.
+- Headless tests for each new surface: the region each gutter reports, the block a polygon names
+  against the block nearest the pointer's row, the row the map reports against the pixel the pointer
+  is on, the lane under the pointer and the line that row has, a right-click that navigates nothing,
+  the splitter that opens nothing, the replacement property suppressing the opening event on every
+  surface and on both context types, the two replacement properties governing their own surface
+  only, every new entry carrying an automation name, and the icons against the gutter's own geometry
+  and the theme's foreground.
+- `MenuSnapshotTests`, the first snapshots in the repository to capture a popup: one frame per
+  surface the plan gave a menu, and the change-marker margin's in both variants because that is the
+  menu carrying both kinds of icon at once. Opening a menu moves about 8% of a frame's pixels, well
+  past the comparer's half-a-percent tolerance, so unlike a chip or an arrow these frames can fail
+  on their own.
+
+- Plan 00014 — the library ships its own translations. `DiffViewLocalization` carries an optional
+  host resolver and an optional culture as **one record**, because two settable statics that must
+  agree are a bug waiting on someone's ordering; `DiffViewStrings.Localization` replaces the former
+  `Resolver` property and `Override` returns an `IDisposable` that restores the previous value.
+  `Get` reads that record once, resolves one culture, and **hands it to the resolver** — so a host
+  returning `null` for a key does so knowing which language will answer instead. The chain is host
+  resolver, then bundled translation for that culture, then the compiled English table, which cannot
+  fail to load.
+- Eight locales: `de-DE`, `es-ES`, `fr-FR`, `ja-JP`, `ko-KR`, `pt-BR`, `ru-RU`, `zh-CN`, 143 keys
+  each, the same set ClaudeForge ships. **They are machine-generated and have not been read by a
+  native speaker of any of the eight** — every file header says so, and `DECISIONS.md` records it as
+  a decision rather than an omission. The parity gate proves keys and placeholders; it proves nothing
+  about wording, and a release should not go out on them unreviewed.
+- `DiffViewStrings.EnglishDefaults`, and `scripts/gen-strings.cs` (with `.sh` / `.ps1` wrappers)
+  which generates the neutral `Localization/Strings.resx` from it under a drift gate, so the embedded
+  resource and the compiled table cannot disagree. The locale files beside it are authored.
+- `LocaleParity` and `LocaleParityTests`: missing keys, undeclared keys, placeholder-set equality per
+  key, and the share of values byte-identical to English — the last borrowed from ClaudeForge's
+  `LocalizationParityTests`, which catches a resx copied and never translated. Written **before any
+  translation existed**, against `fixtures/locales`, a miniature catalogue and a `zz-ZZ` file wrong
+  in all four ways at once. `DeclaredLocales` is asserted against what is on disk, so shipping a
+  locale stays a decision rather than a side effect of adding a file.
+- `SatelliteResourceLanguages` names the eight, so a consumer publishing trimmed keeps exactly them;
+  the trim canary confirms all eight survive with no `IL2xxx`.
+- The demo's `--culture <name>`, which drives the library's text without touching the operating
+  system and names the culture in the status strip. `HeadlessTestApp` pins
+  `DefaultThreadCurrentUICulture`, overridable with `DIFFVIEW_TEST_UI_CULTURE`, so an assertion of
+  English text is an assertion about the library rather than about the machine.
+- Plan 00015 — the culture audit. `[EnglishChrome]` marks a test as being about the English words,
+  holding the library's text at `en-US` for that test's duration through `DiffViewStrings.Override`
+  rather than by an assignment that a test resetting the seam would destroy. The 94 tests that
+  failed under `DIFFVIEW_TEST_UI_CULTURE=de-DE` now pass — 34 assertions of English text pinned
+  rather than softened, 60 frames declared to be pictures of English chrome — and a `culture-leg`
+  CI job on `ubuntu-latest` keeps the whole suite green in German, so a test that fails only there
+  asserted English without saying it wanted English.
+- Plan 00016 — the locale review packet. `scripts/gen-locale-review.cs` writes
+  `docs/locale-review/<culture>.md` for each of the eight shipped locales, pairing every string with
+  what it is, what each of its placeholders holds, and the English it was translated from, so a
+  native speaker can review a language without reading `.resx` files or C# doc comments. Generated
+  and gated, never edited: a correction goes into the `.resx` and the document regenerates, and
+  `LocaleReviewTests` fails if the two drift apart. Thirteen `DiffViewStrings` summaries were
+  repaired to make it possible — five that never documented their placeholder and eight that only
+  made sense beside the key above them — and two gates keep them that way.
+- Plan 00018 — the release, written and dormant. `LICENSE` (MIT — there was none), `Authors`,
+  `PackageLicenseExpression`, `PackageProjectUrl`, `RepositoryUrl` and `PackageTags` on every
+  packable project, and `.github/workflows/release.yml`: tagging `vYYYY.Q.MDD` strips the `v` and
+  carries the version into build and pack, publishes through NuGet Trusted Publishing with no
+  long-lived API key, and creates the GitHub release. The push **names its two packages** rather
+  than globbing `*.nupkg`, because this solution also packs `Bennewitz.Ninja.ThemeAudit`, which is
+  local-feed-only by design and could not be withdrawn once published. `PackagingTests` gates all of
+  it. Nothing has run: there is no remote, and the first push is a person's to make.
+- Plan 00019 — [the hosting guide](docs/hosting-diffview.md), for someone putting the control into
+  their own application: install, quickstart, theming, the properties that carry the control,
+  editing, the extension points, what the TextMate dependency costs, and where the control stops.
+  It states three things a reader cannot discover — the library declares no XAML namespace, so the
+  `using:` form is the only one; the package id, the assembly name and the namespace are three
+  different strings; and the eight shipped locales are machine-generated and unreviewed.
+- Two gates in front of that guide, written before it: every API name it prints must resolve by
+  reflection against the **shipped** surface, with a non-public member counting as absent, and its
+  quickstart is read from the document itself, parsed, and driven to `Ready` headless — so the
+  snippet a stranger pastes is the snippet under test. A third compares the `xmlns` the document
+  teaches against the namespace the control reports, which is the citation plan 00017 would have
+  broken and that no member-name reflection would catch.
+- `PackageReadmeFile` on both published packages, pointing at that guide rather than at a second
+  consumer-facing document kept in step with it. Gated by packing for real and reading the readme
+  back out of the `.nupkg`.
+
+### Fixed
+
+- With unchanged rows folded, the unified view kept the previous model's folds across a rebuild —
+  new sources, or an option such as ignoring case that rebuilds over the same text — and the next
+  layout pass threw: the pane stopped measuring, and no current change's border could be drawn. The
+  unified view now computes its folds again for every new model, after composing that model's text,
+  as the side-by-side views always have, and a run the reader had opened folds again with the rest.
+- With unchanged rows folded, the current change's border was drawn where its block would sit with
+  nothing folded — around unchanged lines, as many rows below the block as the folds above it hid,
+  or off screen altogether — in every view. The border is now placed through the same row
+  projection the connector gutter, the overview map and the scroll-to already use.
+- A padded line that began with a space or a tab lost its padding while whitespace was shown, and
+  one that began with a control character lost it whatever the setting: every row below it slipped
+  against the other pane, and a copy arrow drawn in the missing padding sat on the next line's
+  number. AvaloniaEdit's own single-character generator, which the text view creates before a pane
+  adds any of its own, took the line's first character before the padding was asked for it. The
+  padding is asked first now.
+- The quickstart gate installs a hand-advanced clock before showing its window. A status auto-clear
+  left on the real clock outlived the test and aborted the test host — exit 134, about one full-suite
+  run in ten, reported by the runner as `Failed!` with `failed: 0`. `DECISIONS.md` records the
+  measurements, the ordering trap that made the first repair a no-op, and the unguarded inline
+  dispatch underneath it, which a later probe closed as won't-fix: the headless host runs Avalonia's
+  UI loop on a `.NET TP Worker`, so the path is unreachable on a desktop's dedicated UI thread.
+- Plan 00020 — both views now release the `StatusController` they build when they leave the visual
+  tree, so a closed or detached view is no longer reachable from the timer queue and no auto-clear
+  writes to a status strip nobody is looking at. The field is nulled as well as disposed, which is
+  what keeps a view working when it comes back from a tab switch, a virtualized list or a reparent.
+- `UpdateStrip` reads the status field rather than the lazy `Status` getter. Calling the getter made
+  every strip refresh rebuild the controller a detach had just released — measured at two armed
+  timers on a detached view — and reading the field writes exactly the values the getter's freshly
+  built controller would have.
+
+### Removed
+
+- `ChangeConnectorGutter.CanCopyToLeft`, `CanCopyToRight`, `LastArrows`, `ArrowAt` and
+  `CopyRequested`. The copy arrows moved into the panes' line-number margins under plan 00004, so
+  the connector column draws polygons and resizes the split and nothing else. Removed outright
+  rather than deprecated: nothing has shipped, and the repository's only tag is a checkpoint.
+
+### Fixed
+
+- **A status message could be cleared by the previous message's timer.**
+  `StatusController` identified a pending auto-clear by "is one scheduled" rather than by *which*
+  one, so a timer that came due and posted its clear immediately before the next message arrived
+  ran against that new message — clearing it and disposing its timer. A token created with the
+  timer and compared in the callback fixes it. The existing tests could not see the race: all five
+  ran the clear inline on the advancing thread, closing the window it lives in. Found while scoping
+  plan 00011, and the guard went upstream with the port.
+
+- **A header was the right size in the wrong place, and had been since plan 00004.**
+  `PART_Headers` reserved 24 px for the connector gutter and 14 px for the overview map while
+  `PART_Panes` used 16 and 22 — two stale numbers, from two different plans, that summed to the
+  same 38. The star columns therefore matched and each header was exactly as wide as its pane, so
+  the outer edges lined up; the boundary between them sat 8 px out. Both grids now share one
+  column layout, and a test asserts each header's **x** as well as its width.
+
+### Changed
+
+- Plan 00028 — `Bennewitz.Ninja.XamlQuality` and `Bennewitz.Ninja.AssemblyQuality` move to
+  `2026.3.928`, where every rule id carries the family prefix — `XQ100n` is `BNXQ100n` and `AQ100n`
+  is `BNAQ100n` — and each gate is re-read there. `BNXQ1003` checks the template parts
+  `DiffBuildController` looks up against each host's own theme, which a test did by hand;
+  `BNXQ1004` counts only placements it measured against a fixed slot, so the guard against a
+  blinded scan floors the grid children the scan holds instead; and `BNAQ1002` keeps its stock set
+  beside `DiffPlex`, with a control that proves the stock half can still fire.
+
+- `SideBySideDiffViewTheme` holds the editor's control theme alone. The find bar's, the pane
+  header's and the status strip's moved into dictionaries of their own, which their controls merge,
+  so no theme is found twice on the way up from any element and the viewer carries no theme for a
+  find bar it does not have. `DiffViewResources.CompositeThemeUri` names the editor's theme alone
+  for the same reason. Nothing renders differently: the themes moved byte for byte.
+- The demo's *Unified (inline) view* checkbox is now an entry of View ▸ Control, and the log's
+  `[DebugFlags]` summary reads `view=` where it read `unified=`.
+
+- `DiffView.Core` and `DiffView.Avalonia` are marked trimmable, so a host publishing with
+  `TrimMode=partial` trims them too, and both build with the trim analyzer on.
+
+- **Breaking:** `DiffDocumentBuilder.Build` and `DiffSearch.Find` take their `CancellationToken`
+  ahead of the optional options, and neither defaults it — `Build(left, right, cancellationToken,
+  options)`. Plan 00025 phase 4, adopting `AQ1001`: a caller writes the token it passes.
+- `Bennewitz.Ninja.XamlQuality` moves to `2026.3.924`, whose theme-audit digest no longer depends on
+  the directory a dependency is checked out in, and `docs/theme-audit.md` is regenerated for it.
+  `Bennewitz.Ninja.AssemblyQuality 2026.3.922` joins the tests.
+- `SideBySideDiffView.Status` and `InlineDiffView.Status` return one controller per attach rather
+  than one for the life of the view. A host that stores the reference across a detach meets
+  `ObjectDisposedException`; a host that sets an auto-clear delay on it or subscribes to `Changed`
+  has to do so again after a re-attach. A detach also clears the message on screen, including a
+  `Failure`, which otherwise sticks until dismissed or replaced.
+
+- **Breaking — the library's namespace is `Bennewitz.Ninja.DiffView`**, where it was
+  `Bennewitz.Ninja.DiffView.Avalonia`. A namespace segment named `Avalonia` shadows the framework's
+  own root: C# walks enclosing namespaces before it reaches global, so `Avalonia.Media.Color`
+  resolved to `Bennewitz.Ninja.DiffView.Avalonia.Media.Color` and failed to compile with CS0234,
+  and `DiffCommand`'s documentation needed `global::` to name a `KeyBinding`. The platform is
+  carried by the assembly and package name, `DiffView.Avalonia`, which does **not** change;
+  `Bennewitz.Ninja.DiffView.Core` does not change either and is now a natural child of the
+  library's namespace. Nothing had been published, so no consumer is affected — which is why it was
+  done now rather than later.
+- **Every string that names a side is now a whole sentence per direction**, rather than one sentence
+  with the side substituted into it — *"Copy this change to the left side"* and *"…to the right
+  side"* as separate keys, not *"…to the {0} side"*. A translator cannot inflect a word dropped into
+  someone else's sentence. Fourteen keys replace seven across the copy and selection arrows, the four
+  line-number tooltips and the overview map's lane, with selectors that choose between them; the
+  rendered English is unchanged. Kind words stay placeholders, being labels between separators rather
+  than parts of a phrase. **A host overriding these keys through `DiffViewStrings.Resolver` must
+  supply the new names.**
+- **Alt+Left and Alt+Right copy the selection when there is one**, and the current change block
+  otherwise — the rule the gutter already applied when a selection arrow took a block arrow's
+  cell, and the rule cut, copy and delete follow everywhere. Before this the gutter drew one
+  operation and the chord fired another whenever a selection was up. The block-always behaviour
+  keeps a name, `CopyBlockToLeft` / `CopyBlockToRight`, unbound by default, so a host that wants
+  it back binds a gesture rather than losing the verb. This supersedes a non-goal of plan 00006;
+  `DECISIONS.md` carries the reasoning.
+- The change-block arrow is goldenrod-and-yellow in the default palette — `#8A6D00` over
+  `#F0E442` in Light, `#FFD54F` over `#DAA520` in Dark — in place of slate, so it reads apart from
+  the selection arrow's blue at a glance, as Beyond Compare's does. The colour-blind palette keeps
+  its slate arrow, where gold would collide with two Okabe–Ito hues already in use.
+- **An arrow's fill is scored against its own outline at 1.5, not against the gutter at 3.0.** An
+  outline carries a closed glyph's silhouette and keeps its 3.0 against the ground; a fill is
+  interior to the shape, and scoring it as though it were text on a ground ruled every yellow out
+  of the near-white light gutter — which is the hue that separates the two copy arrows.
+  `contrast-pairs.json` re-aims the two `*ArrowFillBrush` pairs accordingly; `DECISIONS.md`
+  carries the arithmetic and the numbers that were being read wrongly.
+
+- Change markers are drawn on a chip of their kind's colour, one per run of consecutive same-kind
+  rows, so a lone changed line reads as a badge and a block reads as one band. Twelve opaque
+  `DiffView.MarkerChip*Brush` tokens carry the colours, each its marker composited over that
+  variant's pane background, and three new `contrast-pairs.json` pairs hold every marker to its 3.0
+  floor against the chip behind it — a floor nothing had scored until now. No palette colour
+  changed.
+- The change markers are `+`, `−` (U+2212) and `≠` (U+2260), drawn semibold, in place of `+`, `-`
+  and `~`. The glyph carries a row's kind where colour cannot, and the ASCII set was too light to
+  do it: a hyphen laid down 5 pixels of ink against a line number's 29. `DECISIONS.md` carries the
+  measurements and why weight alone was not enough.
+- The copy arrows are drawn by `DiffLineNumberMargin`, over the line number of each block's anchor
+  row in the pane the block would be copied *from*, and clicking one raises
+  `DiffPanePresenter.CopyOutRequested`. `CanCopyOut` on a pane carries the other side's editable
+  flag. The connector column narrows from 24 px to 16.
+- The three log methods that name a pane take a `DiffSide?`; the unified view's pane logs as
+  `unified`, which is neither side.
+- The demo smoke snapshot shows the panes; the accessibility guard counts `TextEditor` and
+  `DiffPanePresenter` as interactive controls.
+- The composite's gutter is the connector gutter and a minimap column sits beside the right
+  pane; every composite and demo snapshot shows both; the accessibility guard counts
+  `ChangeConnectorGutter` and `DiffMinimap` as interactive.
+- The composite and demo snapshots show word-level highlights on their modified rows.
+- `RenderFault` on the presenter is raised after the render pass that caught the fault.
+- The demo smoke snapshot shows the composite; the accessibility guard counts
+  `SideBySideDiffView` as interactive.
+- The snapshot comparer decodes from copies of the streams, so a mismatch can still write the
+  `.received` file.
+- A pane's faults reach the composite's state through `SideBySideDiffView.ApplyResult` as well as
+  through `RenderFault`, so one raised while a build was running is not buried by the `Ready` that
+  follows it; `DiffPanePresenter.ReportFault` now formats through `DiffViewLog.RenderFault`, which
+  was written in Phase 5 and never called.

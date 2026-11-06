@@ -1,0 +1,61 @@
+using Avalonia;
+using Avalonia.Headless;
+using Avalonia.Headless.XUnit;
+using Avalonia.Logging;
+using Avalonia.Media.Imaging;
+using Avalonia.Styling;
+using Avalonia.Threading;
+using Bennewitz.Ninja.DiffView.Tests.Composite;
+using Bennewitz.Ninja.DiffView.Demo;
+
+namespace Bennewitz.Ninja.DiffView.Tests;
+
+/// <summary>
+/// Proves the harness end to end: the headless host renders real pixels, the demo window comes
+/// up under the test theme in both variants with its two panes over the bundled fixture,
+/// nothing binds badly, and the frame matches its committed snapshot within the comparer's
+/// tolerance.
+/// </summary>
+/// <remarks>Every test here is a frame, and a frame is a picture of English chrome — see <see cref="EnglishChromeAttribute"/>.</remarks>
+[EnglishChrome]
+[LinuxBaseline]
+public sealed class SmokeSnapshotTests
+{
+    [AvaloniaTheory]
+    [InlineData("Light")]
+    [InlineData("Dark")]
+    public async Task Demo_window_renders(string variant)
+    {
+        TestLogSink.Instance.Clear();
+        Application.Current!.RequestedThemeVariant = variant == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+
+        MainWindow window = new() { Width = 800, Height = 500 };
+        // The window loads its sides on Opened; the zero-time builder keeps the strip's timings
+        // machine-independent, as every rendered frame must be, and the hand-advanced clock keeps the
+        // status's auto-clear off the real one, which a frame failing before Close() would leave armed.
+        window.Diff.Builder = CompositeHost.ZeroTimeBuilder;
+        window.Diff.TimeProvider = new FakeTimeProvider();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        if (window.Diff.CurrentBuild is { } build)
+        {
+            await build;
+        }
+
+        Dispatcher.UIThread.RunJobs();
+
+        using WriteableBitmap? frame = window.CaptureRenderedFrame();
+        Assert.NotNull(frame);
+        Assert.Equal(800, frame.PixelSize.Width);
+        Assert.Equal(500, frame.PixelSize.Height);
+
+        using MemoryStream png = new();
+        frame.Save(png, PngBitmapEncoderOptions.Default);
+        png.Position = 0;
+
+        window.Close();
+        TestLogSink.AssertNoWarnings(LogArea.Binding);
+
+        await Verifier.Verify(png, "png").UseParameters(variant);
+    }
+}

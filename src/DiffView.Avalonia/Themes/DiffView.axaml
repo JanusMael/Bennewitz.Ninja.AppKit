@@ -1,0 +1,34 @@
+<!--
+    DiffView styles. A host includes this file once:
+
+        <StyleInclude Source="avares://DiffView.Avalonia/Themes/DiffView.axaml" />
+
+    Every brush the controls use is a DiffView.* token from DiffView.Tokens.axaml, merged here.
+    The controls never reference a host theme's own keys (Fluent's SystemControl* family, Semi's
+    tokens), so they render the same under Semi, Fluent and Simple. A host overrides any token by
+    defining the same key in its own resources, or swaps the whole palette for the colour-blind
+    sibling by merging DiffView.Tokens.ColorBlind.axaml after this include.
+
+    This is a <Styles> document rather than a <ResourceDictionary> so it can be pulled in with a
+    plain StyleInclude; Styles.Resources does not accept a ResourceInclude directly (AVLN3000),
+    so the tokens arrive through a merged dictionary.
+
+    Compat/FluentKeys.Semi.axaml and Compat/SimpleKeys.Semi.axaml are not included here: a host
+    that runs Semi and also hosts controls templated for Fluent or Simple (AvaloniaEdit's search
+    panel among them) merges them itself — see DiffViewResources.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://DiffView.Avalonia/Themes/DiffView.Tokens.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <!-- The panes' font: the first installed family of the stack, ending in the generic
+           fallback. A host overrides it by defining the same key; the tests do, with the
+           bundled font, so rendered frames do not depend on installed fonts. Not a palette
+           token, so it lives here rather than in the two token dictionaries. -->
+      <FontFamily x:Key="DiffView.MonospaceFontFamily">Cascadia Mono, Consolas, Menlo, DejaVu Sans Mono, monospace</FontFamily>
+    </ResourceDictionary>
+  </Styles.Resources>
+</Styles>

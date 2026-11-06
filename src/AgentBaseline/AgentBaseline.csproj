@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Step 2's parse. A locator only — see Directory.Packages.props and MarkdownOutline. -->
+    <PackageReference Include="Markdig" />
+    <!-- Step 7's window. The markup compiler and the name generator come with the package itself; a
+         project reference to the library carries neither. That markup is AccessibilityCoverageTests'
+         third subject, beside the library's and the demo's, with a floor of its own: step 11, paid in
+         the change that brought the first .axaml here. -->
+    <PackageReference Include="Avalonia" />
+    <!-- The start-up's shell: a platform to run the window on, and the base theme the tests'
+         BaselineTestApp applies, so a test asserts the window the operator sees. -->
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Semi.Avalonia" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Step 3's ingest decodes through PaneSource.FromBytes and probes through TextProbe rather than
+         a second implementation of either: the text this tool parses is the text it hands the diff
+         control at step 5, and two decoders would put the outline on different lines. -->
+    <ProjectReference Include="../DiffView.Core/DiffView.Core.csproj" />
+    <!-- Step 5's review drives the library's own SideBySideDiffView: decision 1 makes this tool an app
+         that hosts the control, never a second control. -->
+    <ProjectReference Include="../DiffView.Avalonia/DiffView.Avalonia.csproj" />
+  </ItemGroup>
+</Project>

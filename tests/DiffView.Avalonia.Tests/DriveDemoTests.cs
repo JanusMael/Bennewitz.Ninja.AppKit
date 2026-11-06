@@ -1,0 +1,380 @@
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+
+namespace Bennewitz.Ninja.DiffView.Tests;
+
+/// <summary>
+/// <c>scripts/drive-demo</c> drives the running demo for a by-hand pass (plan 00023). Its verbs need a
+/// display and a window, which a test run has neither of. What can be tested without them is how it
+/// reads — its own command line, and the two reports <c>xwininfo</c> hands it — and that is where a
+/// driver goes wrong in silence: a window misread is a click sent somewhere else.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Driven through its real command line, as <see cref="CatchCrashTests"/> drives <c>catch-crash</c>:
+/// what runs here is what a developer runs.
+/// </para>
+/// <para>
+/// The fixtures under <c>fixtures/x11</c> were captured from the real tools on 2026-09-28 with the demo
+/// running, under <c>LC_ALL=de_DE.UTF-8</c>. For the root listing, the demo's unmapped log window — a
+/// direct child of the root, which the window manager has not reparented — was given a hostile title
+/// first: a geometry, a position, a colon and quotes, set as <c>UTF8_STRING</c> the way a toolkit
+/// sets one.
+/// </para>
+/// </remarks>
+public sealed class DriveDemoTests
+{
+    private static string Fixture(string name) =>
+        RepoPaths.Source(Path.Combine("fixtures", "x11", name));
+
+    private static string WindowsFixture(string name) =>
+        RepoPaths.Source(Path.Combine("fixtures", "windows", name));
+
+    [Fact]
+    public void Every_verb_prints_in_canonical_form_and_reads_back_to_the_same_lines()
+    {
+        string[] chain =
+        [
+            "launch", "--edit", "both",
+            "then", "window",
+            "then", "key", "ctrl+Down",
+            "then", "click", "left", "88", "16",
+            "then", "click", "3", "105", "829", "in", "popup",
+            "then", "click", "Right", "--id", "SideBySide/LeftPane/LineNumbers",
+            "then", "mark",
+            "then", "popup",
+            "then", "geometry", "0x1200017",
+            "then", "capture", "popup", "menu.png",
+            "then", "hover", "300", "200",
+            "then", "probe", "SideBySide/FindBar",
+            "then", "drag", "left", "539", "364", "to", "639", "364",
+            "then", "drag", "3", "1089", "100", "to", "1089", "400", "in", "popup",
+        ];
+
+        (int exitCode, string output) = Run(["--parse", .. chain]);
+        Assert.True(exitCode == 0, output);
+        string[] lines = Lines(output);
+        Assert.Equal(
+            [
+                "launch\t--edit\tboth",
+                "window",
+                "key\tctrl+Down",
+                "click\tleft\t88\t16\tin\tdemo",
+                "click\tright\t105\t829\tin\tpopup",
+                "click\tright\t--id\tSideBySide/LeftPane/LineNumbers",
+                "mark",
+                "popup",
+                "geometry\t18874391",
+                "capture\tpopup\tmenu.png",
+                "hover\t300\t200\tin\tdemo",
+                "probe\tSideBySide/FindBar",
+                "drag\tleft\t539\t364\tto\t639\t364\tin\tdemo",
+                "drag\tright\t1089\t100\tto\t1089\t400\tin\tpopup",
+            ],
+            lines);
+
+        // Fed back, the canonical tokens give the same lines: nothing the canonical form prints is read
+        // differently the second time, an id path with its separators included.
+        string[] again = [.. lines.SelectMany((line, i) => i == 0 ? line.Split('\t') : ["then", .. line.Split('\t')])];
+        (int againExit, string againOutput) = Run(["--parse", .. again]);
+        Assert.True(againExit == 0, againOutput);
+        Assert.Equal(lines, Lines(againOutput));
+    }
+
+    [Theory]
+    [InlineData("click left 5", "click takes <x> <y> [in <window>], or --id <path>")]
+    [InlineData("mark then", "an empty verb")]
+    [InlineData("frobnicate", "unknown verb `frobnicate`")]
+    [InlineData("click sideways 1 2", "`sideways` is not a button")]
+    [InlineData("geometry nowhere", "`nowhere` is not a window")]
+    [InlineData("key", "key takes one chord")]
+    [InlineData("click left --id SideBySide//LeftPane", "is not an AutomationId path")]
+    [InlineData("click left --id /LeftPane", "is not an AutomationId path")]
+    [InlineData("drag left 1 2 3 4", "drag takes <x> <y> to <x> <y>")]
+    [InlineData("drag left 1 2 to 3", "drag takes <x> <y> to <x> <y>")]
+
+    // The separator is the word `to` and not merely a token in that position: without this the
+    // arity cases above pass whatever the parser accepts there, which is how a keyword stops being
+    // one without anything noticing.
+    [InlineData("drag left 1 2 at 3 4", "drag takes <x> <y> to <x> <y>")]
+    [InlineData("drag left 1 2 to 3 4 near popup", "drag takes <x> <y> to <x> <y>")]
+    [InlineData("drag sideways 1 2 to 3 4", "`sideways` is not a button")]
+
+    // probe takes a path and only a path. A probe given a coordinate pair is the mistake worth
+    // catching, because the two verbs that read a part — hover and click — do take one.
+    [InlineData("probe", "probe takes one AutomationId path")]
+    [InlineData("probe SideBySide/LeftPane extra", "probe takes one AutomationId path")]
+    [InlineData("probe 300 200", "probe takes one AutomationId path")]
+    [InlineData("probe SideBySide//LeftPane", "probe takes one AutomationId path")]
+    public void A_malformed_chain_is_refused_as_usage_and_says_what_is_wrong(string chain, string expected)
+    {
+        (int exitCode, string output) = Run(["--parse", .. chain.Split(' ')]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains(expected, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_roots_children_are_read_by_the_two_ends_of_each_line_whatever_a_title_holds()
+    {
+        string fixture = Fixture("root-children.txt");
+        (int exitCode, string output) = Run(["--parse-children", fixture]);
+        Assert.True(exitCode == 0, output);
+        string[] windows = Lines(output);
+
+        // Every child, and nothing else: the listing says how many it holds.
+        int declared = int.Parse(
+            Regex.Match(File.ReadAllText(fixture), @"(\d+) children:").Groups[1].Value,
+            System.Globalization.CultureInfo.InvariantCulture);
+        Assert.Equal(declared, windows.Length);
+
+        // The hostile title carries 999x99+7+7 and +7+7; the window is what the END of its line says.
+        Assert.Contains("16777235 1728x873+10+10", windows);
+        Assert.DoesNotContain(windows, w => w.Contains("999x99", StringComparison.Ordinal));
+
+        // In the listing's own order — topmost first: the tooltip open at the capture leads, and
+        // mutter's guard window, at the bottom of the stack, ends it.
+        Assert.Equal("16777307 153x35+617+543", windows[0]);
+        Assert.Equal("4194314 2304x1296+0+0", windows[^1]);
+
+        // xwininfo writes a negative offset after the plus.
+        Assert.Contains("4194310 1x1+-100+-100", windows);
+    }
+
+    [Fact]
+    public void A_window_report_is_read_by_its_labels_under_a_German_locale()
+    {
+        // Each report also carries a relative position and a -geometry hint that disagree with the
+        // absolute one, so reading the wrong line shows.
+        Assert.Equal(
+            "16777239 1100x720+602+283 viewable",
+            Single(Run(["--parse-info", Fixture("window-viewable.txt")])));
+        Assert.Equal(
+            "16777235 1728x873+10+10 not-viewable",
+            Single(Run(["--parse-info", Fixture("window-unmapped.txt")])));
+    }
+
+    [Theory]
+    [InlineData("ctrl+Down", "VK_CONTROL 0x11|VK_DOWN 0x28 extended")]
+    [InlineData("shift+F7", "VK_SHIFT 0x10|VK_F7 0x76")]
+    [InlineData("ctrl+shift+f", "VK_CONTROL 0x11|VK_SHIFT 0x10|VK_F 0x46")]
+    [InlineData("alt+v", "VK_MENU 0x12|VK_V 0x56")]
+    [InlineData("F12", "VK_F12 0x7B")]
+    [InlineData("Return", "VK_RETURN 0x0D")]
+    [InlineData("Page_Down", "VK_NEXT 0x22 extended")]
+    [InlineData("super+Left", "VK_LWIN 0x5B extended|VK_LEFT 0x25 extended")]
+    public void A_chord_is_read_as_the_modifiers_it_holds_and_the_one_key_they_hold(string chord, string expected)
+    {
+        // The arrows and the navigation block must come out extended: they share their virtual-key
+        // codes with the numeric keypad, and without the flag `Down` can arrive as the keypad's 2.
+        (int exitCode, string output) = Run(["--parse-chord", chord]);
+
+        Assert.True(exitCode == 0, output);
+        Assert.Equal(expected.Split('|'), Lines(output));
+    }
+
+    [Theory]
+    [InlineData("hyper+a", "`hyper` in `hyper+a` is not a modifier")]
+    [InlineData("ctrl+Enormous", "`Enormous` in `ctrl+Enormous` is not a key this driver can send")]
+    [InlineData("F25", "`F25` in `F25` is not a key this driver can send")]
+    public void A_chord_nobody_can_send_is_refused_and_says_which_part_of_it_is_wrong(string chord, string expected)
+    {
+        (int exitCode, string output) = Run(["--parse-chord", chord]);
+
+        Assert.Equal(2, exitCode);
+        Assert.Contains(expected, output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_elements_report_is_read_by_its_fields_wherever_on_the_desktop_it_is()
+    {
+        // Tab-separated fields and not prose, so no locale reaches the reading; and a window left of
+        // the primary screen has negative coordinates, which a reader that forgot the sign drops.
+        Assert.Equal(
+            "SideBySide/LeftPane ControlType.Edit 531x618+268+346 in 70387178 focused",
+            Single(Run(["--parse-element", WindowsFixture("element-left-pane.txt")])));
+        Assert.Equal(
+            "Unified/Pane ControlType.Edit 1024x768+-1612+-284 in 133182 unfocused",
+            Single(Run(["--parse-element", WindowsFixture("element-on-a-second-screen.txt")])));
+    }
+
+    [Fact]
+    public void A_range_value_is_read_where_a_part_has_one_and_is_absent_where_it_does_not()
+    {
+        // Plan 00033: the scroll offset is readable only because the stock scroll bars inside
+        // AvaloniaEdit's template advertise RangeValue — our own peers advertise no pattern, by
+        // design. It is the one reading that makes the map drag assertable, so it is read here
+        // rather than discovered to be unparsed on the day.
+        //
+        // ⛔ 41.375 and not 41: a scroll offset is fractional, and an invariant decimal point is what
+        // the reader writes precisely so a German machine's comma never reaches this parse.
+        Assert.Equal(
+            "SideBySide/LeftPane/PART_VerticalScrollBar ControlType.ScrollBar 16x618+813+346 in 70387178 unfocused range=41.375",
+            Single(Run(["--parse-element", WindowsFixture("element-with-a-range-value.txt")])));
+
+        // And `-` is a part with no RangeValue, which is most of them: absent, not zero. A reader
+        // that treated it as 0 would make every unscrollable part look scrolled to the top.
+        Assert.DoesNotContain(
+            "range=",
+            Single(Run(["--parse-element", WindowsFixture("element-left-pane.txt")])),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_window_a_part_is_drawn_in_is_read_and_differs_only_for_a_popup()
+    {
+        // Open item 17, XamlQuality's correction. A menu's items sit under the main window's element
+        // in BOTH tree views while each popup is drawn in a window of its own, so the popup is an
+        // item's nearest window in the RAW view — and the reader walks that, because the driver
+        // cannot infer it. Asking WindowFromPoint what window a pixel belongs to and then checking
+        // the pixel against that answer is circular: it agreed with itself for every window of the
+        // demo's process, so the demo's own F12 log window lying over the target was accepted and
+        // the click went into it, reported as success.
+        //
+        // `ColourBlindPalette` is the entry that produced the original defect, which is why it is
+        // the fixture: found under the main window, drawn in a popup of its own.
+        Assert.Equal(
+            "ColourBlindPalette ControlType.MenuItem 214x24+312+432 in 70387178 drawn in 99887766 unfocused",
+            Single(Run(["--parse-element", WindowsFixture("element-in-a-popup.txt")])));
+
+        // The positive control's other half: `drawn in` is said only when there is something to say.
+        // A part drawn in the window it was found under is the ordinary case, and a report that
+        // announced it every time would train a reader to skip the one line that matters.
+        foreach (string ordinary in (string[])
+            ["element-left-pane.txt", "element-on-a-second-screen.txt", "element-with-a-range-value.txt"])
+        {
+            Assert.DoesNotContain(
+                "drawn in",
+                Single(Run(["--parse-element", WindowsFixture(ordinary)])),
+                StringComparison.Ordinal);
+        }
+
+        // ⚠ Not covered here, and deliberately: the reader answering 0 — "I could not name the
+        // window" — is refused by `Drawn` rather than fallen back on, and that path is reachable
+        // only through `Absolute`, which needs a live window. No reading has ever produced 0. The
+        // attended Windows pass is what would exercise it.
+    }
+
+    [Fact]
+    public void The_interactive_pass_prints_through_the_host_so_a_functions_return_value_is_its_own()
+    {
+        // ⛔ A PowerShell function returns everything written to its OUTPUT stream, not just the
+        // value after `return`. The pass gates every capture on the step before it — `if (Drive …)`
+        // — so one Write-Output inside a function makes that gate true whenever the function
+        // printed anything, which is to say always. The first run of the pass (2026-10-08) had
+        // exactly that defect: every guarded block ran whether its step had succeeded or not, and
+        // it produced a frame named for the colour-blind palette that was the demo with a menu open
+        // over it. Nothing in the run's own summary was wrong — the failures go in a separate list
+        // — so what a reader had to go on was a frame whose name was a lie.
+        //
+        // The whole script is held to Write-Host rather than only its functions: a line moved into
+        // a function later would otherwise reopen the gate without touching this test. The reader
+        // beside it keeps its Write-Output on purpose — that report IS its output — which is why
+        // this names one file and not the directory.
+        // Comments are stripped before the reading, and the script's own header names the trap in
+        // prose — so a reading that scanned the file whole would fail on the documentation of the
+        // very rule it enforces, which it did when this was first written. Line numbers survive the
+        // strip, because a hit a reader cannot find is half a finding.
+        string[] lines = File.ReadAllLines(RepoPaths.Source(Path.Combine("scripts", "drive-demo-interactive.ps1")));
+        List<string> offenders = [];
+        bool inBlockComment = false;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            string line = lines[i].Trim();
+
+            if (inBlockComment)
+            {
+                inBlockComment = !line.Contains("#>", StringComparison.Ordinal);
+                continue;
+            }
+
+            if (line.StartsWith("<#", StringComparison.Ordinal))
+            {
+                inBlockComment = !line.Contains("#>", StringComparison.Ordinal);
+                continue;
+            }
+
+            // Everything from the first # is a line comment. Conservative in the safe direction:
+            // a Write-Output after one is a comment, and one before it is still read.
+            if (line.Split('#')[0].Contains("Write-Output", StringComparison.OrdinalIgnoreCase))
+            {
+                offenders.Add($"drive-demo-interactive.ps1:{i + 1}: {line}");
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            "The interactive pass writes to the output stream, so a function's return value carries "
+            + "its chatter and `if (Drive …)` gates on nothing. Use Write-Host:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+    }
+
+    [Fact]
+    public void Nothing_in_scripts_assumes_a_uid_a_display_or_a_repository_path()
+    {
+        // The scratch scripts the driver replaced each wrote all three in: the cookie under
+        // /run/user/1001, the display as :0.0, and the checkout's own path (plan 00023).
+        Regex[] assumptions =
+        [
+            new(@"/run/user/\d"),
+            new(@"/home/\w"),
+            new(@"(?i)\b[a-z]:\\+users\\+"),
+            new(@"Xwaylandauth\.[A-Za-z0-9]"),
+            new(@"DISPLAY=:\d"),
+            new(@"""\s*:\d+(\.\d+)?\s*"""),
+            new(@"\s-i\s+:\d"),
+        ];
+
+        string[] hits =
+        [
+            .. Directory.EnumerateFiles(RepoPaths.Source("scripts"))
+                .SelectMany(path => File.ReadAllLines(path).Select((line, i) => (path, line, number: i + 1)))
+                .Where(entry => assumptions.Any(a => a.IsMatch(entry.line)))
+                .Select(entry => $"{Path.GetFileName(entry.path)}:{entry.number}: {entry.line.Trim()}"),
+        ];
+
+        Assert.True(
+            hits.Length == 0,
+            "A script assumes a uid, a display or a repository path — discover it instead, as "
+            + "scripts/drive-demo.cs does:" + Environment.NewLine + string.Join(Environment.NewLine, hits));
+    }
+
+    private static string[] Lines(string output) =>
+        output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.TrimEnd('\r')).ToArray();
+
+    private static string Single((int ExitCode, string Output) run)
+    {
+        Assert.True(run.ExitCode == 0, run.Output);
+        return Assert.Single(Lines(run.Output));
+    }
+
+    private static (int ExitCode, string Output) Run(string[] arguments)
+    {
+        ProcessStartInfo start = new()
+        {
+            FileName = "dotnet",
+            WorkingDirectory = RepoPaths.Root,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        start.ArgumentList.Add("run");
+        start.ArgumentList.Add(Path.Combine("scripts", "drive-demo.cs"));
+        start.ArgumentList.Add("--");
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process process = Process.Start(start)
+            ?? throw new InvalidOperationException("Could not start dotnet run.");
+
+        // Both pipes drained concurrently: stdout to EOF first deadlocks once the child fills the
+        // stderr pipe buffer, and the test then hangs rather than failing.
+        Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+        Task<string> stderr = process.StandardError.ReadToEndAsync();
+        process.WaitForExit();
+        return (process.ExitCode, stdout.GetAwaiter().GetResult() + stderr.GetAwaiter().GetResult());
+    }
+}

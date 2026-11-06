@@ -1,0 +1,395 @@
+using System.Reflection;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
+using Avalonia.Markup.Xaml;
+using Bennewitz.Ninja.DiffView.Core;
+using Bennewitz.Ninja.DiffView.Tests.Composite;
+
+namespace Bennewitz.Ninja.DiffView.Tests;
+
+/// <summary>
+/// Plan 00019 §Phase 1: the gates that land before <c>docs/hosting-diffview.md</c> is written.
+/// </summary>
+/// <remarks>
+/// Each check is first shown catching a document broken in exactly that one way, the way
+/// <c>LocaleReviewTests</c> proves its own gate; then the real document — once phase 2 writes it —
+/// goes through all of them at once, which is the test that fails the day somebody renames a member
+/// the guide names.
+/// </remarks>
+public sealed class HostingGuideTests
+{
+    /// <summary>
+    /// The snippet a reader pastes. Deliberately loadable as it stands: no <c>x:Class</c>, because a
+    /// quickstart that had one could not be driven without a code-behind type, and the gate's whole
+    /// claim is that the snippet in the document <em>is</em> the snippet under test rather than a
+    /// copy of it that drifts.
+    /// </summary>
+    private const string Quickstart = """
+        <Window xmlns="https://github.com/avaloniaui"
+                xmlns:dv="using:Bennewitz.Ninja.DiffView"
+                Width="900" Height="600">
+          <dv:SideBySideDiffView />
+        </Window>
+        """;
+
+    /// <summary>
+    /// A guide-shaped document, correct unless a parameter breaks exactly one thing about it. Built
+    /// by concatenation rather than interpolation so that markup braces never have to be escaped.
+    /// </summary>
+    private static string Document(string? citation = null, string? xaml = null)
+    {
+        return "# Hosting DiffView\n\n"
+               + "Merge `DiffViewResources.ThemeUri` into `Application.Styles`, or the templates never resolve.\n\n"
+               + "```xml\n"
+               + (xaml ?? Quickstart) + "\n"
+               + "```\n\n"
+               + "Assign " + (citation ?? "`SideBySideDiffView.LeftSource`") + " and `SideBySideDiffView.RightSource`; "
+               + "the control reaches `DiffViewState.Ready`. It ships as `Bennewitz.Ninja.DiffView.Avalonia` "
+               + "over assembly `DiffView.Avalonia`, and `README.md` is the contributor's document.\n";
+    }
+
+    private static List<string> Unresolved(string markdown) =>
+        HostingGuideGate.Unresolved(markdown, HostingGuideGate.Surface());
+
+    private static HostingGuideGate.Kind Classify(string dotted) =>
+        HostingGuideGate.Classify(
+            dotted,
+            HostingGuideGate.PackageIds(),
+            HostingGuideGate.AssemblyNames(),
+            HostingGuideGate.Namespaces(HostingGuideGate.Surface()));
+
+    // ── The citation gate ──────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void A_guide_that_names_only_real_members_trips_nothing()
+    {
+        Assert.Empty(Unresolved(Document()));
+    }
+
+    [Fact]
+    public void A_guide_that_names_a_member_that_does_not_exist_is_caught()
+    {
+        string stale = Assert.Single(Unresolved(Document(citation: "`SideBySideDiffView.NoSuchProperty`")));
+        Assert.Equal("SideBySideDiffView.NoSuchProperty", stale);
+    }
+
+    [Fact]
+    public void A_member_that_exists_but_is_not_public_is_caught()
+    {
+        // Builder is internal, and this assembly sees it through InternalsVisibleTo. A consumer does
+        // not, so naming it in the guide is the same defect as naming one that was never there —
+        // which is why the check reflects over exported types and Public binding flags only.
+        Assert.NotNull(typeof(SideBySideDiffView)
+            .GetProperty("Builder", BindingFlags.NonPublic | BindingFlags.Instance));
+
+        string hidden = Assert.Single(Unresolved(Document(citation: "`SideBySideDiffView.Builder`")));
+        Assert.Equal("SideBySideDiffView.Builder", hidden);
+    }
+
+    [Fact]
+    public void A_framework_type_the_guide_must_name_resolves()
+    {
+        // Application.Styles is the instruction a host cannot skip. Holding citations to the two
+        // DiffView assemblies alone would fail the entire theming section.
+        Assert.Empty(Unresolved("Merge it into `Application.Styles` as a `StyleInclude`.\n"));
+    }
+
+    // ── What is dotted and backticked but is not a member ──────────────────────────────────
+
+    [Fact]
+    public void A_package_id_is_not_read_as_a_member_citation()
+    {
+        Assert.Equal(HostingGuideGate.Kind.PackageId, Classify("Bennewitz.Ninja.DiffView.Avalonia"));
+        Assert.Equal(HostingGuideGate.Kind.PackageId, Classify("Bennewitz.Ninja.DiffView.Core"));
+    }
+
+    [Fact]
+    public void An_assembly_name_is_not_read_as_a_member_citation()
+    {
+        Assert.Equal(HostingGuideGate.Kind.AssemblyName, Classify("DiffView.Avalonia"));
+        Assert.Equal(HostingGuideGate.Kind.AssemblyName, Classify("DiffView.Core"));
+    }
+
+    [Fact]
+    public void A_file_name_is_not_read_as_a_member_citation()
+    {
+        Assert.Equal(HostingGuideGate.Kind.FileName, Classify("README.md"));
+        Assert.Equal(HostingGuideGate.Kind.FileName, Classify("DiffView.axaml"));
+    }
+
+    [Fact]
+    public void A_namespace_the_library_declares_is_not_read_as_a_member_citation()
+    {
+        // The guide has to print this one: it is the xmlns a reader imports, and plan 00017 left no
+        // type named DiffView on purpose, so member resolution could never account for it.
+        Assert.Equal("Bennewitz.Ninja.DiffView", typeof(SideBySideDiffView).Namespace);
+        Assert.Equal(HostingGuideGate.Kind.Namespace, Classify("Bennewitz.Ninja.DiffView"));
+    }
+
+    [Fact]
+    public void A_namespace_the_library_does_not_declare_is_still_caught()
+    {
+        // Excused, not unchecked. The day the namespace moves again, the guide's own xmlns fails.
+        Assert.Equal(HostingGuideGate.Kind.Api, Classify("Bennewitz.Ninja.DiffView.Nowhere"));
+        Assert.Single(Unresolved("It lives in `Bennewitz.Ninja.DiffView.Nowhere`.\n"));
+    }
+
+    [Fact]
+    public void The_package_ids_the_gate_excuses_are_the_ones_the_build_declares()
+    {
+        // Read from the csproj, pinned here. The ids moved once already, in 3ae46d8; this fails on
+        // the next move rather than letting the gate excuse a string nothing ships any more.
+        Assert.Equal(
+            ["Bennewitz.Ninja.DiffView.Avalonia", "Bennewitz.Ninja.DiffView.Core"],
+            HostingGuideGate.PackageIds().OrderBy(id => id, StringComparer.Ordinal));
+    }
+
+    // ── The quickstart gate ────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void The_quickstart_is_read_from_the_document()
+    {
+        string? xaml = HostingGuideGate.FirstBlock(Document(), "xml");
+        Assert.NotNull(xaml);
+        Assert.Contains("SideBySideDiffView", xaml, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_document_with_no_quickstart_block_yields_none()
+    {
+        Assert.Null(HostingGuideGate.FirstBlock("# Guide\n\nProse only.\n", "xml"));
+    }
+
+    [Fact]
+    public void The_quickstart_names_the_namespace_the_control_reports()
+    {
+        string xaml = HostingGuideGate.FirstBlock(Document(), "xml")!;
+        Assert.Equal(typeof(SideBySideDiffView).Namespace, HostingGuideGate.DeclaredNamespace(xaml));
+    }
+
+    [Fact]
+    public void A_quickstart_importing_a_namespace_the_library_does_not_have_is_caught()
+    {
+        // Precisely the citation plan 00017 would have broken, and the one no reflection over member
+        // names would notice: the xmlns is a string, and every member it reaches still exists.
+        string moved = Quickstart.Replace(
+            "using:Bennewitz.Ninja.DiffView",
+            "using:Bennewitz.Ninja.DiffView.Avalonia",
+            StringComparison.Ordinal);
+
+        Assert.NotEqual(typeof(SideBySideDiffView).Namespace, HostingGuideGate.DeclaredNamespace(moved));
+    }
+
+    [AvaloniaFact]
+    public void A_quickstart_whose_xaml_does_not_parse_is_caught()
+    {
+        string broken = Document(xaml: """
+            <Window xmlns="https://github.com/avaloniaui"
+                    xmlns:dv="using:Bennewitz.Ninja.DiffView">
+              <dv:SideBySideDiffView
+            </Window>
+            """);
+
+        string xaml = HostingGuideGate.FirstBlock(broken, "xml")!;
+        Assert.ThrowsAny<Exception>(() => AvaloniaRuntimeXamlLoader.Load(xaml));
+    }
+
+    [AvaloniaFact]
+    public async Task The_quickstart_parses_and_reaches_ready_over_two_sources()
+    {
+        string xaml = HostingGuideGate.FirstBlock(Document(), "xml")!;
+        await AssertQuickstartRunsAsync(xaml);
+    }
+
+    // ── The real document, once it exists ──────────────────────────────────────────────────
+
+    [AvaloniaFact]
+    public async Task The_guide_itself_passes_every_check()
+    {
+        string path = RepoPaths.Source(HostingGuideGate.DocumentPath);
+
+        // Phase 1 shipped this as a skip, because the gate deliberately preceded the document. Phase
+        // 2 wrote it, so the skip came out: a guide that vanishes must fail here rather than quietly
+        // stop being checked.
+        Assert.True(File.Exists(path), $"{HostingGuideGate.DocumentPath} is gone, and with it every check below.");
+
+        string markdown = await File.ReadAllTextAsync(path);
+
+        List<string> unresolved = HostingGuideGate.Unresolved(markdown, HostingGuideGate.Surface());
+        Assert.True(
+            unresolved.Count == 0,
+            "The guide names API that does not resolve: " + string.Join("; ", unresolved));
+
+        string? xaml = HostingGuideGate.FirstBlock(markdown, "xml");
+        Assert.NotNull(xaml);
+        Assert.Equal(typeof(SideBySideDiffView).Namespace, HostingGuideGate.DeclaredNamespace(xaml));
+        await AssertQuickstartRunsAsync(xaml);
+    }
+
+    [Fact]
+    public void The_guide_is_linked_from_the_readme()
+    {
+        // A guide nobody can find is the failure mode that costs least to prevent, and README.md is
+        // the only place a consumer who arrived at the repository will look.
+        string readme = File.ReadAllText(RepoPaths.Source("README.md"));
+        Assert.Contains(HostingGuideGate.DocumentPath, readme, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Loads the markup, shows it, feeds it two sources and waits for the build. Parsing is not
+    /// working: a quickstart that parses and then never leaves <c>Building</c> is still broken for
+    /// the reader who pasted it.
+    /// </summary>
+    private static async Task AssertQuickstartRunsAsync(string xaml)
+    {
+        Window window = Assert.IsType<Window>(AvaloniaRuntimeXamlLoader.Load(xaml));
+        try
+        {
+            SideBySideDiffView view = Assert.Single(
+                window.GetLogicalDescendants().OfType<SideBySideDiffView>());
+
+            // A hand-advanced clock, as every other Avalonia test here uses — and it must be set
+            // BEFORE the window is shown. StatusController is built lazily on the first touch of
+            // Status, capturing whatever TimeProvider says at that moment, and applying the template
+            // is one such touch; assigning afterwards compiles, reads as correct, and leaves the
+            // real clock in place. ("Set it before the first build" is the property's own wording,
+            // which is looser than the truth.)
+            //
+            // Not cosmetic. A successful build posts a status message with an auto-clear timer
+            // behind it; on the real clock that timer outlives the test, fires on a pool thread, and
+            // StatusController.DispatchToUiThread invokes it inline because
+            // Dispatcher.UIThread.CheckAccess() answers true for a pooled thread the headless
+            // dispatcher has already handed back. That call sits outside the method's try/catch, so
+            // the VerifyAccess failure escapes unhandled and aborts the process — exit 134,
+            // mid-suite. Recorded in DECISIONS.md, where the unguarded inline call is left as a
+            // finding rather than repaired inside a documentation plan.
+            //
+            // Scaffolding around the markup, not a change to it: the quickstart under test is still
+            // exactly what the document prints.
+            FakeTimeProvider clock = new();
+            view.TimeProvider = clock;
+
+            window.Show();
+            CompositeHost.Layout();
+
+            view.LeftSource = new PaneSource("one\ntwo\nthree\n") { Title = "left.txt" };
+            view.RightSource = new PaneSource("one\ntwo changed\nthree\n") { Title = "right.txt" };
+
+            bool ready = await CompositeHost.PumpUntilAsync(() => view.State == DiffViewState.Ready);
+
+            Assert.True(ready, $"The quickstart never reached Ready; it settled at {view.State}.");
+            Assert.NotNull(view.Document);
+
+            // Proof the clock above actually took. A successful build posts a status message and
+            // arms its auto-clear, so the timer has to be on this clock; if the assignment ever
+            // drifts back below Show() it lands on the real one instead, and the only symptom is a
+            // process abort in roughly one full-suite run out of ten, long after this test passed.
+            Assert.True(
+                clock.ActiveTimers > 0,
+                "The status auto-clear was not armed on the test clock, so it is on the real one.");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // ── The id table ───────────────────────────────────────────────────────────────────────
+
+    /// <summary>A pinned set small enough to read: two parts' ids, a margin's, a verb's entry and an exception.</summary>
+    private static readonly (string Owner, string Id)[] SamplePins =
+    [
+        ("SideBySideDiffView", "LeftPane"),
+        ("InlineDiffView", "Pane"),
+        ("DiffPanePresenter", "LineNumbers"),
+        ("DiffMenuItem", "NextChange"),
+        ("DiffMenuItem", "Save"),
+    ];
+
+    /// <summary>
+    /// A guide-shaped id table, agreeing with <see cref="SamplePins"/> unless a parameter breaks exactly one
+    /// row of it.
+    /// </summary>
+    private static string IdTable(
+        string panes = "`LeftPane`; `Pane` in the unified view",
+        string menu = "the name of its `DiffCommand`; `Save` for the one with none") =>
+        "## Finding its parts\n\n"
+        + "| Part | `AutomationId` | Unique within |\n"
+        + "|---|---|---|\n"
+        + "| a view | the one you give it | your window |\n"
+        + "| the panes | " + panes + " | the view |\n"
+        + "| a pane's margin | `LineNumbers` | the pane |\n"
+        + "| an entry the library puts in a context menu | " + menu + " | the menu |\n\n"
+        + "Give the view an id where you place it.\n";
+
+    private static List<string> IdMismatches(string markdown) =>
+        HostingGuideGate.IdTableMismatches(markdown, SamplePins, ["NextChange"], nameof(DiffMenuItem));
+
+    [Fact]
+    public void A_table_that_names_exactly_the_pinned_ids_trips_nothing()
+    {
+        Assert.Empty(IdMismatches(IdTable()));
+    }
+
+    [Fact]
+    public void An_id_the_fixture_pins_and_the_table_leaves_out_is_caught()
+    {
+        Assert.Equal(["pinned and not in the guide's table: Pane"], IdMismatches(IdTable(panes: "`LeftPane`")));
+    }
+
+    [Fact]
+    public void An_id_the_table_names_and_the_fixture_does_not_pin_is_caught()
+    {
+        Assert.Equal(
+            ["in the guide's table and not pinned: RightPane"],
+            IdMismatches(IdTable(panes: "`LeftPane`, `RightPane`; `Pane` in the unified view")));
+    }
+
+    [Fact]
+    public void A_menu_row_that_leaves_out_an_entry_with_no_command_is_caught()
+    {
+        Assert.Equal(
+            ["a menu entry with no command that the menu row leaves out: Save"],
+            IdMismatches(IdTable(menu: "the name of its `DiffCommand`")));
+    }
+
+    [Fact]
+    public void A_menu_row_that_names_an_entry_with_a_command_is_caught()
+    {
+        Assert.Equal(
+            ["named by the menu row and not a pinned menu entry with no command: NextChange"],
+            IdMismatches(IdTable(menu: "the name of its `DiffCommand`; `Save` and `NextChange`")));
+    }
+
+    [Fact]
+    public void A_guide_with_no_id_table_is_caught()
+    {
+        Assert.Equal(["the guide has no AutomationId table"], IdMismatches("# Hosting DiffView\n\nNo table here.\n"));
+    }
+
+    /// <summary>
+    /// The guide's table is a host's copy of <c>fixtures/automation-ids.txt</c>, which the code is held to
+    /// both ways, so holding the table to the fixture holds it to the code. The menu row is held to the rule
+    /// it states: its own ids are exactly the pinned entries that name no <see cref="DiffCommand"/>.
+    /// </summary>
+    [Fact]
+    public void The_guides_id_table_names_exactly_the_ids_the_fixture_pins()
+    {
+        string markdown = File.ReadAllText(RepoPaths.Source(HostingGuideGate.DocumentPath));
+        (string Owner, string Id)[] pinned =
+        [
+            .. AccessibilityCoverageTests.PinnedIds()
+                .Select(line => line.Split(' ', 2))
+                .Select(pair => (pair[0], pair[1])),
+        ];
+
+        List<string> findings = HostingGuideGate.IdTableMismatches(
+            markdown, pinned, Enum.GetNames<DiffCommand>(), nameof(DiffMenuItem));
+
+        Assert.True(
+            findings.Count == 0,
+            $"{HostingGuideGate.DocumentPath}'s AutomationId table and fixtures/automation-ids.txt disagree:"
+            + Environment.NewLine + string.Join(Environment.NewLine, findings.Select(f => "  " + f)));
+    }
+}
