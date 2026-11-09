@@ -13,6 +13,14 @@ reason to release one (decision 21).
 DiffView does not live here. The plan brought it too, and the maintainer took it out on 2026-11-06:
 development stays in Bennewitz.Ninja.DiffView, which is not archived.
 
+**Synced to Bennewitz.Ninja.Templates `2026.4.1109`** on 2026-11-09. The scripts were already that
+release's; it moves the pins: AutoVersioning `2026.3.916` to `2026.4.1031`, whose diagnostics are
+`BNAV00` to `BNAV04` from `2026.3.928` on; xunit.v3 `4.0.2` to `4.0.3`; and, in the tests,
+AssemblyQuality `2026.4.1029` to `2026.4.1031` and XamlQuality `2026.4.1026` to `2026.4.1109`.
+Avalonia stays `12.1.3`, the floor every consumer inherits. Build with warnings as errors, 466 tests
+(451 passed, 15 skipped as before), pack, `assert-packages`, and `check`, which conforms, pass on
+Windows; the AOT and trim jobs run in CI. Neither family's packages change, so neither releases.
+
 **Next, in order:**
 1. **AppServices' and ScopedEditors' next releases** are each a family release, `appservices/v…` and
    `scopededitors/v…`, on the maintainer's word when the family next changes. The policy names this
