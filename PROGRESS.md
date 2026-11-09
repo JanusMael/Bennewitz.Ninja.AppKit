@@ -21,6 +21,16 @@ Avalonia stays `12.1.3`, the floor every consumer inherits. Build with warnings 
 (451 passed, 15 skipped as before), pack, `assert-packages`, and `check`, which conforms, pass on
 Windows; the AOT and trim jobs run in CI. Neither family's packages change, so neither releases.
 
+**ScopedEditors runs `BNXQ1009` and `BNXQ1010`** from 2026-11-09, by the owner's choice, in
+`tests/ScopedEditors.Tests/Accessibility/GeneratedRowRuleTests.cs`: the rows a list generates are
+named by what they show and draw a background of their own. Each reads the strict enum's `ComboBox`,
+the one such list, with the package's assembly loaded, and requires something inspected and nothing
+skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` alone, and the rows'
+`Background` set to `{x:Null}` fails `BNXQ1010` alone. XamlQuality's other unadopted rules,
+`BNXQ1003` to `BNXQ1006` and `BNXQ1008`, were measured the same day and inspect nothing here: no
+control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
+package changes.
+
 **Next, in order:**
 1. **AppServices' and ScopedEditors' next releases** are each a family release, `appservices/v…` and
    `scopededitors/v…`, on the maintainer's word when the family next changes. The policy names this
@@ -69,11 +79,7 @@ The three ids ship together at every version.
    is scheduled for them.
 
 **ScopedEditors**
-1. **Whether to adopt XamlQuality's other opt-in rules is the owner's call.** None reports anything
-   until constructed. `BNXQ1008` inspects nothing here. `BNXQ1009` (item containers named by what they
-   show), and `BNXQ1005` and `BNXQ1006`, read compiled assemblies (`WithAssemblies`) and are unmeasured
-   here.
-2. **Per-assembly headless isolation is unverified**, as above. It is the candidate fix for the
+1. **Per-assembly headless isolation is unverified**, as above. It is the candidate fix for the
    cross-thread failure seen on OpenForge2k's CI, and OpenForge2k has not reproduced that failure since
    its xUnit move (measured 2026-09-25) and parked its own attempt because it broke a seam, so the
    evidence has not arrived.
