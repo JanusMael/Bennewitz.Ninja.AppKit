@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup Label="Versioning">
-    <PackageVersion Include="Bennewitz.Ninja.AutoVersioning" Version="2026.3.916" />
+    <PackageVersion Include="Bennewitz.Ninja.AutoVersioning" Version="2026.4.1031" />
   </ItemGroup>
 
   <ItemGroup Label="Analysis">
@@ -45,14 +45,14 @@
     <!-- The family's own rules, run as tests over what this repository ships. Test-only: nothing
          shipped references them. A rule's reading here is a measurement against these versions, so
          a move re-opens every rule. -->
-    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.4.1029" />
-    <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.4.1026" />
+    <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.4.1031" />
+    <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.4.1109" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">
     <!-- xunit.v3 on Microsoft.Testing.Platform: see global.json. The VSTest bridge packages are
          deliberately absent. -->
-    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
     <!-- A real Avalonia application on a headless platform. ⚠ Pinned to the SAME version as Avalonia
          above: a headless platform from any other release pulls that release's Avalonia in
          transitively, against the libraries' pin, and trips central transitive pinning. -->
