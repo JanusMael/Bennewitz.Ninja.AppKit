@@ -35,6 +35,13 @@ namespace AppServices.Tests.AvaloniaUI;
 /// from <c>ResetForTests</c>, which also takes the handler off its dispatcher and puts the seam back,
 /// and puts the logger back. This assembly runs serially (Parallelization.cs).
 /// </para>
+/// <para>
+/// ⚠ <b>Every throw here also leaves a task exception nobody observed.</b> Avalonia 12.1.3's
+/// <c>DispatcherOperation.InvokeCore</c> puts a posted job's exception in the job's task before
+/// <c>UnhandledException</c> sees it, and nothing reads that task. The runtime raises it at whichever
+/// collection finds the task, into whichever run is hooked in then, so <see cref="Dispose"/> collects
+/// before the next test starts.
+/// </para>
 /// </remarks>
 public sealed class UiThreadExceptionHandlerTests : IDisposable
 {
@@ -55,6 +62,12 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
     {
         Log.Logger = _originalLogger;
         AvaloniaDiagnostics.ResetForTests();
+
+        // The task exceptions this test's throws left unobserved are raised now, while no run is hooked
+        // in (see the remarks).
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
         try
         {
             Directory.Delete(_logs, recursive: true);
