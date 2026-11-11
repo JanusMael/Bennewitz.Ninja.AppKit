@@ -167,6 +167,51 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
     }, CancellationToken.None);
 
     [Fact]
+    public Task A_failure_first_seen_while_a_dialog_is_open_is_shown_at_its_first_repeat_after_it_closes_and_never_again() =>
+        Session.Dispatch(() =>
+        {
+            Install();
+            InvalidOperationException first = new("the first failure");
+
+            Throw(first);
+            Throw(Second());
+
+            Assert.Equal<Exception>([first], _dialogs.Requests.Select(request => request.Exception));
+
+            _dialogs.Requests[0].Close();
+            InvalidOperationException secondAgain = Second();
+            Throw(secondAgain);
+
+            // A different failure still gets its dialog, one at a time: at its first repeat once the gate
+            // has reopened. It was logged in full only the once, when it was first seen.
+            Assert.Equal<Exception>([first, secondAgain], _dialogs.Requests.Select(request => request.Exception));
+            Assert.Equal(2, Failures().Length);
+
+            _dialogs.Requests[1].Close();
+            Throw(Second());
+
+            // Never shown twice, and its count line came when its dialog closed.
+            Assert.Equal(2, _dialogs.Requests.Count);
+            Assert.Equal([1L], RepeatLines().Select(RepeatCount));
+        }, CancellationToken.None);
+
+    [Fact]
+    public Task A_failure_whose_dialog_failed_to_show_is_not_offered_it_again() => Session.Dispatch(() =>
+    {
+        Install();
+        _dialogs.FailNext = true;
+        const string message = "a failure whose dialog fails to show";
+
+        Throw(new InvalidOperationException(message));
+        Throw(new InvalidOperationException(message));
+
+        // The gate is open again, but the repeat is not offered the dialog that failed, so a dialog that
+        // cannot open is not tried, and its failure not logged, on every repeat.
+        Assert.Single(_dialogs.Requests);
+        Assert.Single(_sink.At(LogEventLevel.Error), e => e.Exception is FakeDialogs.CannotShow);
+    }, CancellationToken.None);
+
+    [Fact]
     public Task A_repeat_is_logged_once_counted_never_shown_twice_and_its_count_written_when_its_dialog_closes() =>
         Session.Dispatch(() =>
         {
@@ -336,6 +381,11 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
 
     /// <summary>A fresh exception with the type, message and throw site of every other one it returns.</summary>
     private static InvalidOperationException Repeat() => new(RepeatMessage);
+
+    private const string SecondMessage = "the second failure, first seen while the first dialog is open";
+
+    /// <summary>A fresh exception that is one failure with every other one it returns, and a different one from <see cref="Repeat"/>'s.</summary>
+    private static InvalidOperationException Second() => new(SecondMessage);
 
     /// <summary>Configures logging into <see cref="_sink"/> at Debug, and installs the hooks.</summary>
     private void Install(

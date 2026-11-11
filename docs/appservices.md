@@ -86,8 +86,8 @@ exception handled:
 |---|---|
 | Benign, by `IsBenignException` | Logged at Debug, and nothing is shown |
 | Any other | Logged at Error and shown in a `FatalErrorDialog` titled `Application Error — {AppName}`; the app keeps running |
-| Another, while that dialog is open | Logged at Error, and not shown |
-| A repeat: the type, message and throw site of one already reported | Counted, never logged in full again and never shown; a line gives its count when its dialog closes and when `EntryPointOptions()`' `FlushLog` runs |
+| Another, while that dialog is open | Logged at Error, and not shown then; if it repeats, its first repeat after that dialog closes is shown |
+| A repeat: the type, message and throw site of one already reported | Counted, never logged in full again, and never shown twice; a line gives its count when its dialog closes and when `EntryPointOptions()`' `FlushLog` runs |
 | One a handler subscribed before the package's has already handled | Left alone |
 
 The handler is installed once, however often `InstallAvaloniaHooks()` is called, and

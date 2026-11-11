@@ -62,7 +62,7 @@ Each new test was seen red with the code it guards broken on purpose. One rule h
 comment for its only guard: that `ResetForTests` leaves the dispatcher recorded at install, never
 `Dispatcher.UIThread`. No headless test can tell the two apart, since a dispatcher the session has
 moved past runs no more jobs (measured). Build with warnings as errors,
-546 tests (531 passed, 15 skipped as before), and `check`, which conforms, pass on Windows. Package
+548 tests (533 passed, 15 skipped as before), and `check`, which conforms, pass on Windows. Package
 validation against `2026.4.1110` reports no breaking change in `.EntryPoint` or `.Avalonia`, and
 reports a planted one (`CP0002`); the native AOT probe publishes on win-x64 without a warning and
 passes its contract there, and CI's `aot-linux` covers Linux. **A change of behaviour for an app
@@ -88,11 +88,11 @@ cost and the three ways out.
 
 ## Drift from `plans/00002`
 
-- **A repeat is never shown, where the plan says "never shown twice".** Only a failure's first
-  occurrence can open a dialog. A failure first seen while another dialog is open is logged and
-  counted, and stays unshown after that dialog closes; its count is written when `FlushLog` runs.
-  Showing it once, after the gate reopens, would also meet the plan's words; this reading is the
-  simpler, and is the one documented.
+- **"Never shown twice" is one dialog for each failure.** A failure is offered its dialog at its
+  first occurrence, or, when another dialog is open then, at its first repeat after that dialog
+  closes: as the maintainer's choice of 2026-11-11 put it, a different exception still gets its
+  dialog, one at a time. A dialog that fails to show counts as offered, so a dialog that cannot open
+  is not tried, and its failure logged, again on every repeat.
 - **The throw site is the first line of the exception's stack trace, as text.** The plan does not say
   how a repeat's throw site is read. `TargetSite` and `StackFrame.GetMethod` need metadata a trimmed
   app may not keep, and the trim analyser fails the build on them.
