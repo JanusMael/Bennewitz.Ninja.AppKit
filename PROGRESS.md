@@ -62,31 +62,32 @@ Each new test was seen red with the code it guards broken on purpose. One rule h
 comment for its only guard: that `ResetForTests` leaves the dispatcher recorded at install, never
 `Dispatcher.UIThread`. No headless test can tell the two apart, since a dispatcher the session has
 moved past runs no more jobs (measured). Build with warnings as errors,
-548 tests (533 passed, 15 skipped as before), and `check`, which conforms, pass on Windows. Package
+559 tests (544 passed, 15 skipped as before), and `check`, which conforms, pass on Windows. Package
 validation against `2026.4.1110` reports no breaking change in `.EntryPoint` or `.Avalonia`, and
 reports a planted one (`CP0002`); the native AOT probe publishes on win-x64 without a warning and
 passes its contract there, and CI's `aot-linux` covers Linux. **A change of behaviour for an app
 with a UI-thread handler of its own:** `docs/appservices.md`, "Upgrading from 2026.4.1110", gives the
 cost and the three ways out.
 
-**Avalonia reports each UI-thread failure a second time.** Its 12.1.3 `DispatcherOperation.InvokeCore`
-puts a posted job's exception in the job's task before `UnhandledException` sees it, and nothing
-reads that task, so the runtime raises the exception again, at whichever later collection finds the
-task, as a task exception nobody observed (traced in a test run on 2026-11-11). CI's Windows run
-caught it in the tests: the handler's tests left those exceptions behind, and the web probe's run
-reported one on its stderr. They now collect them before each test ends (`tests/AGENTS.md`). In an app
-that `AppMain` runs with `EntryPointOptions()`, each such failure, every repeat included, is logged
-again at Warning and written on stderr, or logged again at Debug when benign. Whether the package
-should recognise its own failures there awaits the maintainer's choice.
+**Avalonia reports each UI-thread failure a second time, and the package knows it.** Its 12.1.3
+`DispatcherOperation.InvokeCore` puts a posted job's exception in the job's task before
+`UnhandledException` sees it, and nothing reads that task, so the runtime raises the exception again,
+at whichever later collection finds the task, as a task exception nobody observed (traced in a test
+run on 2026-11-11). CI's Windows run caught it in the tests: the handler's tests left those exceptions
+behind, and the web probe's run reported one on its stderr. They now collect them before each test
+ends (`tests/AGENTS.md`). In an app that `AppMain` runs with `EntryPointOptions()`, every failure,
+each repeat included, would have been logged again at Warning and written on stderr. By the
+maintainer's choice of 2026-11-11, the handler remembers, weakly, each exception it handles, and
+`EntryPointOptions()` keeps that second report off stderr and out of the log (see Drift). Every row of
+the shared table is thrown for real inside an `AppMain` run and its second report collected there, and
+each of seven planted breaks turns a test red.
 
 **Next, in order:**
-1. **The second report of a UI-thread failure** (above): the maintainer's choice, before AppServices'
-   next release.
-2. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word. Then its
+1. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word. Then its
    step 6: ClaudeForge is told what it must change in one commit, and that OpenForge2k's copy of it
    holds its version until it can make the same change; Templates is told the version, and the line
    `bbavalonia` needs in the same sync, `HandleUiThreadExceptions = !smoke`.
-3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+2. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: each pushed at `2026.4.1110`.
 
@@ -95,7 +96,7 @@ should recognise its own failures there awaits the maintainer's choice.
 | Package | Change |
 |---|---|
 | `Bennewitz.Ninja.AppServices.EntryPoint` | `AppMainOptions` is a `sealed record` with `IsBenignException` (`plans/00002`, step 2). Binary compatible with `2026.4.1110`, by package validation |
-| `Bennewitz.Ninja.AppServices.Avalonia` | `InstallAvaloniaHooks()` installs the UI-thread handler, on by default, and `AvaloniaDiagnosticsOptions` gains `HandleUiThreadExceptions` and `IsBenignException`; `EntryPointOptions()` passes the filter on, logs a benign unobserved exception at Debug, and writes the pending repeat counts before it flushes (`plans/00002`, step 3). Binary compatible with `2026.4.1110`, by package validation, but **a change of behaviour for an app with a UI-thread handler of its own** |
+| `Bennewitz.Ninja.AppServices.Avalonia` | `InstallAvaloniaHooks()` installs the UI-thread handler, on by default, and `AvaloniaDiagnosticsOptions` gains `HandleUiThreadExceptions` and `IsBenignException`; `EntryPointOptions()` passes the filter on, logs a benign unobserved exception at Debug, keeps Avalonia's second report of a handled UI-thread exception off stderr and out of the log, and writes the pending repeat counts before it flushes (`plans/00002`, step 3). Binary compatible with `2026.4.1110`, by package validation, but **a change of behaviour for an app with a UI-thread handler of its own** |
 | All five | The packed README, `docs/appservices.md`, describes the hook and the filter, and gains "Upgrading from 2026.4.1110" (`plans/00002`, step 4) |
 
 ## Drift from `plans/00002`
@@ -105,6 +106,13 @@ should recognise its own failures there awaits the maintainer's choice.
   closes: as the maintainer's choice of 2026-11-11 put it, a different exception still gets its
   dialog, one at a time. A dialog that fails to show counts as offered, so a dialog that cannot open
   is not tried, and its failure logged, again on every repeat.
+- **Avalonia's second report of a UI-thread exception is not reported again.** The plan did not know
+  of it. By the maintainer's choice of 2026-11-11, `UiThreadExceptions` remembers, weakly, each
+  exception it handles and what an aggregate among them flattens to; the filter `EntryPointOptions()`
+  passes on calls that second report benign, and its callback skips it. An exception another handler
+  dealt with first is left alone, its second report included. One case still reaches stderr: an empty
+  `AggregateException` thrown on the UI thread flattens to nothing, and the entry point's rule calls
+  that not benign before any filter runs.
 - **The throw site is the first line of the exception's stack trace, as text.** The plan does not say
   how a repeat's throw site is read. `TargetSite` and `StackFrame.GetMethod` need metadata a trimmed
   app may not keep, and the trim analyser fails the build on them.
