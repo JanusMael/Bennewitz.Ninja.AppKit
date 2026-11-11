@@ -115,3 +115,7 @@ Built on a branch, in a fresh clone of AppServices at `0c2dfae`, importing Scope
   its tags were renamed. Its archived repository keeps the original commits.
 - **nuget.org's policy cannot change its repository.** The rename needed a new policy naming AppKit,
   and AppServices' old one deleted.
+- **Lines from before the merge still said the root `README.md` is packed.** Each family packs its
+  own `docs/<family>.md` as `README.md`. The root `AGENTS.md`, `docs/AGENTS.md` and `src/AGENTS.md`
+  say so since 2026-11-11, and `docs/AGENTS.md` names AppKit as the policy's repository, where it
+  still named ScopedEditors' old one.

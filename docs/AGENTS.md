@@ -5,8 +5,9 @@ Each family's README, `appservices.md` and `scopededitors.md`, each packed as th
 
 ## AppServices
 
-Documents for humans. What an agent needs lives in the `AGENTS.md` files, not here. Nothing here is
-packed; `README.md` at the root is what nuget.org shows.
+Documents for humans. What an agent needs lives in the `AGENTS.md` files, not here. `appservices.md`
+is packed into every AppServices package as its `README.md`, so it is what nuget.org shows; nothing
+else here is packed.
 
 | Document | What it is | Kept in step with |
 |---|---|---|
@@ -21,8 +22,9 @@ packed; `README.md` at the root is what nuget.org shows.
 
 ## ScopedEditors
 
-Documents for humans. What an agent needs lives in the `AGENTS.md` files, not here. None of it is
-packed; the packages carry the root `README.md` only.
+Documents for humans. What an agent needs lives in the `AGENTS.md` files, not here.
+`scopededitors.md` is packed into every ScopedEditors package as its `README.md`, so it is what
+nuget.org shows; nothing else here is packed.
 
 | Document | What it is | Kept in step with |
 |---|---|---|
@@ -32,6 +34,6 @@ packed; the packages carry the root `README.md` only.
 
 | Rule | Why |
 |---|---|
-| `publishing.md` names `release.yml` as the trusted-publishing policy's workflow file and `Bennewitz.Ninja.ScopedEditors` as its repository | The policy on nuget.org matches those literally; the document is where a maintainer copies them from |
-| Consumer-facing upgrade notes, such as the `avares://` and namespace changes, go in the root `README.md`, not here | The README is the nuget.org description, so it is what a consumer reads before upgrading |
+| `publishing.md` names `release.yml` as the trusted-publishing policy's workflow file and `Bennewitz.Ninja.AppKit` as its repository | The policy on nuget.org matches those literally; the document is where a maintainer copies them from |
+| Consumer-facing upgrade notes, such as the `avares://` and namespace changes, go in `scopededitors.md`, under an "Upgrading from" heading | It is packed as every ScopedEditors package's README, so it is what a consumer reads on nuget.org before upgrading |
 | The history of the package split and the renames lives in Bennewitz.Ninja.Templates (`docs/layered-editors-renames.md`, `docs/layered-editors-package-split.md`) and is linked rather than copied | Two copies of a record eventually disagree |
