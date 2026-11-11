@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using AppServices.Tests.BenignExceptions;
 using Avalonia.Controls;
@@ -5,6 +6,7 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
+using Bennewitz.Ninja.AppServices.EntryPoint;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
@@ -41,6 +43,9 @@ namespace AppServices.Tests.AvaloniaUI;
 /// <c>UnhandledException</c> sees it, and nothing reads that task. The runtime raises it at whichever
 /// collection finds the task, into whichever run is hooked in then, so <see cref="Dispose"/> collects
 /// before the next test starts.
+/// <see cref="Avalonia_s_second_report_of_a_handled_exception_is_neither_logged_nor_written_on_stderr"/>
+/// raises it on purpose, inside an <c>AppMain</c> run, since that second report is what
+/// <c>EntryPointOptions()</c> must recognise.
 /// </para>
 /// </remarks>
 public sealed class UiThreadExceptionHandlerTests : IDisposable
@@ -275,11 +280,15 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         // The app's own handler, subscribed before the package's, as an app that keeps its handler can.
         Dispatcher.UIThread.UnhandledException += (_, e) => e.Handled = true;
         Install();
+        InvalidOperationException thrown = new("the app's own handler dealt with this");
 
-        Throw(new InvalidOperationException("the app's own handler dealt with this"));
+        Throw(thrown);
 
         Assert.Empty(_sink.Events);
         Assert.Empty(_dialogs.Requests);
+
+        // Its second report included: the options EntryPointOptions() returns do not know it.
+        Assert.False(AvaloniaDiagnostics.EntryPointOptions().IsBenignException!(thrown));
     }, CancellationToken.None);
 
     [Fact]
@@ -345,10 +354,15 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
     public Task ResetForTests_detaches_the_handler_and_resets_the_gate_and_the_counts() => Session.Dispatch(() =>
     {
         Install();
+        InvalidOperationException first = Repeat();
+        Throw(first);
         Throw(Repeat());
-        Throw(Repeat());
+        Assert.True(AvaloniaDiagnostics.EntryPointOptions().IsBenignException!(first));
 
         UiThreadExceptions.ResetForTests();
+
+        // It forgets what it handled, so the options no longer know the second report of it.
+        Assert.False(AvaloniaDiagnostics.EntryPointOptions().IsBenignException!(first));
 
         // Detached: nothing handles an exception now.
         InvalidOperationException unhandled = new("nothing handles this");
@@ -389,6 +403,68 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
             Assert.Equal(2, opened.Count);
             Assert.IsType<FatalErrorDialog>(opened[1]).Close();
         }, CancellationToken.None);
+
+    [Theory]
+    [MemberData(nameof(BenignExceptionTable.AllRows), MemberType = typeof(BenignExceptionTable))]
+    public async Task Avalonia_s_second_report_of_a_handled_exception_is_neither_logged_nor_written_on_stderr(string row)
+    {
+        Exception thrown = BenignExceptionTable.Get(row).Make();
+        ConcurrentQueue<Exception> unobserved = new();
+        bool arrived = false;
+        AppMainOptions options = AvaloniaDiagnostics.EntryPointOptions();
+        TextWriter originalError = Console.Error;
+        StringWriter stderr = new();
+
+        // Whatever an earlier test left unobserved is raised now, before the run hooks in.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        Console.SetError(stderr);
+        try
+        {
+            await AppMain.RunHostAsync(typeof(UiThreadExceptionHandlerTests).Assembly, [], async _ =>
+            {
+                await Session.Dispatch(() =>
+                {
+                    Install();
+                    Throw(thrown);
+                }, CancellationToken.None);
+
+                arrived = CollectUntil(() => unobserved.Any(raised => IsSecondReportOf(thrown, raised)));
+            }, options with
+            {
+                OnUnobservedTaskException = raised =>
+                {
+                    unobserved.Enqueue(raised);
+                    options.OnUnobservedTaskException!(raised);
+                },
+            });
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+
+        // The control: Avalonia did raise the exception again, wrapped as the runtime wraps a task's.
+        Assert.True(arrived,
+            "Avalonia raised no second report. If a newer Avalonia no longer puts a posted job's exception "
+            + "in the job's task, the second report is gone, and with it the reason UiThreadExceptions "
+            + "remembers what it handled.");
+        Exception second = Assert.Single(unobserved, raised => IsSecondReportOf(thrown, raised));
+
+        // Not logged: the handler's own line is the only one that carries the failure.
+        Assert.DoesNotContain(_sink.Events, logged => ReferenceEquals(logged.Exception, second));
+
+        // Off stderr, unless it flattens to nothing: the rule calls an empty aggregate not benign before
+        // any filter runs.
+        if (((AggregateException)second).Flatten().InnerExceptions.Count > 0)
+        {
+            Assert.Equal("", stderr.ToString());
+        }
+        else
+        {
+            Assert.StartsWith("warning: AppServices.Tests had a task exception nobody observed", stderr.ToString());
+        }
+    }
 
     private const string RepeatMessage = "the same failure, on every frame";
 
@@ -442,6 +518,34 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         List<bool> handled = [];
         Dispatcher.UIThread.UnhandledException += (_, e) => handled.Add(e.Handled);
         return handled;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="raised"/> is Avalonia's second report of <paramref name="thrown"/>: that
+    /// exception alone, wrapped as the runtime wraps a task's.
+    /// </summary>
+    private static bool IsSecondReportOf(Exception thrown, Exception raised) =>
+        raised is AggregateException { InnerExceptions: [Exception only] } && ReferenceEquals(only, thrown);
+
+    /// <summary>
+    /// Collects garbage until <paramref name="arrived"/> holds, for two seconds at most, and says whether
+    /// it did: the runtime raises a task's exception only once a collection finds the task unreachable.
+    /// </summary>
+    private static bool CollectUntil(Func<bool> arrived)
+    {
+        for (int attempt = 0; attempt < 100; attempt++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            if (arrived())
+            {
+                return true;
+            }
+
+            Thread.Sleep(20);
+        }
+
+        return false;
     }
 
     /// <summary>The Error lines that carry an exception: one per failure logged in full.</summary>

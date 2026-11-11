@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 using Serilog;
@@ -37,6 +38,14 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 /// past its last file, deleting the start of the session, and a dialog that came back after every close
 /// could never be got rid of.
 /// </para>
+/// <para>
+/// ⚠ <b>Avalonia reports each of these exceptions a second time.</b> Its 12.1.3
+/// <c>DispatcherOperation.InvokeCore</c> also puts the exception in the posted job's task, which nothing
+/// reads, so the runtime raises it again, at a later garbage collection, as a task exception nobody
+/// observed. Every exception this handles is remembered, weakly, with what an aggregate flattens to,
+/// so that <see cref="AvaloniaDiagnostics.EntryPointOptions"/> can tell that second report from a
+/// failure of its own (<see cref="WasHandled"/>). One it leaves alone is not remembered.
+/// </para>
 /// </remarks>
 internal static class UiThreadExceptions
 {
@@ -51,6 +60,12 @@ internal static class UiThreadExceptions
 
     // A token for the dialog this opened that is still open; null while the gate is open.
     private static object? _openDialog;
+
+    // Every exception this has handled, and what each aggregate among them flattens to, held weakly: an
+    // entry lives as long as its exception, which Avalonia's unread task keeps until its second report.
+    private static readonly ConditionalWeakTable<Exception, object> _handled = new();
+
+    private static readonly object HandledMarker = new();
 
     /// <summary>
     /// Opens the dialog for a reported exception, and calls the action it is given once that dialog
@@ -74,6 +89,13 @@ internal static class UiThreadExceptions
 
         dispatcher.UnhandledException += OnUnhandledException;
     }
+
+    /// <summary>
+    /// Whether this handled <paramref name="exception"/>, or an aggregate it handled flattens to it: when
+    /// true, a task exception nobody observed that carries it is Avalonia's second report of a failure
+    /// already logged here.
+    /// </summary>
+    internal static bool WasHandled(Exception exception) => _handled.TryGetValue(exception, out _);
 
     /// <summary>Writes one line for each failure that has repeated since its last count line.</summary>
     internal static void WritePendingRepeats()
@@ -111,8 +133,8 @@ internal static class UiThreadExceptions
     }
 
     /// <summary>
-    /// Leaves the dispatcher the handler was installed on, reopens the gate, forgets every failure and
-    /// count, and puts <see cref="OpenDialog"/> back. Test-only.
+    /// Leaves the dispatcher the handler was installed on, reopens the gate, forgets every failure, count
+    /// and handled exception, and puts <see cref="OpenDialog"/> back. Test-only.
     /// </summary>
     /// <remarks>
     /// ⛔ It leaves the dispatcher recorded at install, never <see cref="Dispatcher.UIThread"/>: read where
@@ -128,6 +150,8 @@ internal static class UiThreadExceptions
             _openDialog = null;
             _reported.Clear();
         }
+
+        _handled.Clear();
 
         if (installedOn is not null)
         {
@@ -147,12 +171,33 @@ internal static class UiThreadExceptions
         e.Handled = true;
         try
         {
+            Remember(e.Exception);
             Handle(e.Exception);
         }
         catch (Exception)
         {
             // ⛔ The last guard. Every step of Handle guards itself, and this catches what nobody
             // foresaw: a throw out of a dispatcher handler escapes in place of the exception it handled.
+        }
+    }
+
+    // With what an aggregate flattens to, because the rule offers a filter those and never the aggregate.
+    private static void Remember(Exception exception)
+    {
+        try
+        {
+            _handled.AddOrUpdate(exception, HandledMarker);
+            if (exception is AggregateException aggregate)
+            {
+                foreach (Exception inner in aggregate.Flatten().InnerExceptions)
+                {
+                    _handled.AddOrUpdate(inner, HandledMarker);
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // ⛔ Remembering serves the second report; it must never cost the first its log line or dialog.
         }
     }
 

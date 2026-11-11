@@ -329,8 +329,9 @@ public static class AvaloniaDiagnostics
     /// The options <see cref="AppMain.RunDesktop"/> takes in an Avalonia app: a failure is logged as
     /// fatal and shown in the native fatal-error dialog; a task exception nobody observed is logged at
     /// Debug when <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/> calls it benign, and as a
-    /// warning otherwise; and on every exit the UI-thread handler's pending repeat counts are written,
-    /// then the log is closed and flushed.
+    /// warning otherwise, unless it is Avalonia's second report of an exception the UI-thread handler has
+    /// handled, which is neither logged nor written on stderr; and on every exit the UI-thread handler's
+    /// pending repeat counts are written, then the log is closed and flushed.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -344,6 +345,15 @@ public static class AvaloniaDiagnostics
     /// and until it has, nothing is benign. The entry point keeps a benign task exception nobody
     /// observed off stderr, and the callback logs it at Debug. Neither shows a dialog for one: by the
     /// time a garbage collection finds it, its caller is gone, and a dialog would offer nothing to act on.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>Avalonia reports a UI-thread exception twice.</b> Avalonia 12.1.3 also puts every exception a
+    /// posted job throws in that job's task, which nothing reads, so the runtime raises it again, at a
+    /// later garbage collection, as a task exception nobody observed. The options know that second report
+    /// of whatever the UI-thread handler has handled: the filter they pass on calls it benign, which keeps
+    /// it off stderr, and their callback does not log it, so the handler's report is the only one. An
+    /// exception the handler left alone is not known here, and an empty aggregate thrown on the UI thread
+    /// flattens to nothing, so the entry point reports its second report before any filter runs.
     /// </para>
     /// <para>
     /// ⚠ The fatal event is logged before the dialog opens, since the dialog blocks until it is
@@ -372,14 +382,25 @@ public static class AvaloniaDiagnostics
                 Log.CloseAndFlush();
             }
         },
-        IsBenignException = exception => BenignExceptionFilter is { } filter && filter(exception),
+        IsBenignException = IsBenignOrHandledOnUiThread,
     };
 
+    // The filter the options pass on: the host's, and whatever the UI-thread handler has handled, whose
+    // second report Avalonia raises as a task exception nobody observed, and which is no new failure.
+    private static bool IsBenignOrHandledOnUiThread(Exception exception) =>
+        UiThreadExceptions.WasHandled(exception) || (BenignExceptionFilter is { } filter && filter(exception));
+
     // The callback is given the exception without the entry point's verdict, so it applies the rule
-    // again, with the same filter, to choose its level.
+    // again, with the same filter, to choose its level. Avalonia's second report of an exception the
+    // UI-thread handler has handled is not logged at all: the handler logged it, and counts its repeats.
     private static void LogUnobservedTaskException(Exception exception)
     {
-        bool benign = BenignExceptionRule.IsBenign(BenignExceptionFilter, exception, out Exception? filterFailure);
+        if (IsSecondReport(exception))
+        {
+            return;
+        }
+
+        bool benign = BenignExceptionRule.IsBenign(IsBenignOrHandledOnUiThread, exception, out Exception? filterFailure);
         if (benign)
         {
             Log.Debug(exception, "A benign task exception nobody observed");
@@ -393,4 +414,11 @@ public static class AvaloniaDiagnostics
                 "The IsBenignException filter threw on the task exception above, so that exception counts as not benign");
         }
     }
+
+    // A task exception nobody observed arrives wrapped, and Avalonia's second report wraps exactly the
+    // exception the handler handled; an aggregate the handler handled is known itself, empty or not.
+    private static bool IsSecondReport(Exception exception) =>
+        UiThreadExceptions.WasHandled(exception)
+        || (exception is AggregateException { InnerExceptions.Count: > 0 } aggregate
+            && aggregate.InnerExceptions.All(UiThreadExceptions.WasHandled));
 }

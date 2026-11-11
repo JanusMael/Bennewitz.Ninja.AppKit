@@ -192,8 +192,10 @@ public sealed class AvaloniaDiagnosticsOptions
     /// reported is a repeat: it is counted rather than logged, and no failure is shown twice; one first
     /// seen while another dialog was open is shown at its first repeat once that dialog has closed. A
     /// line gives a failure's count when the dialog shown for it closes and when the <c>FlushLog</c> of
-    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> runs at exit. An exception that a handler
-    /// subscribed before this one has already handled is left alone.
+    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> runs at exit. Avalonia raises each exception
+    /// this handles a second time, later, as a task exception nobody observed, and those options neither
+    /// log that second report nor write it on stderr. An exception that a handler subscribed before this
+    /// one has already handled is left alone, its second report included.
     /// </para>
     /// <para>
     /// ⚠ <b>An app with a UI-thread handler of its own</b>, subscribed after <c>InstallAvaloniaHooks</c>,
