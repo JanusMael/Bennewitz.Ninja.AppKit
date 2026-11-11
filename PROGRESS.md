@@ -69,12 +69,24 @@ passes its contract there, and CI's `aot-linux` covers Linux. **A change of beha
 with a UI-thread handler of its own:** `docs/appservices.md`, "Upgrading from 2026.4.1110", gives the
 cost and the three ways out.
 
+**Avalonia reports each UI-thread failure a second time.** Its 12.1.3 `DispatcherOperation.InvokeCore`
+puts a posted job's exception in the job's task before `UnhandledException` sees it, and nothing
+reads that task, so the runtime raises the exception again, at whichever later collection finds the
+task, as a task exception nobody observed (traced in a test run on 2026-11-11). CI's Windows run
+caught it in the tests: the handler's tests left those exceptions behind, and the web probe's run
+reported one on its stderr. They now collect them before each test ends (`tests/AGENTS.md`). In an app
+that `AppMain` runs with `EntryPointOptions()`, each such failure, every repeat included, is logged
+again at Warning and written on stderr, or logged again at Debug when benign. Whether the package
+should recognise its own failures there awaits the maintainer's choice.
+
 **Next, in order:**
-1. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word. Then its
+1. **The second report of a UI-thread failure** (above): the maintainer's choice, before AppServices'
+   next release.
+2. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word. Then its
    step 6: ClaudeForge is told what it must change in one commit, and that OpenForge2k's copy of it
    holds its version until it can make the same change; Templates is told the version, and the line
    `bbavalonia` needs in the same sync, `HandleUiThreadExceptions = !smoke`.
-2. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: each pushed at `2026.4.1110`.
 
