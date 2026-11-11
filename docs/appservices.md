@@ -10,7 +10,7 @@ completing the same way whether or not anything did.
 | `Bennewitz.Ninja.AppServices.Abstractions` | The contracts and the dialog vocabulary: shell launching, environment, sharing, dialogs and pickers. Framework-free. |
 | `Bennewitz.Ninja.AppServices` | Default implementations: shell launching, environment probing, sharing and a native error dialog. Needs an operating system, not a UI framework, so it works from a CLI, a service or a test. |
 | `Bennewitz.Ninja.AppServices.Logging` | Serilog sinks for desktop applications, starting with a bucketed rolling file sink that keeps a bounded number of files per bucket. |
-| `Bennewitz.Ninja.AppServices.Avalonia` | Avalonia implementations — dialog service, file pickers, fatal and non-fatal dialogs — and the bridge that routes Avalonia's logger and its binding errors into Serilog. Its `EntryPointOptions` gives an Avalonia app's entry point the fatal dialog and the log. |
+| `Bennewitz.Ninja.AppServices.Avalonia` | Avalonia implementations — dialog service, file pickers, fatal and non-fatal dialogs — the bridge that routes Avalonia's logger and its binding errors into Serilog, and a handler for the exceptions the UI thread lets escape. Its `EntryPointOptions` gives an Avalonia app's entry point the fatal dialog and the log. |
 | `Bennewitz.Ninja.AppServices.EntryPoint` | One entry point for console, web and desktop apps: exit codes a script can read, a fatal report on stderr, Ctrl+C, `--version`, and the app's log flushed on every exit. References nothing but the framework, and is native AOT compatible. |
 
 ## Install
@@ -58,6 +58,81 @@ which flushes. A run flushes only once, so an app that handles SIGTERM itself, w
 for one, belongs in `RunHostAsync`. An exception on another thread is reported and flushed too, but
 the process then ends with the runtime's own exit code. A `HostAbortedException`, which design-time
 tools such as `dotnet ef` throw to stop an app, passes through untouched.
+
+A task exception nobody observed does not end the run: it is reported on stderr with `warning:`,
+then passed to `OnUnobservedTaskException`. `IsBenignException` marks the exceptions an app knows to
+be harmless, and one it calls benign is kept off stderr and still passed to the callback. A filter
+that throws counts as not benign, and its throw is reported on stderr beside the exception. A failure
+that ends the run is reported whatever the filter says.
+
+`AppMainOptions` is a record, so an app changes one member and keeps the rest:
+
+```csharp
+AppMainOptions defaults = AvaloniaDiagnostics.EntryPointOptions();
+return AppMain.RunDesktop(typeof(Program).Assembly, args, Run, defaults with
+{
+    FlushLog = () => { Log.Information("Exiting"); defaults.FlushLog?.Invoke(); },
+});
+```
+
+## Exceptions on the UI thread
+
+In an Avalonia app, `AvaloniaDiagnostics.InstallAvaloniaHooks()`, called from
+`OnFrameworkInitializationCompleted`, also installs a handler for every exception a job on the UI
+thread lets escape, so a failure behind a click no longer ends the process. The handler marks each
+exception handled:
+
+| The exception | What happens |
+|---|---|
+| Benign, by `IsBenignException` | Logged at Debug, and nothing is shown |
+| Any other | Logged at Error and shown in a `FatalErrorDialog` titled `Application Error — {AppName}`; the app keeps running |
+| Another, while that dialog is open | Logged at Error, and not shown |
+| A repeat: the type, message and throw site of one already reported | Counted, never logged in full again and never shown; a line gives its count when its dialog closes and when `EntryPointOptions()`' `FlushLog` runs |
+| One a handler subscribed before the package's has already handled | Left alone |
+
+The handler is installed once, however often `InstallAvaloniaHooks()` is called, and
+`HandleUiThreadExceptions = false` installs nothing.
+
+`IsBenignException` is one filter for both paths: the handler reads it, and `EntryPointOptions()`
+passes it on, so a benign task exception nobody observed is kept off stderr and logged at Debug,
+where any other is logged at Warning. Set it where logging is configured:
+
+```csharp
+AvaloniaDiagnostics.ConfigureLogging(new AvaloniaDiagnosticsOptions
+{
+    AppName = "MyApp",
+    LogsDirectory = logs,
+    IsBenignException = IsKnownLinuxPortalNoise,
+});
+```
+
+An `AggregateException` is benign when it flattens to at least one exception and the filter matches
+every one of them. The aggregate itself is never passed to the filter, and a task exception nobody
+observed always arrives as one, so a filter is written for the exceptions inside. A filter that
+throws counts as not benign, and its throw is logged beside the exception. The filter runs on
+whichever thread raised the exception, the UI thread or the finalizer thread, so it must be quick
+and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
+
+## Upgrading from 2026.4.1110
+
+- **`InstallAvaloniaHooks()` now handles the UI thread's unhandled exceptions, and does by
+  default.** An app with a `Dispatcher.UIThread.UnhandledException` handler of its own, subscribed
+  after `InstallAvaloniaHooks()`, runs both, the package's first, and the package's cannot know what
+  the app's classifier calls benign. Until the app changes, the exceptions it ignores today, such as
+  the Linux D-Bus portal ones, are logged at Error and shown in a dialog, and a real failure shows
+  two dialogs. There are three ways out, and the version bump belongs in the same commit as one of
+  them:
+  1. set `AvaloniaDiagnosticsOptions.IsBenignException` to the app's classifier, and delete the
+     app's own handler;
+  2. set `HandleUiThreadExceptions = false`, and keep the app's own handler;
+  3. subscribe the app's own handler before calling `InstallAvaloniaHooks()`: the package's then
+     leaves alone every exception the app's handler marked handled.
+- An exception the handler handles no longer ends the process, so a smoke run that proves a build by
+  its exit code sets `HandleUiThreadExceptions = false` for that run.
+- Setting `OnUnobservedTaskException` to null never kept a task exception off stderr, since the report
+  is written before the callback runs. `IsBenignException` does, for the exceptions it calls benign.
+- `AppMainOptions` is a `sealed record`. Code compiled against `2026.4.1110` still binds, `with` now
+  compiles, and two options are equal when all their members are.
 
 ## Upgrading from 2026.3.924
 
