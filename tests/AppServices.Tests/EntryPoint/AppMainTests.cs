@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
+using AppServices.Tests.BenignExceptions;
 using Bennewitz.Ninja.AppServices.EntryPoint;
 
 namespace AppServices.Tests.EntryPoint;
@@ -19,6 +20,13 @@ namespace AppServices.Tests.EntryPoint;
 /// ⛔ Ctrl+C is pressed through <c>EntryRun.Current.PressCtrlC</c>, the seam the real handler calls.
 /// <c>ConsoleCancelEventArgs</c> has no public constructor, and a real SIGINT reaches only a child
 /// process (<see cref="EntryPointProbeTests"/>), and only on Linux and macOS.
+/// </para>
+/// <para>
+/// ⭐ The tests of <see cref="AppMainOptions.IsBenignException"/> read <see cref="BenignExceptionTable"/>,
+/// the one table both copies of the benign rule are held to. Each abandons a task faulted with a row's
+/// exception and collects it, so the run's hook sees it as the runtime raises it, wrapped in an
+/// <see cref="AggregateException"/>; anything abandoned before the run is collected before the run
+/// hooks in.
 /// </para>
 /// </remarks>
 public sealed class AppMainTests : IDisposable
@@ -349,6 +357,118 @@ public sealed class AppMainTests : IDisposable
         Assert.Equal("", _stderr.ToString());
     }
 
+    [Theory]
+    [MemberData(nameof(BenignExceptionTable.BenignRows), MemberType = typeof(BenignExceptionTable))]
+    public async Task A_benign_unobserved_exception_leaves_stderr_empty_and_still_reaches_the_callback(string row)
+    {
+        (Exception thrown, List<Exception> passed) = await AbandonInARun(BenignExceptionTable.Get(row));
+
+        Assert.Equal("", _stderr.ToString());
+        AssertPassedOnAsRaised(thrown, passed);
+    }
+
+    [Theory]
+    [MemberData(nameof(BenignExceptionTable.NotBenignRows), MemberType = typeof(BenignExceptionTable))]
+    public async Task A_non_benign_unobserved_exception_is_reported_as_before(string row)
+    {
+        (Exception thrown, List<Exception> passed) = await AbandonInARun(BenignExceptionTable.Get(row));
+
+        string stderr = _stderr.ToString();
+        Assert.StartsWith("warning: AppServices.Tests had a task exception nobody observed", stderr);
+        Assert.Contains(thrown.Message, stderr);
+        Assert.DoesNotContain("filter threw", stderr);
+        AssertPassedOnAsRaised(thrown, passed);
+    }
+
+    [Theory]
+    [MemberData(nameof(BenignExceptionTable.FilterThrowsRows), MemberType = typeof(BenignExceptionTable))]
+    public async Task A_throwing_filter_is_reported_along_with_the_exception(string row)
+    {
+        (Exception thrown, List<Exception> passed) = await AbandonInARun(BenignExceptionTable.Get(row));
+
+        // A filter that throws counts as not benign, so the exception is reported as any other is, and
+        // the filter's own throw beside it.
+        string stderr = _stderr.ToString();
+        Assert.StartsWith("warning: AppServices.Tests had a task exception nobody observed", stderr);
+        Assert.Contains(thrown.Message, stderr);
+        Assert.Contains("warning: AppServices.Tests: the IsBenignException filter threw", stderr);
+        Assert.Contains(BenignExceptionTable.FilterBug, stderr);
+        AssertPassedOnAsRaised(thrown, passed);
+    }
+
+    [Theory]
+    [InlineData("console")]
+    [InlineData("host")]
+    [InlineData("desktop")]
+    public async Task A_fatal_exception_is_reported_whatever_the_filter_says(string kind)
+    {
+        bool fatal = false;
+
+        // The filter calls everything benign, and the work throws the very exception the table calls benign.
+        int code = await Run(kind, Versioned, [], _ => throw new BenignExceptionTable.BenignNoise(),
+            new AppMainOptions { IsBenignException = _ => true, OnFatal = _ => fatal = true });
+
+        Assert.Equal(1, code);
+        Assert.StartsWith("fatal: AppServices.Tests stopped on an unhandled exception", _stderr.ToString());
+        Assert.Contains("benign noise", _stderr.ToString());
+        Assert.True(fatal);
+    }
+
+    [Fact]
+    public void With_changes_one_member_and_keeps_the_rest()
+    {
+        Action flush = () => { };
+        Action<Exception> onFatal = _ => { };
+        Action<Exception> onUnobserved = _ => { };
+        Func<Exception, bool> isBenign = _ => true;
+        AppMainOptions defaults = new()
+        {
+            Usage = "usage: app",
+            FlushLog = flush,
+            OnFatal = onFatal,
+            OnUnobservedTaskException = onUnobserved,
+            IsBenignException = isBenign,
+        };
+        Action replaced = () => { };
+
+        // ⛔ This line is the test: `with` compiles only because AppMainOptions is a record.
+        AppMainOptions changed = defaults with { FlushLog = replaced };
+
+        Assert.Same(replaced, changed.FlushLog);
+        Assert.Same(flush, defaults.FlushLog);
+        Assert.Equal("usage: app", changed.Usage);
+        Assert.Same(onFatal, changed.OnFatal);
+        Assert.Same(onUnobserved, changed.OnUnobservedTaskException);
+        Assert.Same(isBenign, changed.IsBenignException);
+    }
+
+    /// <summary>
+    /// Abandons a task faulted with <paramref name="row"/>'s exception inside a run whose filter is the
+    /// table's, and collects it there, so that the run's hook sees it as the runtime raises it.
+    /// </summary>
+    private async Task<(Exception Thrown, List<Exception> Passed)> AbandonInARun(BenignExceptionTable.Row row)
+    {
+        Exception thrown = row.Make();
+        List<Exception> passed = [];
+
+        // Whatever an earlier test abandoned is collected now, before this run hooks in.
+        CollectGarbage();
+        await Run("host", Versioned, [], _ =>
+        {
+            AbandonAFaultedTask(thrown);
+            CollectGarbage();
+        }, new AppMainOptions { IsBenignException = BenignExceptionTable.Filter, OnUnobservedTaskException = passed.Add });
+
+        return (thrown, passed);
+    }
+
+    /// <summary>The callback had the exception exactly once, wrapped as the runtime wraps it.</summary>
+    private static void AssertPassedOnAsRaised(Exception thrown, List<Exception> passed)
+    {
+        AggregateException raised = Assert.IsType<AggregateException>(Assert.Single(passed));
+        Assert.Same(thrown, Assert.Single(raised.InnerExceptions));
+    }
+
     private static Task<int> Run(string kind, Assembly program, string[] args,
         Action<string[]>? work = null, AppMainOptions? options = null) => kind switch
     {
@@ -371,10 +491,12 @@ public sealed class AppMainTests : IDisposable
     };
 
     /// <summary>A task that failed and that nothing awaits: its exception stays unobserved until the GC finds it.</summary>
+    /// <param name="thrown">What the task throws; a fresh exception when null.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void AbandonAFaultedTask()
+    private static void AbandonAFaultedTask(Exception? thrown = null)
     {
-        Task task = Task.Run((Action)(() => throw new InvalidOperationException("nobody observed this")));
+        Exception exception = thrown ?? new InvalidOperationException("nobody observed this");
+        Task task = Task.Run((Action)(() => throw exception));
         SpinWait.SpinUntil(() => task.IsCompleted);
     }
 

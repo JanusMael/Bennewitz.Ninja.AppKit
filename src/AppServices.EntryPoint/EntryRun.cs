@@ -32,6 +32,11 @@ internal enum AppKind
 /// ended; a console <see cref="UsageException"/> exits 2; any other exception is a failure and exits 1;
 /// otherwise the work's own code stands.
 /// </para>
+/// <para>
+/// ⛔ <b>The app's <see cref="AppMainOptions.IsBenignException"/> decides one thing only</b>: whether a
+/// task exception nobody observed is reported on stderr. Every failure that ends the run is reported
+/// whatever it says, and every unobserved exception still reaches the app's callback.
+/// </para>
 /// </remarks>
 internal sealed class EntryRun : IDisposable
 {
@@ -243,7 +248,20 @@ internal sealed class EntryRun : IDisposable
 
     private void OnUnobservedTaskException(object? sender, UnobservedTaskExceptionEventArgs e)
     {
-        Error($"warning: {AppName} had a task exception nobody observed", e.Exception);
+        bool benign = BenignExceptionRule.IsBenign(_options.IsBenignException, e.Exception, out Exception? filterFailure);
+        if (!benign)
+        {
+            Error($"warning: {AppName} had a task exception nobody observed", e.Exception);
+        }
+
+        // A filter that throws has a bug of its own, and the exception it was asked about counts as
+        // not benign, so both are on stderr.
+        if (filterFailure is not null)
+        {
+            Error($"warning: {AppName}: the {nameof(AppMainOptions.IsBenignException)} filter threw", filterFailure);
+        }
+
+        // A benign one still reaches the callback: whether to log it, and at what level, is the app's.
         if (_options.OnUnobservedTaskException is { } onUnobserved)
         {
             Invoke(nameof(AppMainOptions.OnUnobservedTaskException), () => onUnobserved(e.Exception));

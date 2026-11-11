@@ -47,10 +47,31 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
 
+**`plans/00002`, the UI-thread exception hook, is under way** (approved 2026-11-11). Its step 2 is in:
+`AppMainOptions` is a `sealed record`, so a host changes one callback with `with`, and its new
+`IsBenignException` keeps a task exception nobody observed off stderr when the app's filter calls it
+benign, while `OnUnobservedTaskException` still receives it. A failure that ends the run is reported
+whatever the filter says. The rule that applies a filter, the plan's decision 3, is EntryPoint's
+internal `BenignExceptionRule`, held to one table,
+`tests/AppServices.Tests/BenignExceptions/BenignExceptionTable.cs`, which the Avalonia package's copy
+will share. Each new test was seen red with the code it guards broken on purpose. Package validation
+against `2026.4.1110` reports no breaking change, and reports a planted one (`CP0002`); the native AOT
+probe publishes on win-x64 without a warning and passes its contract there.
+
 **Next, in order:**
-1. **AppServices' and ScopedEditors' next releases** are each a family release, `appservices/v…` and
-   `scopededitors/v…`, on the maintainer's word when the family next changes. The policy names this
-   repository and covers all eight ids: each pushed at `2026.4.1110`.
+1. **`plans/00002` steps 3 and 4**: the UI-thread handler in the Avalonia package, then the
+   documents.
+2. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word, then its
+   step 6, telling ClaudeForge and Templates.
+3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+   maintainer's word when the family next changes. The policy names this repository and covers all
+   eight ids: each pushed at `2026.4.1110`.
+
+## On `main`, not yet released
+
+| Package | Change |
+|---|---|
+| `Bennewitz.Ninja.AppServices.EntryPoint` | `AppMainOptions` is a `sealed record` with `IsBenignException` (`plans/00002`, step 2). Binary compatible with `2026.4.1110`, by package validation |
 
 ## What the merge changed for consumers
 
