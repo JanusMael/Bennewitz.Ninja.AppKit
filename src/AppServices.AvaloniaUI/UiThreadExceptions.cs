@@ -29,19 +29,22 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 /// </para>
 /// <para>
 /// ⚠ <b>A repeat is logged once and never shown twice.</b> An exception with the type, message and
-/// throw site of one already reported is counted rather than logged, and only a failure's first
-/// occurrence can open a dialog. One line gives the count when that failure's dialog closes, and one
-/// when <see cref="AvaloniaDiagnostics.EntryPointOptions"/>' <c>FlushLog</c> runs at exit. An exception
-/// that repeats on every frame would otherwise roll the log past its last file, deleting the start of
-/// the session, and a dialog that came back after every close could never be got rid of.
+/// throw site of one already reported is counted rather than logged. Each failure is offered one
+/// dialog: at its first occurrence, or, when another dialog was open then, at its first repeat once
+/// the gate has reopened. A dialog that fails to show counts as offered. One line gives the count when
+/// that failure's dialog closes, and one when <see cref="AvaloniaDiagnostics.EntryPointOptions"/>'
+/// <c>FlushLog</c> runs at exit. An exception that repeats on every frame would otherwise roll the log
+/// past its last file, deleting the start of the session, and a dialog that came back after every close
+/// could never be got rid of.
 /// </para>
 /// </remarks>
 internal static class UiThreadExceptions
 {
     private static readonly Lock _lock = new();
 
-    // Every failure reported this session, with its repeats since its last count line.
-    private static readonly Dictionary<Failure, Repeats> _reported = [];
+    // Every failure reported this session, with its repeats since its last count line, and whether it
+    // has been offered its dialog.
+    private static readonly Dictionary<Failure, Reported> _reported = [];
 
     // The dispatcher the handler is subscribed to, recorded so that ResetForTests can leave it.
     private static Dispatcher? _installedOn;
@@ -78,12 +81,12 @@ internal static class UiThreadExceptions
         List<(Failure Failure, long Count)> pending = [];
         lock (_lock)
         {
-            foreach ((Failure failure, Repeats repeats) in _reported)
+            foreach ((Failure failure, Reported reported) in _reported)
             {
-                if (repeats.Count > 0)
+                if (reported.Count > 0)
                 {
-                    pending.Add((failure, repeats.Count));
-                    repeats.Count = 0;
+                    pending.Add((failure, reported.Count));
+                    reported.Count = 0;
                 }
             }
         }
@@ -164,22 +167,37 @@ internal static class UiThreadExceptions
         }
 
         Failure failure = Failure.Of(exception);
+        bool repeat;
         lock (_lock)
         {
-            if (_reported.TryGetValue(failure, out Repeats? repeats))
+            if (_reported.TryGetValue(failure, out Reported? reported))
             {
-                repeats.Count++;
-                return;
-            }
+                reported.Count++;
 
-            _reported.Add(failure, new Repeats());
+                // Only a failure never offered its dialog, first seen while another dialog was open, is
+                // shown at a repeat, and only once the gate has reopened.
+                if (reported.Offered || _openDialog is not null)
+                {
+                    return;
+                }
+
+                repeat = true;
+            }
+            else
+            {
+                _reported.Add(failure, new Reported());
+                repeat = false;
+            }
         }
 
-        Write(LogEventLevel.Error, exception, "An exception on the UI thread that nothing handled; the app keeps running");
-        if (filterFailure is not null)
+        if (!repeat)
         {
-            Write(LogEventLevel.Warning, filterFailure,
-                "The IsBenignException filter threw on the exception above, so that exception counts as not benign");
+            Write(LogEventLevel.Error, exception, "An exception on the UI thread that nothing handled; the app keeps running");
+            if (filterFailure is not null)
+            {
+                Write(LogEventLevel.Warning, filterFailure,
+                    "The IsBenignException filter threw on the exception above, so that exception counts as not benign");
+            }
         }
 
         Show(failure, exception);
@@ -196,6 +214,13 @@ internal static class UiThreadExceptions
             }
 
             _openDialog = dialog;
+
+            // Offered before it is tried: a dialog that cannot open is not tried again, and its failure
+            // not logged again, on every repeat.
+            if (_reported.TryGetValue(failure, out Reported? reported))
+            {
+                reported.Offered = true;
+            }
         }
 
         try
@@ -229,10 +254,10 @@ internal static class UiThreadExceptions
                     _openDialog = null;
                 }
 
-                if (_reported.TryGetValue(failure, out Repeats? repeats))
+                if (_reported.TryGetValue(failure, out Reported? reported))
                 {
-                    count = repeats.Count;
-                    repeats.Count = 0;
+                    count = reported.Count;
+                    reported.Count = 0;
                 }
             }
 
@@ -286,9 +311,11 @@ internal static class UiThreadExceptions
         }
     }
 
-    /// <summary>A failure's repeats since its last count line.</summary>
-    private sealed class Repeats
+    /// <summary>A reported failure: its repeats since its last count line, and whether it has been offered its dialog.</summary>
+    private sealed class Reported
     {
         internal long Count;
+
+        internal bool Offered;
     }
 }

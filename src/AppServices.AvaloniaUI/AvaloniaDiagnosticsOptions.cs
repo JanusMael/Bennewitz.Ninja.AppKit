@@ -188,9 +188,10 @@ public sealed class AvaloniaDiagnosticsOptions
     /// <see cref="IsBenignException"/> calls benign is logged at Debug and shows nothing. Any other is
     /// logged at Error and shown in a <see cref="Dialogs.FatalErrorDialog"/> titled with
     /// <see cref="AppName"/>, one dialog at a time: another exception while that dialog is open is
-    /// logged and not shown. An exception with the type, message and throw site of one already
-    /// reported is a repeat: it is counted rather than logged and is never shown, and a line gives its
-    /// count when the dialog shown for it closes and when the <c>FlushLog</c> of
+    /// logged and not shown then. An exception with the type, message and throw site of one already
+    /// reported is a repeat: it is counted rather than logged, and no failure is shown twice; one first
+    /// seen while another dialog was open is shown at its first repeat once that dialog has closed. A
+    /// line gives a failure's count when the dialog shown for it closes and when the <c>FlushLog</c> of
     /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> runs at exit. An exception that a handler
     /// subscribed before this one has already handled is left alone.
     /// </para>
