@@ -1,3 +1,4 @@
+using AvaloniaRule = Bennewitz.Ninja.AppServices.AvaloniaUI.BenignExceptionRule;
 using EntryPointRule = Bennewitz.Ninja.AppServices.EntryPoint.BenignExceptionRule;
 
 namespace AppServices.Tests.BenignExceptions;
@@ -8,7 +9,8 @@ namespace AppServices.Tests.BenignExceptions;
 /// </summary>
 /// <remarks>
 /// The behaviour each copy drives is held to the same rows where it is tested: what reaches stderr in
-/// <c>AppMainTests</c>.
+/// <c>AppMainTests</c>; the UI-thread handler's level and dialog in <c>UiThreadExceptionHandlerTests</c>;
+/// and the level <c>EntryPointOptions()</c>' callback logs at in <c>AvaloniaDiagnosticsEntryPointTests</c>.
 /// </remarks>
 public sealed class BenignExceptionRuleTests
 {
@@ -24,12 +26,34 @@ public sealed class BenignExceptionRuleTests
         AssertFilterFailure(expected, filterFailure);
     }
 
+    [Theory]
+    [MemberData(nameof(BenignExceptionTable.AllRows), MemberType = typeof(BenignExceptionTable))]
+    public void The_AvaloniaUI_copy_gives_every_row_its_verdict(string row)
+    {
+        BenignExceptionTable.Row expected = BenignExceptionTable.Get(row);
+
+        bool benign = AvaloniaRule.IsBenign(BenignExceptionTable.Filter, expected.Make(), out Exception? filterFailure);
+
+        Assert.Equal(expected.Benign, benign);
+        AssertFilterFailure(expected, filterFailure);
+    }
+
     [Fact]
     public void Without_a_filter_the_EntryPoint_copy_calls_nothing_benign()
     {
         foreach (BenignExceptionTable.Row row in BenignExceptionTable.Rows)
         {
             Assert.False(EntryPointRule.IsBenign(null, row.Make(), out Exception? filterFailure), row.Name);
+            Assert.Null(filterFailure);
+        }
+    }
+
+    [Fact]
+    public void Without_a_filter_the_AvaloniaUI_copy_calls_nothing_benign()
+    {
+        foreach (BenignExceptionTable.Row row in BenignExceptionTable.Rows)
+        {
+            Assert.False(AvaloniaRule.IsBenign(null, row.Make(), out Exception? filterFailure), row.Name);
             Assert.Null(filterFailure);
         }
     }

@@ -47,20 +47,26 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
 
-**`plans/00002`, the UI-thread exception hook, is under way** (approved 2026-11-11). Its step 2 is in:
-`AppMainOptions` is a `sealed record`, so a host changes one callback with `with`, and its new
+**`plans/00002`, the UI-thread exception hook, is under way** (approved 2026-11-11). Steps 2 and 3
+are in. `AppMainOptions` is a `sealed record`, so a host changes one callback with `with`, and its new
 `IsBenignException` keeps a task exception nobody observed off stderr when the app's filter calls it
-benign, while `OnUnobservedTaskException` still receives it. A failure that ends the run is reported
-whatever the filter says. The rule that applies a filter, the plan's decision 3, is EntryPoint's
-internal `BenignExceptionRule`, held to one table,
-`tests/AppServices.Tests/BenignExceptions/BenignExceptionTable.cs`, which the Avalonia package's copy
-will share. Each new test was seen red with the code it guards broken on purpose. Package validation
-against `2026.4.1110` reports no breaking change, and reports a planted one (`CP0002`); the native AOT
-probe publishes on win-x64 without a warning and passes its contract there.
+benign, while `OnUnobservedTaskException` still receives it; a failure that ends the run is reported
+whatever the filter says. `InstallAvaloniaHooks()` installs a handler on the UI thread's
+`Dispatcher.UnhandledException`, on by default and off with `HandleUiThreadExceptions = false`, and
+`AvaloniaDiagnosticsOptions.IsBenignException` is the one filter, read by that handler and passed on
+by `EntryPointOptions()`. The handler marks every exception handled: a benign one is logged at Debug,
+any other at Error and shown in a `FatalErrorDialog`, one dialog at a time, and a repeat is counted
+rather than logged, with a count line when its dialog closes and when `FlushLog` runs. The rule that
+applies a filter, the plan's decision 3, is copied into each package as an internal
+`BenignExceptionRule`, and both copies are held to one table,
+`tests/AppServices.Tests/BenignExceptions/BenignExceptionTable.cs`. Each new test was seen red with the
+code it guards broken on purpose. Package validation against `2026.4.1110` reports no breaking change
+in either package, and reports a planted one (`CP0002`); the native AOT probe publishes on win-x64
+without a warning and passes its contract there.
 
 **Next, in order:**
-1. **`plans/00002` steps 3 and 4**: the UI-thread handler in the Avalonia package, then the
-   documents.
+1. **`plans/00002` step 4**: the documents, with the upgrading note for an app that has a UI-thread
+   handler of its own.
 2. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word, then its
    step 6, telling ClaudeForge and Templates.
 3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
@@ -72,6 +78,7 @@ probe publishes on win-x64 without a warning and passes its contract there.
 | Package | Change |
 |---|---|
 | `Bennewitz.Ninja.AppServices.EntryPoint` | `AppMainOptions` is a `sealed record` with `IsBenignException` (`plans/00002`, step 2). Binary compatible with `2026.4.1110`, by package validation |
+| `Bennewitz.Ninja.AppServices.Avalonia` | `InstallAvaloniaHooks()` installs the UI-thread handler, on by default, and `AvaloniaDiagnosticsOptions` gains `HandleUiThreadExceptions` and `IsBenignException`; `EntryPointOptions()` passes the filter on, logs a benign unobserved exception at Debug, and writes the pending repeat counts before it flushes (`plans/00002`, step 3). Binary compatible with `2026.4.1110`, by package validation, but **a change of behaviour for an app with a UI-thread handler of its own** |
 
 ## What the merge changed for consumers
 
