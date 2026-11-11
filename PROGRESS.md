@@ -47,29 +47,31 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
 
-**`plans/00002`, the UI-thread exception hook, is under way** (approved 2026-11-11). Steps 2 and 3
-are in. `AppMainOptions` is a `sealed record`, so a host changes one callback with `with`, and its new
-`IsBenignException` keeps a task exception nobody observed off stderr when the app's filter calls it
-benign, while `OnUnobservedTaskException` still receives it; a failure that ends the run is reported
-whatever the filter says. `InstallAvaloniaHooks()` installs a handler on the UI thread's
-`Dispatcher.UnhandledException`, on by default and off with `HandleUiThreadExceptions = false`, and
-`AvaloniaDiagnosticsOptions.IsBenignException` is the one filter, read by that handler and passed on
-by `EntryPointOptions()`. The handler marks every exception handled: a benign one is logged at Debug,
-any other at Error and shown in a `FatalErrorDialog`, one dialog at a time, and a repeat is counted
-rather than logged, with a count line when its dialog closes and when `FlushLog` runs. The rule that
-applies a filter, the plan's decision 3, is copied into each package as an internal
-`BenignExceptionRule`, and both copies are held to one table,
-`tests/AppServices.Tests/BenignExceptions/BenignExceptionTable.cs`. Each new test was seen red with the
-code it guards broken on purpose. Package validation against `2026.4.1110` reports no breaking change
-in either package, and reports a planted one (`CP0002`); the native AOT probe publishes on win-x64
-without a warning and passes its contract there.
+**`plans/00002`, the UI-thread exception hook, is on `main` and not yet released** (approved
+2026-11-11; its steps 2 to 4). `InstallAvaloniaHooks()` installs a handler on the UI thread's
+`Dispatcher.UnhandledException`, on by default and off with `HandleUiThreadExceptions = false`. It
+marks every exception handled, logs a benign one at Debug, and logs any other at Error and shows it
+in a `FatalErrorDialog`, one dialog at a time; a repeat is counted rather than logged, with a count
+line when its dialog closes and when `FlushLog` runs. `AvaloniaDiagnosticsOptions.IsBenignException`
+is the one filter: the handler reads it, and `EntryPointOptions()` passes it on as
+`AppMainOptions.IsBenignException`, which keeps a benign task exception nobody observed off stderr
+while the callback still receives it. `AppMainOptions` is a `sealed record`. The rule that applies a
+filter, the plan's decision 3, is copied into each package as an internal `BenignExceptionRule`, and
+both copies are held to one table, `tests/AppServices.Tests/BenignExceptions/BenignExceptionTable.cs`.
+Each new test was seen red with the code it guards broken on purpose. Build with warnings as errors,
+546 tests (531 passed, 15 skipped as before), and `check`, which conforms, pass on Windows. Package
+validation against `2026.4.1110` reports no breaking change in `.EntryPoint` or `.Avalonia`, and
+reports a planted one (`CP0002`); the native AOT probe publishes on win-x64 without a warning and
+passes its contract there, and CI's `aot-linux` covers Linux. **A change of behaviour for an app
+with a UI-thread handler of its own:** `docs/appservices.md`, "Upgrading from 2026.4.1110", gives the
+cost and the three ways out.
 
 **Next, in order:**
-1. **`plans/00002` step 4**: the documents, with the upgrading note for an app that has a UI-thread
-   handler of its own.
-2. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word, then its
-   step 6, telling ClaudeForge and Templates.
-3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+1. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word. Then its
+   step 6: ClaudeForge is told what it must change in one commit, and that OpenForge2k's copy of it
+   holds its version until it can make the same change; Templates is told the version, and the line
+   `bbavalonia` needs in the same sync, `HandleUiThreadExceptions = !smoke`.
+2. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: each pushed at `2026.4.1110`.
 
@@ -79,6 +81,23 @@ without a warning and passes its contract there.
 |---|---|
 | `Bennewitz.Ninja.AppServices.EntryPoint` | `AppMainOptions` is a `sealed record` with `IsBenignException` (`plans/00002`, step 2). Binary compatible with `2026.4.1110`, by package validation |
 | `Bennewitz.Ninja.AppServices.Avalonia` | `InstallAvaloniaHooks()` installs the UI-thread handler, on by default, and `AvaloniaDiagnosticsOptions` gains `HandleUiThreadExceptions` and `IsBenignException`; `EntryPointOptions()` passes the filter on, logs a benign unobserved exception at Debug, and writes the pending repeat counts before it flushes (`plans/00002`, step 3). Binary compatible with `2026.4.1110`, by package validation, but **a change of behaviour for an app with a UI-thread handler of its own** |
+| All five | The packed README, `docs/appservices.md`, describes the hook and the filter, and gains "Upgrading from 2026.4.1110" (`plans/00002`, step 4) |
+
+## Drift from `plans/00002`
+
+- **A repeat is never shown, where the plan says "never shown twice".** Only a failure's first
+  occurrence can open a dialog. A failure first seen while another dialog is open is logged and
+  counted, and stays unshown after that dialog closes; its count is written when `FlushLog` runs.
+  Showing it once, after the gate reopens, would also meet the plan's words; this reading is the
+  simpler, and is the one documented.
+- **The throw site is the first line of the exception's stack trace, as text.** The plan does not say
+  how a repeat's throw site is read. `TargetSite` and `StackFrame.GetMethod` need metadata a trimmed
+  app may not keep, and the trim analyser fails the build on them.
+- **What the plan leaves open, settled here:** a repeat's count line is logged at Error, as the
+  failure it counts; a benign exception is logged at Debug every time, since the repeat rule governs
+  what is reported; the handler logs a filter's throw at Warning beside the Error line, and not again
+  for a repeat; a dialog that fails to show is logged at Error. On stderr, a filter's throw follows the
+  exception's own report as `warning: <app>: the IsBenignException filter threw`.
 
 ## What the merge changed for consumers
 
