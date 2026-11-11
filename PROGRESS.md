@@ -58,7 +58,10 @@ is the one filter: the handler reads it, and `EntryPointOptions()` passes it on 
 while the callback still receives it. `AppMainOptions` is a `sealed record`. The rule that applies a
 filter, the plan's decision 3, is copied into each package as an internal `BenignExceptionRule`, and
 both copies are held to one table, `tests/AppServices.Tests/BenignExceptions/BenignExceptionTable.cs`.
-Each new test was seen red with the code it guards broken on purpose. Build with warnings as errors,
+Each new test was seen red with the code it guards broken on purpose. One rule has its code and
+comment for its only guard: that `ResetForTests` leaves the dispatcher recorded at install, never
+`Dispatcher.UIThread`. No headless test can tell the two apart, since a dispatcher the session has
+moved past runs no more jobs (measured). Build with warnings as errors,
 546 tests (531 passed, 15 skipped as before), and `check`, which conforms, pass on Windows. Package
 validation against `2026.4.1110` reports no breaking change in `.EntryPoint` or `.Avalonia`, and
 reports a planted one (`CP0002`); the native AOT probe publishes on win-x64 without a warning and
