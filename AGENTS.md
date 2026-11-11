@@ -135,7 +135,8 @@ applications are the consumers: they reference the Avalonia package, which bring
 through its project references. A test or a non-UI host references `.Abstractions` or
 `Bennewitz.Ninja.AppServices` alone. `Bennewitz.Ninja.AppServices.EntryPoint`, referencing nothing, is
 the entry point every app's `Main` calls, console, web and desktop alike (`plans/00001`).
-`README.md` is packed into every package and is the nuget.org description.
+`docs/appservices.md` is packed into every package as its `README.md` and is the nuget.org
+description; the root `README.md` is the repository's overview.
 
 ## AppServices's invariants
 
@@ -153,7 +154,7 @@ the entry point every app's `Main` calls, console, web and desktop alike (`plans
 | No public method takes a defaulted `CancellationToken`, or is a token-less overload of one that takes it | A caller silently opts out of cancellation | `AssemblyQualityTests.BNAQ1001_no_public_method_takes_a_defaulted_cancellation_token` |
 | No public signature names a `Microsoft.Win32`, `System.Runtime.InteropServices` or `System.Diagnostics` type | A contract becomes Windows-shaped, or a test seam becomes API, and every consumer binds against platform plumbing it never chose | `AssemblyQualityTests.BNAQ1002_no_platform_or_leak_prone_type_appears_in_the_public_surface` |
 | No namespace segment shadows a referenced root, so the Avalonia assembly and namespaces are `AppServices.AvaloniaUI` while its package id stays `Bennewitz.Ninja.AppServices.Avalonia` | Under a `….Avalonia` namespace, `Avalonia.X` resolves against it instead of Avalonia's root; a changed package id strands every consumer on the old one | `AssemblyQualityTests.BNAQ1004_no_namespace_segment_shadows_a_referenced_root`; `PackageId` in `src/AppServices.AvaloniaUI/AppServices.AvaloniaUI.csproj` |
-| Every packable project states `IsPackable`, a `Description` and `PackageTags`, with no `TODO`, and the packed `README.md` has no placeholder | Placeholder metadata is published and can never be replaced | `PackageMetadataTests` |
+| Every packable project states `IsPackable`, a `Description` and `PackageTags`, with no `TODO`, and the packed README, `docs/appservices.md`, has no placeholder | Placeholder metadata is published and can never be replaced | `PackageMetadataTests` |
 | Avalonia is pinned at 12.1.3 or later | UI Automation selection stops reaching the client on Windows; the headless tests cannot see it | `Directory.Packages.props`, `UI` group comment; `Avalonia.Headless` pinned to the same version |
 
 ## AppServices's commands
@@ -180,7 +181,8 @@ What the shared checklist above leaves out:
 4. Add its id to `packages.push`, or to `packages.local` with the reason as a comment above it. The
    trusted-publishing pattern `Bennewitz.Ninja.AppServices*` already covers a `Bennewitz.Ninja.AppServices.` id;
    an id outside it needs the policy widened first, see `docs/publishing.md`.
-5. Add it to the package table in `README.md`, and record it in `PROGRESS.md`.
+5. Add it to the package table in `docs/appservices.md` and to AppServices' packages in the root
+   `README.md`, and record it in `PROGRESS.md`.
 
 # ScopedEditors
 
@@ -214,7 +216,7 @@ or a non-UI host references `.Abstractions` or `.ViewModels` alone.
 | There is no bare `Bennewitz.Ninja.ScopedEditors` package | The trusted-publishing pattern `Bennewitz.Ninja.ScopedEditors.*` cannot authorise it, and it was never meant to exist | `packages.push`, header comment; `PackagingTests` |
 | A rooted trimmed publish produces exactly the ILLink warnings in `trimcheck/expected-warnings.txt` | A trim hazard in compiled XAML ships unseen, or ILLink silently stops analysing `ScopedEditors.AvaloniaUI` | CI's `trim` job; `scripts/check-trim-warnings.cs` |
 | Avalonia and `Avalonia.Headless` are pinned to the same version, which is the consumer's floor | A lower Avalonia loses the UI Automation selection fix a host relies on; a mismatched headless platform trips central transitive pinning | `Directory.Packages.props`, `UI` and `Testing` groups |
-| The README is the nuget.org description and carries no placeholder | The placeholder is published permanently on every id | `Directory.Build.props` packs `README.md`; `PackageMetadataTests.The_packed_readme_is_not_the_template_placeholder` |
+| The family's README, `docs/scopededitors.md`, is the nuget.org description and carries no placeholder | The placeholder is published permanently on every id | `Directory.Build.props` packs each project's `FamilyReadme`, `docs/scopededitors.md`, as `README.md`; `PackageMetadataTests.The_packed_readme_is_not_the_template_placeholder` reads that file |
 
 ## ScopedEditors's commands
 
@@ -234,4 +236,5 @@ What the shared checklist above leaves out:
 3. Add its id to `packages.push`, or to `packages.local` with the reason as a comment above it.
 4. Confirm the trusted-publishing policy's `Bennewitz.Ninja.ScopedEditors.*` pattern covers a new
    `packages.push` id; see `docs/publishing.md`.
-5. Add it to the package table in `README.md`, and record it in `PROGRESS.md`.
+5. Add it to the package table in `docs/scopededitors.md` and to ScopedEditors' packages in the root
+   `README.md`, and record it in `PROGRESS.md`.
