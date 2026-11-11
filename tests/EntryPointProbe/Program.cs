@@ -36,7 +36,11 @@ static async Task<int> ConsoleAsync(string[] args, CancellationToken cancellatio
             return 0;
 
         case ["background"]:
+            // BNCQ1009: this thread throws on purpose, so the tests can see the entry point report
+            // an exception no caller catches.
+#pragma warning disable BNCQ1009
             new Thread(() => throw new InvalidOperationException("the probe failed on a background thread")).Start();
+#pragma warning restore BNCQ1009
             await Task.Delay(Timeout.Infinite, cancellationToken);
             return 0;
 

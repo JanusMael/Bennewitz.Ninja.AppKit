@@ -54,6 +54,9 @@ public sealed class EntryPointWebProbeTests : IDisposable
         Exception? escaped = null;
 
         // On a thread of its own, as HostFactoryResolver runs an entry point.
+        // BNCQ1009: invoking the probe's own entry point with its one string[] argument throws only
+        // TargetInvocationException, wrapping what the entry point threw, and that is caught.
+#pragma warning disable BNCQ1009
         Thread thread = new(() =>
         {
             try
@@ -65,6 +68,7 @@ public sealed class EntryPointWebProbeTests : IDisposable
                 escaped = exception.InnerException;
             }
         });
+#pragma warning restore BNCQ1009
         thread.Start();
 
         Assert.True(thread.Join(TimeSpan.FromMinutes(1)), "The entry point did not stop at HostBuilt.");
