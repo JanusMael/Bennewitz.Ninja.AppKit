@@ -1,3 +1,4 @@
+using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Binding;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 using Bennewitz.Ninja.AppServices.Dialogs;
@@ -31,7 +32,8 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 ///       framework has finished initialising (dispatchers, binding plugin list,
 ///       etc. are all live). Installs <see cref="BindingValidationErrorLogger"/> to capture
 ///       binding-coercion errors via the <c>DataValidationErrors.ErrorsProperty</c>
-///       attached-property pipeline.
+///       attached-property pipeline, and the handler for exceptions nothing on the UI
+///       thread caught (<see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/>).
 ///     </description>
 ///   </item>
 /// </list>
@@ -87,6 +89,19 @@ public static class AvaloniaDiagnostics
     /// <see cref="AvaloniaDiagnosticsOptions.EnableEventLogFile"/> was not set.
     /// </summary>
     public static string? CurrentEventLogFilePath => _eventFileSink?.CurrentFilePath;
+
+    /// <summary>
+    /// The title every <see cref="FatalErrorDialog"/> this package opens takes: <c>"Application Error —
+    /// {AppName}"</c>, or a neutral <c>"Application Error"</c> before <see cref="ConfigureLogging"/> has run.
+    /// </summary>
+    internal static string FatalErrorDialogTitle =>
+        string.IsNullOrWhiteSpace(AppName) ? "Application Error" : $"Application Error — {AppName}";
+
+    /// <summary>
+    /// The host's <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/>, read when an exception
+    /// arrives: <see langword="null"/>, so nothing is benign, before <see cref="ConfigureLogging"/> has run.
+    /// </summary>
+    internal static Func<Exception, bool>? BenignExceptionFilter => _options?.IsBenignException;
 
     /// <summary>
     /// Configures <see cref="Log.Logger"/> and (optionally) redirects
@@ -169,16 +184,29 @@ public static class AvaloniaDiagnostics
     ///         is set) to catch binding-coercion errors via the
     ///         <c>DataValidationErrors.ErrorsProperty</c> attached-property
     ///         pipeline.</item>
+    ///   <item>Subscribes the handler for exceptions nothing on the UI thread caught
+    ///         to <see cref="Dispatcher.UIThread"/>'s
+    ///         <see cref="Dispatcher.UnhandledException"/> (when
+    ///         <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> is set,
+    ///         as it is by default): each is logged, and shown unless it is benign, and
+    ///         the app keeps running.</item>
     /// </list>
     /// <para>
     /// <strong>Must be called from <c>App.OnFrameworkInitializationCompleted</c></strong>
     /// (or equivalent) <em>after</em> the framework has initialised, so the
-    /// binding plugin list is in place before it is modified.
+    /// binding plugin list is in place before it is modified, and the UI thread's
+    /// dispatcher is the app's.
     /// </para>
     /// <para>
     /// Must be preceded by a call to <see cref="ConfigureLogging"/>. When the
     /// options instance from that call is not available, this method is a
-    /// no-op.
+    /// no-op. Each hook is installed once, however often this is called.
+    /// </para>
+    /// <para>
+    /// ⚠ An app's own UI-thread handler subscribed after this call runs after the
+    /// package's, and finds every exception already handled;
+    /// <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> says what
+    /// that costs and the ways out.
     /// </para>
     /// </summary>
     public static void InstallAvaloniaHooks()
@@ -193,6 +221,11 @@ public static class AvaloniaDiagnostics
         if (options.EnableBindingValidationLogger)
         {
             BindingValidationErrorLogger.Install();
+        }
+
+        if (options.HandleUiThreadExceptions)
+        {
+            UiThreadExceptions.Install(Dispatcher.UIThread);
         }
     }
 
@@ -225,7 +258,8 @@ public static class AvaloniaDiagnostics
 
     /// <summary>
     /// Returns this static bootstrap to its unconfigured state, so a test can call
-    /// <see cref="ConfigureLogging"/> again. Disposes the file sinks it created.
+    /// <see cref="ConfigureLogging"/> again. Disposes the file sinks it created, and takes the
+    /// UI-thread handler off the dispatcher it was installed on, with its gate and counts reset.
     /// </summary>
     /// <remarks>
     /// ⚠ Test-only. It does not restore <see cref="Log.Logger"/> or Avalonia's logger sink, which
@@ -233,6 +267,7 @@ public static class AvaloniaDiagnostics
     /// </remarks>
     internal static void ResetForTests()
     {
+        UiThreadExceptions.ResetForTests();
         _eventLogger?.Dispose();
         _eventLogger = null;
         _eventFileSink?.Dispose();
@@ -257,10 +292,7 @@ public static class AvaloniaDiagnostics
     /// <see cref="Exception.ToString"/> output is displayed.</param>
     public static void ShowFatalErrorDialog(string? message, Exception exception)
     {
-        string title = string.IsNullOrWhiteSpace(AppName)
-            ? "Application Error"
-            : $"Application Error — {AppName}";
-        FatalErrorDialog.ShowSafe(title, message ?? FatalErrorDialog.DefaultMessage, exception);
+        FatalErrorDialog.ShowSafe(FatalErrorDialogTitle, message ?? FatalErrorDialog.DefaultMessage, exception);
     }
 
     /// <summary>
@@ -295,13 +327,23 @@ public static class AvaloniaDiagnostics
 
     /// <summary>
     /// The options <see cref="AppMain.RunDesktop"/> takes in an Avalonia app: a failure is logged as
-    /// fatal and shown in the native fatal-error dialog, a task exception nobody observed is logged as
-    /// a warning, and the log is closed and flushed on every exit.
+    /// fatal and shown in the native fatal-error dialog; a task exception nobody observed is logged at
+    /// Debug when <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/> calls it benign, and as a
+    /// warning otherwise; and on every exit the UI-thread handler's pending repeat counts are written,
+    /// then the log is closed and flushed.
     /// </summary>
     /// <remarks>
     /// <para>
     /// ⭐ <b>The wiring lives here so that a package bump fixes it in every app.</b> Written into each
     /// app's <c>Program.cs</c> instead, it would be copied from the template once and never updated.
+    /// </para>
+    /// <para>
+    /// ⭐ <b>The host's one filter is passed on.</b> The options' <c>IsBenignException</c> reads
+    /// <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/> when an exception arrives, not when the
+    /// options are built: they are built in <c>Main</c>, before <see cref="ConfigureLogging"/> has run,
+    /// and until it has, nothing is benign. The entry point keeps a benign task exception nobody
+    /// observed off stderr, and the callback logs it at Debug. Neither shows a dialog for one: by the
+    /// time a garbage collection finds it, its caller is gone, and a dialog would offer nothing to act on.
     /// </para>
     /// <para>
     /// ⚠ The fatal event is logged before the dialog opens, since the dialog blocks until it is
@@ -310,7 +352,7 @@ public static class AvaloniaDiagnostics
     /// stderr are what remain.
     /// </para>
     /// </remarks>
-    /// <returns>New options on every call.</returns>
+    /// <returns>New options on every call: a record, so a host changes one member with <c>with</c>.</returns>
     public static AppMainOptions EntryPointOptions() => new()
     {
         OnFatal = exception =>
@@ -318,7 +360,37 @@ public static class AvaloniaDiagnostics
             Log.Fatal(exception, "{AppName} stopped on an unhandled exception", AppName ?? "The application");
             ShowNativeFatalError(exception.ToString());
         },
-        OnUnobservedTaskException = exception => Log.Warning(exception, "A task exception nobody observed"),
-        FlushLog = Log.CloseAndFlush,
+        OnUnobservedTaskException = LogUnobservedTaskException,
+        FlushLog = () =>
+        {
+            try
+            {
+                UiThreadExceptions.WritePendingRepeats();
+            }
+            finally
+            {
+                Log.CloseAndFlush();
+            }
+        },
+        IsBenignException = exception => BenignExceptionFilter is { } filter && filter(exception),
     };
+
+    // The callback is given the exception without the entry point's verdict, so it applies the rule
+    // again, with the same filter, to choose its level.
+    private static void LogUnobservedTaskException(Exception exception)
+    {
+        bool benign = BenignExceptionRule.IsBenign(BenignExceptionFilter, exception, out Exception? filterFailure);
+        if (benign)
+        {
+            Log.Debug(exception, "A benign task exception nobody observed");
+            return;
+        }
+
+        Log.Warning(exception, "A task exception nobody observed");
+        if (filterFailure is not null)
+        {
+            Log.Warning(filterFailure,
+                "The IsBenignException filter threw on the task exception above, so that exception counts as not benign");
+        }
+    }
 }

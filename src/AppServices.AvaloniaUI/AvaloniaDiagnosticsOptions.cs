@@ -176,4 +176,58 @@ public sealed class AvaloniaDiagnosticsOptions
     /// handled by <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/>.
     /// </summary>
     public bool EnableBindingValidationLogger { get; init; } = true;
+
+    /// <summary>
+    /// Installs, from <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/>, a handler for every
+    /// exception a job on the UI thread lets escape, so that it is logged, and shown, instead of ending
+    /// the process. Defaults to <see langword="true"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The handler marks every exception handled, and the app keeps running. One that
+    /// <see cref="IsBenignException"/> calls benign is logged at Debug and shows nothing. Any other is
+    /// logged at Error and shown in a <see cref="Dialogs.FatalErrorDialog"/> titled with
+    /// <see cref="AppName"/>, one dialog at a time: another exception while that dialog is open is
+    /// logged and not shown. An exception with the type, message and throw site of one already
+    /// reported is a repeat: it is counted rather than logged and is never shown, and a line gives its
+    /// count when the dialog shown for it closes and when the <c>FlushLog</c> of
+    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> runs at exit. An exception that a handler
+    /// subscribed before this one has already handled is left alone.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>An app with a UI-thread handler of its own</b>, subscribed after <c>InstallAvaloniaHooks</c>,
+    /// runs both, this one first. Until the app moves its classifier into <see cref="IsBenignException"/>
+    /// and deletes its handler, what it calls benign is logged at Error and shown, and a real failure
+    /// shows two dialogs. Subscribing its handler before <c>InstallAvaloniaHooks</c>, or setting this to
+    /// <see langword="false"/>, avoids that as well.
+    /// </para>
+    /// <para>
+    /// Set it to <see langword="false"/>, too, wherever an exception on the UI thread must still end the
+    /// process: a smoke run that proves a build by its exit code, for one.
+    /// </para>
+    /// </remarks>
+    public bool HandleUiThreadExceptions { get; init; } = true;
+
+    /// <summary>
+    /// Marks the exceptions the host knows to be harmless, such as the Linux D-Bus portal ones, so that
+    /// they are logged at Debug and never shown. Read by the UI-thread handler
+    /// (<see cref="HandleUiThreadExceptions"/>), and by the options
+    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> returns, which keep a benign task exception
+    /// nobody observed off stderr and log it at Debug. Defaults to <see langword="null"/>: nothing is
+    /// benign.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// An <see cref="AggregateException"/> is benign when it flattens to at least one exception and the
+    /// filter matches every one of them; the aggregate itself is never passed to the filter. A task
+    /// exception nobody observed always arrives as an aggregate, so the filter is written for the
+    /// exceptions inside it. A filter that throws counts as not benign, and its throw is logged beside
+    /// the exception.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>It runs on whichever thread raised the exception</b>: the UI thread, or the finalizer thread
+    /// for a task exception nobody observed. So it must be quick and thread-safe.
+    /// </para>
+    /// </remarks>
+    public Func<Exception, bool>? IsBenignException { get; init; }
 }
