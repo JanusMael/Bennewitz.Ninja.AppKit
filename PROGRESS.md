@@ -87,6 +87,12 @@ the root `AGENTS.md` carries every template's paragraph, which it had lacked sin
 Avalonia 12.1.3's second report of a UI-thread exception went to the XamlQuality session the same
 day, for `docs/avalonia-gotchas.md`.
 
+**ScopedEditors runs `BNAQ1005`** from 2026-11-12, by the maintainer's choice, so both families'
+tests run `BNAQ1001` to `BNAQ1005`; until then nothing checked what ScopedEditors' compiled assemblies
+grant. A stray grant planted in `ScopedEditors.Abstractions` failed it alone, 1 test of 270.
+CodeQuality came with the `2026.4.1111` sync at its defaults, the family's decision of 2026-11-10, so
+`BNCQ1001` stays off where `BNAQ1001` already holds; `BNAQ1006` stays unadopted.
+
 **Next, in order:**
 1. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
    `2026.4.1112`, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
