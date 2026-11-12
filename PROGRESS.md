@@ -100,8 +100,8 @@ CodeQuality came with the `2026.4.1111` sync at its defaults, the family's decis
    report apart, so one failure could show two dialogs. The maintainer chose a new
    `AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions`, separate from `HandleUiThreadExceptions`
    and on by default. The dialog goes through the UI-thread handler's gate and repeat counting, and
-   never for a second report; a benign exception stays at Debug with no dialog. It supersedes
-   `plans/00002`'s decision 5. Then its approval, the implementation, an AppServices release, and
+   never for a second report; a benign exception stays at Debug with no dialog. It amends
+   `plans/00002`'s decision 6. Then its approval, the implementation, an AppServices release, and
    `bbavalonia`'s `ShowUnobservedTaskExceptions = !smoke` beside its smoke line.
 2. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
    the version, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
