@@ -116,6 +116,13 @@ ScopedEditors' trim baseline.
 `<family>/vYYYY.Q.MMDD`, one release per calendar day per family; verify against the feed, then record
 it in `PROGRESS.md`.
 
+**Avalonia and drivable-UI lessons go to XamlQuality.** `docs/avalonia-gotchas.md` and
+`docs/ai-drivable-ui.md` in
+[JanusMael/Bennewitz.Ninja.Inspections](https://github.com/JanusMael/Bennewitz.Ninja.Inspections)
+are the one living copy of each. Send a new finding or a correction to the XamlQuality session by
+message, with the versions and the measurement or source behind it, or open an issue there when no
+session is running. Keep no copy here.
+
 **Every change:** update `PROGRESS.md` in the same commit. Commits are Conventional Commits, with `!`
 on a change that breaks a consumer, and a breaking change gets a line in the family's README, which
 is what nuget.org shows.
