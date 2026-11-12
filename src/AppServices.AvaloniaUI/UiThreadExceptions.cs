@@ -9,7 +9,8 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 /// <summary>
 /// The handler <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/> subscribes to the UI thread's
 /// <see cref="Dispatcher.UnhandledException"/> (<c>plans/00002</c>, decision 4): every exception a job on
-/// the UI thread lets escape is handled, logged, and shown or not, and the app keeps running.
+/// the UI thread lets escape is handled, logged, and shown or not, and the app keeps running. A task
+/// exception nobody observed is shown through the same gate and repeat table (<c>plans/00003</c>).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -36,15 +37,25 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 /// that failure's dialog closes, and one when <see cref="AvaloniaDiagnostics.EntryPointOptions"/>'
 /// <c>FlushLog</c> runs at exit. An exception that repeats on every frame would otherwise roll the log
 /// past its last file, deleting the start of the session, and a dialog that came back after every close
-/// could never be got rid of.
+/// could never be got rid of. A failure is one failure whichever path reports it.
 /// </para>
 /// <para>
 /// ⚠ <b>Avalonia reports each of these exceptions a second time.</b> Its 12.1.3
 /// <c>DispatcherOperation.InvokeCore</c> also puts the exception in the posted job's task, which nothing
 /// reads, so the runtime raises it again, at a later garbage collection, as a task exception nobody
-/// observed. Every exception this handles is remembered, weakly, with what an aggregate flattens to,
-/// so that <see cref="AvaloniaDiagnostics.EntryPointOptions"/> can tell that second report from a
-/// failure of its own (<see cref="WasHandled"/>). One it leaves alone is not remembered.
+/// observed. Every exception the dispatcher reports is remembered, weakly, with what an aggregate
+/// flattens to, whoever handles it, so that <see cref="AvaloniaDiagnostics.EntryPointOptions"/> can tell
+/// that second report from a failure of its own (<see cref="WasSeen"/>). So the handler is subscribed
+/// whenever <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> or
+/// <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> is set, and handles nothing
+/// unless the first is (<c>plans/00003</c>, decision 4).
+/// </para>
+/// <para>
+/// ⛔ <b>A task exception nobody observed arrives on the finalizer thread</b>
+/// (<see cref="ReportUnobserved"/>). It is counted and logged there, and its dialog is posted to the
+/// dispatcher recorded at install, so the gate is taken on the UI thread, where a dialog the handler
+/// opened meanwhile still holds it. <see cref="Dispatcher.UIThread"/> is never read there: before
+/// Avalonia has started, it would make a dispatcher bound to the finalizer thread.
 /// </para>
 /// </remarks>
 internal static class UiThreadExceptions
@@ -55,17 +66,23 @@ internal static class UiThreadExceptions
     // has been offered its dialog.
     private static readonly Dictionary<Failure, Reported> _reported = [];
 
-    // The dispatcher the handler is subscribed to, recorded so that ResetForTests can leave it.
+    // The dispatcher the handler is subscribed to: a task exception's dialog is posted to it, and
+    // ResetForTests leaves it.
     private static Dispatcher? _installedOn;
+
+    // Whether the handler handles what the dispatcher reports, or only remembers it. Written at install,
+    // which runs on the UI thread before the handler can.
+    private static volatile bool _handles;
 
     // A token for the dialog this opened that is still open; null while the gate is open.
     private static object? _openDialog;
 
-    // Every exception this has handled, and what each aggregate among them flattens to, held weakly: an
-    // entry lives as long as its exception, which Avalonia's unread task keeps until its second report.
-    private static readonly ConditionalWeakTable<Exception, object> _handled = new();
+    // Every exception the dispatcher has reported, whoever handled it, and what each aggregate among
+    // them flattens to, held weakly: an entry lives as long as its exception, which Avalonia's unread
+    // task keeps until its second report.
+    private static readonly ConditionalWeakTable<Exception, object> _seen = new();
 
-    private static readonly object HandledMarker = new();
+    private static readonly object SeenMarker = new();
 
     /// <summary>
     /// Opens the dialog for a reported exception, and calls the action it is given once that dialog
@@ -74,8 +91,14 @@ internal static class UiThreadExceptions
     /// </summary>
     internal static Action<Exception, Action> OpenDialog { get; set; } = OpenFatalErrorDialog;
 
-    /// <summary>Subscribes the handler to <paramref name="dispatcher"/>, once however often it is called.</summary>
-    internal static void Install(Dispatcher dispatcher)
+    /// <summary>
+    /// Subscribes the handler to <paramref name="dispatcher"/>, once however often it is called, and
+    /// records it for the dialogs <see cref="ReportUnobserved"/> posts.
+    /// </summary>
+    /// <param name="dispatcher">The UI thread's dispatcher.</param>
+    /// <param name="handle">Whether the handler handles what the dispatcher reports; when false, it only
+    /// remembers it, for <see cref="WasSeen"/>.</param>
+    internal static void Install(Dispatcher dispatcher, bool handle)
     {
         lock (_lock)
         {
@@ -85,17 +108,85 @@ internal static class UiThreadExceptions
             }
 
             _installedOn = dispatcher;
+            _handles = handle;
         }
 
         dispatcher.UnhandledException += OnUnhandledException;
     }
 
     /// <summary>
-    /// Whether this handled <paramref name="exception"/>, or an aggregate it handled flattens to it: when
-    /// true, a task exception nobody observed that carries it is Avalonia's second report of a failure
-    /// already logged here.
+    /// Whether the dispatcher has reported <paramref name="exception"/>, or an aggregate it reported
+    /// flattens to it: when true, a task exception nobody observed that carries it is Avalonia's second
+    /// report of an exception the UI thread let escape, whoever handled it.
     /// </summary>
-    internal static bool WasHandled(Exception exception) => _handled.TryGetValue(exception, out _);
+    internal static bool WasSeen(Exception exception) => _seen.TryGetValue(exception, out _);
+
+    /// <summary>
+    /// Reports a task exception nobody observed that is not benign (<c>plans/00003</c>, decisions 2, 3 and
+    /// 5): logs it at Error, unless its failure is a repeat, and posts its dialog to the dispatcher
+    /// recorded at install. Called on the finalizer thread; it never waits for the dialog.
+    /// </summary>
+    /// <param name="raised">The exception as the runtime raised it, wrapped.</param>
+    /// <param name="filterFailure">What the host's filter threw on it, if it threw, logged beside it.</param>
+    /// <remarks>
+    /// The failure counted and shown is the wrapper's one inner exception when it has exactly one, as a
+    /// task that failed on one throw does; otherwise, as for a <c>Task.WhenAll</c> that several failures
+    /// faulted, the wrapper itself. Keyed on the wrapper, every one would be the same failure. Before
+    /// <see cref="Install"/>, and once the dispatcher has shut down, it is logged and not shown.
+    /// </remarks>
+    internal static void ReportUnobserved(Exception raised, Exception? filterFailure)
+    {
+        Exception exception = raised is AggregateException { InnerExceptions: [Exception only] } ? only : raised;
+        Failure failure = Failure.Of(exception);
+        Dispatcher? dispatcher;
+        bool repeat;
+        lock (_lock)
+        {
+            dispatcher = _installedOn;
+            if (_reported.TryGetValue(failure, out Reported? reported))
+            {
+                reported.Count++;
+
+                // Only a failure never offered its dialog is offered it at a repeat.
+                if (reported.Offered)
+                {
+                    return;
+                }
+
+                repeat = true;
+            }
+            else
+            {
+                _reported.Add(failure, new Reported());
+                repeat = false;
+            }
+        }
+
+        if (!repeat)
+        {
+            Write(LogEventLevel.Error, raised, "A task exception nobody observed");
+            if (filterFailure is not null)
+            {
+                Write(LogEventLevel.Warning, filterFailure,
+                    "The IsBenignException filter threw on the task exception above, so that exception counts as not benign");
+            }
+        }
+
+        if (dispatcher is null)
+        {
+            return;
+        }
+
+        try
+        {
+            // ⛔ Posted, never waited for: every finalizer in the process would wait for the user.
+            dispatcher.Post(() => ShowPosted(failure, exception));
+        }
+        catch (Exception cannotPost)
+        {
+            Write(LogEventLevel.Error, cannotPost, "The dialog for the task exception above could not be shown");
+        }
+    }
 
     /// <summary>Writes one line for each failure that has repeated since its last count line.</summary>
     internal static void WritePendingRepeats()
@@ -134,7 +225,7 @@ internal static class UiThreadExceptions
 
     /// <summary>
     /// Leaves the dispatcher the handler was installed on, reopens the gate, forgets every failure, count
-    /// and handled exception, and puts <see cref="OpenDialog"/> back. Test-only.
+    /// and exception seen, and puts <see cref="OpenDialog"/> back. Test-only.
     /// </summary>
     /// <remarks>
     /// ⛔ It leaves the dispatcher recorded at install, never <see cref="Dispatcher.UIThread"/>: read where
@@ -147,11 +238,12 @@ internal static class UiThreadExceptions
         {
             installedOn = _installedOn;
             _installedOn = null;
+            _handles = false;
             _openDialog = null;
             _reported.Clear();
         }
 
-        _handled.Clear();
+        _seen.Clear();
 
         if (installedOn is not null)
         {
@@ -163,16 +255,19 @@ internal static class UiThreadExceptions
 
     private static void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
     {
-        if (e.Handled)
+        bool handle = _handles && !e.Handled;
+        if (handle)
         {
-            return;
+            e.Handled = true;
         }
 
-        e.Handled = true;
         try
         {
             Remember(e.Exception);
-            Handle(e.Exception);
+            if (handle)
+            {
+                Handle(e.Exception);
+            }
         }
         catch (Exception)
         {
@@ -181,17 +276,18 @@ internal static class UiThreadExceptions
         }
     }
 
-    // With what an aggregate flattens to, because the rule offers a filter those and never the aggregate.
+    // Every exception, whoever handles it, with what an aggregate flattens to, because the rule offers a
+    // filter those and never the aggregate.
     private static void Remember(Exception exception)
     {
         try
         {
-            _handled.AddOrUpdate(exception, HandledMarker);
+            _seen.AddOrUpdate(exception, SeenMarker);
             if (exception is AggregateException aggregate)
             {
                 foreach (Exception inner in aggregate.Flatten().InnerExceptions)
                 {
-                    _handled.AddOrUpdate(inner, HandledMarker);
+                    _seen.AddOrUpdate(inner, SeenMarker);
                 }
             }
         }
@@ -248,12 +344,28 @@ internal static class UiThreadExceptions
         Show(failure, exception);
     }
 
+    // The dialog ReportUnobserved posted, run on the UI thread.
+    private static void ShowPosted(Failure failure, Exception exception)
+    {
+        try
+        {
+            Show(failure, exception);
+        }
+        catch (Exception)
+        {
+            // ⛔ A throw out of a posted job would reach the dispatcher as a UI-thread failure of its own.
+        }
+    }
+
     private static void Show(Failure failure, Exception exception)
     {
         object dialog = new();
         lock (_lock)
         {
-            if (_openDialog is not null)
+            // One dialog at a time, and one for each failure: a dialog posted for a failure that has been
+            // offered one since, by either path, is not shown.
+            _reported.TryGetValue(failure, out Reported? reported);
+            if (_openDialog is not null || reported is { Offered: true })
             {
                 return;
             }
@@ -262,7 +374,7 @@ internal static class UiThreadExceptions
 
             // Offered before it is tried: a dialog that cannot open is not tried again, and its failure
             // not logged again, on every repeat.
-            if (_reported.TryGetValue(failure, out Reported? reported))
+            if (reported is not null)
             {
                 reported.Offered = true;
             }
@@ -319,7 +431,7 @@ internal static class UiThreadExceptions
 
     private static void WriteRepeats(Failure failure, long count) =>
         Write(LogEventLevel.Error, null,
-            "A UI-thread exception repeated {RepeatCount} more times: {ExceptionType:l}: {ExceptionMessage:l}, thrown {ThrowSite:l}",
+            "An exception repeated {RepeatCount} more times: {ExceptionType:l}: {ExceptionMessage:l}, thrown {ThrowSite:l}",
             count, failure.Type, failure.Message, failure.ThrowSite);
 
     private static void Write(LogEventLevel level, Exception? exception, string template, params object?[] values)

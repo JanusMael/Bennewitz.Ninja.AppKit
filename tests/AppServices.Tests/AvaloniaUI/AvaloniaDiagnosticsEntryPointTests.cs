@@ -72,8 +72,23 @@ public sealed class AvaloniaDiagnosticsEntryPointTests : IDisposable
     }
 
     [Fact]
-    public void A_task_exception_nobody_observed_is_logged_as_a_warning()
+    public void A_task_exception_nobody_observed_is_logged_at_Error()
     {
+        InvalidOperationException unobserved = new("nobody awaited this");
+
+        AvaloniaDiagnostics.EntryPointOptions().OnUnobservedTaskException!(unobserved);
+
+        LogEvent logged = Assert.Single(_sink.Events);
+        Assert.Equal(LogEventLevel.Error, logged.Level);
+        Assert.Same(unobserved, logged.Exception);
+        Assert.Null(NativeErrorDialog.LastSuppressedCall.Title);
+    }
+
+    [Fact]
+    public void With_ShowUnobservedTaskExceptions_off_a_task_exception_nobody_observed_is_logged_as_a_warning()
+    {
+        AvaloniaDiagnostics.ResetForTests();
+        Configure(show: false);
         InvalidOperationException unobserved = new("nobody awaited this");
 
         AvaloniaDiagnostics.EntryPointOptions().OnUnobservedTaskException!(unobserved);
@@ -113,6 +128,27 @@ public sealed class AvaloniaDiagnosticsEntryPointTests : IDisposable
     }
 
     [Fact]
+    public void The_filter_calls_a_cancellation_benign_without_asking_the_host_s_filter()
+    {
+        List<Exception> asked = [];
+        Reconfigure(exception =>
+        {
+            asked.Add(exception);
+            return false;
+        });
+        AppMainOptions options = AvaloniaDiagnostics.EntryPointOptions();
+
+        Assert.True(options.IsBenignException!(new OperationCanceledException(BenignExceptionTable.Cancelled)));
+        Assert.True(options.IsBenignException!(new TaskCanceledException(BenignExceptionTable.Cancelled)));
+        Assert.Empty(asked);
+
+        // The control: anything else is the host's filter's to call.
+        InvalidOperationException other = new(BenignExceptionTable.NotBenign);
+        Assert.False(options.IsBenignException!(other));
+        Assert.Same(other, Assert.Single(asked));
+    }
+
+    [Fact]
     public void The_callback_logs_an_aggregate_wrapping_a_benign_exception_at_Debug()
     {
         Reconfigure(BenignExceptionTable.Filter);
@@ -127,7 +163,7 @@ public sealed class AvaloniaDiagnosticsEntryPointTests : IDisposable
     }
 
     [Fact]
-    public void The_callback_logs_an_aggregate_wrapping_a_non_benign_exception_at_Warning()
+    public void The_callback_logs_an_aggregate_wrapping_a_non_benign_exception_at_Error()
     {
         Reconfigure(BenignExceptionTable.Filter);
         AggregateException unobserved = new(new InvalidOperationException(BenignExceptionTable.NotBenign));
@@ -135,24 +171,25 @@ public sealed class AvaloniaDiagnosticsEntryPointTests : IDisposable
         AvaloniaDiagnostics.EntryPointOptions().OnUnobservedTaskException!(unobserved);
 
         LogEvent logged = Assert.Single(_sink.Events);
-        Assert.Equal(LogEventLevel.Warning, logged.Level);
+        Assert.Equal(LogEventLevel.Error, logged.Level);
         Assert.Same(unobserved, logged.Exception);
         Assert.Null(NativeErrorDialog.LastSuppressedCall.Title);
     }
 
     [Theory]
-    [MemberData(nameof(BenignExceptionTable.AllRows), MemberType = typeof(BenignExceptionTable))]
-    public void The_callback_logs_every_row_of_the_shared_table_at_the_level_its_verdict_gives(string row)
+    [MemberData(nameof(BenignExceptionTable.AllRowsWithShowOnAndOff), MemberType = typeof(BenignExceptionTable))]
+    public void The_callback_logs_every_row_of_the_shared_table_at_the_level_its_verdict_gives(string row, bool show)
     {
         BenignExceptionTable.Row expected = BenignExceptionTable.Get(row);
-        Reconfigure(BenignExceptionTable.Filter);
+        Reconfigure(BenignExceptionTable.Filter, show);
         // Wrapped, as the runtime raises a task exception nobody observed.
         AggregateException unobserved = new(expected.Make());
 
         AvaloniaDiagnostics.EntryPointOptions().OnUnobservedTaskException!(unobserved);
 
         LogEvent logged = Assert.Single(_sink.Events, e => ReferenceEquals(e.Exception, unobserved));
-        Assert.Equal(expected.Benign ? LogEventLevel.Debug : LogEventLevel.Warning, logged.Level);
+        LogEventLevel notBenign = show ? LogEventLevel.Error : LogEventLevel.Warning;
+        Assert.Equal(expected.BenignUnobserved ? LogEventLevel.Debug : notBenign, logged.Level);
         LogEvent[] others = [.. _sink.Events.Where(e => !ReferenceEquals(e, logged))];
         if (expected.FilterThrows)
         {
@@ -166,8 +203,12 @@ public sealed class AvaloniaDiagnosticsEntryPointTests : IDisposable
         }
     }
 
-    /// <summary>Configures logging into <see cref="_sink"/>; with a filter, at Debug.</summary>
-    private void Configure(Func<Exception, bool>? filter = null) =>
+    /// <summary>
+    /// Configures logging into <see cref="_sink"/>; with a filter, at Debug. No UI thread's dispatcher is
+    /// recorded here, so a task exception's dialog is never posted: what it shows is tested in
+    /// <c>UiThreadExceptionHandlerTests</c>.
+    /// </summary>
+    private void Configure(Func<Exception, bool>? filter = null, bool show = true) =>
         AvaloniaDiagnostics.ConfigureLogging(new AvaloniaDiagnosticsOptions
         {
             AppName = "entry-tests",
@@ -176,15 +217,16 @@ public sealed class AvaloniaDiagnosticsEntryPointTests : IDisposable
             EnableTraceSink = false,
             // Avalonia's logger sink is process-wide and not the subject here.
             BridgeAvaloniaLogger = false,
+            ShowUnobservedTaskExceptions = show,
             IsBenignException = filter,
             ConfigureLogger = configuration => configuration.WriteTo.Sink(_sink),
         });
 
     /// <summary>Configures logging again, ConfigureLogging being configure-once.</summary>
-    private void Reconfigure(Func<Exception, bool> filter)
+    private void Reconfigure(Func<Exception, bool> filter, bool show = true)
     {
         AvaloniaDiagnostics.ResetForTests();
-        Configure(filter);
+        Configure(filter, show);
     }
 
     private sealed class CollectingSink : ILogEventSink

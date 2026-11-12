@@ -78,7 +78,8 @@ behind, and the web probe's run reported one on its stderr. They now collect the
 ends (`tests/AGENTS.md`). In an app that `AppMain` runs with `EntryPointOptions()`, every failure,
 each repeat included, would have been logged again at Warning and written on stderr. By the
 maintainer's choice of 2026-11-11, the handler remembers, weakly, each exception it handles, and
-`EntryPointOptions()` keeps that second report off stderr and out of the log (see Drift). Every row of
+`EntryPointOptions()` keeps that second report off stderr and out of the log (see Drift); since
+`plans/00003` it remembers every exception the dispatcher reports, whoever handles it. Every row of
 the shared table is thrown for real inside an `AppMain` run and its second report collected there, and
 each of seven planted breaks turns a test red.
 
@@ -93,16 +94,37 @@ grant. A stray grant planted in `ScopedEditors.Abstractions` failed it alone, 1 
 CodeQuality came with the `2026.4.1111` sync at its defaults, the family's decision of 2026-11-10, so
 `BNCQ1001` stays off where `BNAQ1001` already holds; `BNAQ1006` stays unadopted.
 
+**`plans/00003`, task exceptions nobody observed shown as UI-thread failures are, is built and not
+yet released** (approved 2026-11-12; its steps 1 to 3). ClaudeForge asked for it: a wrapper of its own
+around the callback cannot tell Avalonia's second report apart, so one failure could show two
+dialogs. `AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions`, on by default and separate from
+`HandleUiThreadExceptions` by the maintainer's choice, has `EntryPointOptions()`' callback log a task
+exception nobody observed, when not benign, at Error and show it in a `FatalErrorDialog`, through the
+UI-thread handler's gate and repeat table. The dialog is posted from the finalizer thread to the
+dispatcher `InstallAvaloniaHooks()` recorded. Off, it is logged at Warning with no dialog, as in
+`2026.4.1112`. `InstallAvaloniaHooks()` subscribes the handler while either switch is on, and the
+handler remembers every exception the dispatcher reports, so Avalonia's second report is known in an
+app with a UI-thread handler of its own too. On that path alone, an exception that is nothing but
+cancellations is benign, by the maintainer's choice: logged at Debug, shown nothing, kept off stderr.
+Build with warnings as errors, 649 tests (634 passed, 15 skipped as before), and `check`, which
+conforms, pass on Windows. Each new test was seen red with the code it guards broken on purpose: 18
+of 19 planted breaks turned the tests aimed at them red. The 19th, posting to `Dispatcher.UIThread`
+read on the finalizer thread once the hooks are installed, survived and is equivalent there, since
+`Dispatcher.UIThread` is then the UI thread's dispatcher from any thread (measured: the dialog still
+opened on the UI thread); falling back to it before they are installed turned
+`Before_InstallAvaloniaHooks_a_task_exception_is_logged_and_not_shown` red. That nothing is shown once
+the app has shut down rests on Avalonia 12.1.3's `Dispatcher.InvokeAsyncImpl`, which enqueues nothing
+for a dispatcher that has shut down and aborts the post without a throw (read in its source): no test
+shuts down the headless dispatcher, which every later test shares. Package validation against
+`2026.4.1112`, packed as the next day's build, reports no breaking change in `.EntryPoint` or
+`.Avalonia`.
+
 **Next, in order:**
-1. **`plans/00003`, decided 2026-11-12 and to be drafted.** ClaudeForge asked that a task exception
-   nobody observed, when not benign, be logged at Error and shown in the `FatalErrorDialog`, as a
-   UI-thread failure is: it shows one today, and a wrapper of its own cannot tell Avalonia's second
-   report apart, so one failure could show two dialogs. The maintainer chose a new
-   `AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions`, separate from `HandleUiThreadExceptions`
-   and on by default. The dialog goes through the UI-thread handler's gate and repeat counting, and
-   never for a second report; a benign exception stays at Debug with no dialog. It amends
-   `plans/00002`'s decision 6. Then its approval, the implementation, an AppServices release, and
-   `bbavalonia`'s `ShowUnobservedTaskExceptions = !smoke` beside its smoke line.
+1. **Release AppServices with `plans/00003`** (its step 4), on the maintainer's word, through
+   `docs/publishing.md`, then its Published row. Then step 5: tell ClaudeForge the version, for its
+   one-commit change with no unobserved handler of its own, and that an unobserved exception that is
+   nothing but cancellations is benign now; tell Templates the version and the line `bbavalonia` needs
+   beside its smoke line, `ShowUnobservedTaskExceptions = !App.Smoke`.
 2. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
    the version, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
    unobserved handler and its rebuilt options. It holds its bump until the release that carries
@@ -135,6 +157,27 @@ CodeQuality came with the `2026.4.1111` sync at its defaults, the family's decis
   what is reported; the handler logs a filter's throw at Warning beside the Error line, and not again
   for a repeat; a dialog that fails to show is logged at Error. On stderr, a filter's throw follows the
   exception's own report as `warning: <app>: the IsBenignException filter threw`.
+
+## Drift from `plans/00003`
+
+- **A repeat's count line begins "An exception repeated"**, where `2026.4.1112`'s began "A UI-thread
+  exception repeated": a failure may now come either way. The plan does not say what the line reads;
+  the upgrading note does.
+- **More tests changed than the plan names.** Besides `False_installs_nothing` and the last assertion
+  of `An_exception_another_handler_already_handled_is_left_alone`, two tests in
+  `AvaloniaDiagnosticsEntryPointTests` pinned `2026.4.1112`'s Warning: each asserts Error now, a twin
+  asserts Warning with the switch off, and the table's theory runs every row both ways.
+- **Every row is raised for real, both ways**, where the plan asks for one: each is abandoned in a task
+  and collected inside one `Session.Dispatch` inside an `AppMain` run, with the switch on and off. The
+  second-report tests collect and run the dispatcher's jobs inside the dispatch as well, so that a
+  dialog posted in error would be requested and seen.
+- **What the plan leaves open, settled here:** before `ConfigureLogging` has run, the switch reads its
+  default, on, though nothing can be shown before `InstallAvaloniaHooks()`; the Error line carries the
+  exception as the runtime raised it, wrapped, and the dialog the failure; a filter's throw is logged
+  at Warning beside it, as on the UI thread; a dialog that cannot be posted is logged at Error; a
+  dialog posted for a failure that has been offered one since opens nothing; and the cancellation
+  rule asks the host's filter nothing about a cancellation and lives in `EntryPointOptions()`' filter,
+  in neither copy of `BenignExceptionRule`.
 
 ## What the merge changed for consumers
 

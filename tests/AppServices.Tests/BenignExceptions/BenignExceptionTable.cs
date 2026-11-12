@@ -3,8 +3,8 @@ namespace AppServices.Tests.BenignExceptions;
 /// <summary>
 /// The one table both copies of the benign-exception rule are held to (<c>plans/00002</c>, decision
 /// 3): the copy in <c>AppServices.EntryPoint</c>, which decides what reaches stderr, and the copy in
-/// <c>AppServices.AvaloniaUI</c>, which decides the UI-thread handler's level and dialog and the level
-/// <c>EntryPointOptions()</c>' callback logs at.
+/// <c>AppServices.AvaloniaUI</c>, which decides the UI-thread handler's level and dialog, and what
+/// <c>EntryPointOptions()</c>' callback logs and shows.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -18,6 +18,13 @@ namespace AppServices.Tests.BenignExceptions;
 /// throw too, because the rule must offer the filter what is inside an aggregate and never the
 /// aggregate itself.
 /// </para>
+/// <para>
+/// ⚠ <b>Each row has a verdict for each path</b> (<c>plans/00003</c>, decision 7). The filter calls a
+/// cancellation not benign, as a host that shows the cancellations escaping on the UI thread does. On
+/// an Avalonia app's unobserved path, the filter <c>EntryPointOptions()</c> passes on also calls a
+/// cancellation benign, so there an exception that is nothing but cancellations is benign
+/// (<see cref="Row.BenignUnobserved"/>).
+/// </para>
 /// </remarks>
 internal static class BenignExceptionTable
 {
@@ -26,6 +33,9 @@ internal static class BenignExceptionTable
 
     /// <summary>The message of every exception in the table the filter does not call benign.</summary>
     internal const string NotBenign = "not benign: a real failure";
+
+    /// <summary>The message of every cancellation in the table.</summary>
+    internal const string Cancelled = "cancelled: abandoned work";
 
     /// <summary>Every case of the rule, each with the verdict it must get.</summary>
     internal static IReadOnlyList<Row> Rows { get; } =
@@ -53,6 +63,19 @@ internal static class BenignExceptionTable
             Benign: false, FilterThrows: false),
         new("an aggregate with one exception the filter throws on",
             () => new AggregateException(new BenignNoise(), new FilterBreaker()), Benign: false, FilterThrows: true),
+        new("a cancellation", () => new OperationCanceledException(Cancelled),
+            Benign: false, FilterThrows: false, Unobserved: true),
+        new("a task's cancellation", () => new TaskCanceledException(Cancelled),
+            Benign: false, FilterThrows: false, Unobserved: true),
+        new("an aggregate of cancellations only",
+            () => new AggregateException(new OperationCanceledException(Cancelled), new TaskCanceledException(Cancelled)),
+            Benign: false, FilterThrows: false, Unobserved: true),
+        new("a cancellation beside a real failure",
+            () => new AggregateException(new OperationCanceledException(Cancelled), new InvalidOperationException(NotBenign)),
+            Benign: false, FilterThrows: false, Unobserved: false),
+        new("a cancellation beside a benign exception",
+            () => new AggregateException(new OperationCanceledException(Cancelled), new BenignNoise()),
+            Benign: false, FilterThrows: false, Unobserved: true),
     ];
 
     /// <summary>
@@ -80,6 +103,25 @@ internal static class BenignExceptionTable
     /// <summary>The rows on which the filter throws, which are therefore not benign.</summary>
     public static TheoryData<string> FilterThrowsRows => Names(row => row.FilterThrows);
 
+    /// <summary>
+    /// Every row's name, once with <c>ShowUnobservedTaskExceptions</c> on and once with it off, for the
+    /// tests of an Avalonia app's unobserved path.
+    /// </summary>
+    public static TheoryData<string, bool> AllRowsWithShowOnAndOff
+    {
+        get
+        {
+            TheoryData<string, bool> data = [];
+            foreach (Row row in Rows)
+            {
+                data.Add(row.Name, true);
+                data.Add(row.Name, false);
+            }
+
+            return data;
+        }
+    }
+
     /// <summary>The row named <paramref name="name"/>.</summary>
     internal static Row Get(string name) => Rows.Single(row => row.Name == name);
 
@@ -89,9 +131,19 @@ internal static class BenignExceptionTable
     /// <param name="Name">What the case is, which names the test that runs it.</param>
     /// <param name="Make">Makes a fresh exception for the case: Avalonia's dispatcher offers an
     /// exception object to its handlers once, so a test never throws one twice.</param>
-    /// <param name="Benign">The verdict the rule must give.</param>
+    /// <param name="Benign">The verdict the rule must give with <see cref="Filter"/>: the UI-thread
+    /// handler's, and the entry point's when the table's filter is its own.</param>
     /// <param name="FilterThrows">Whether the filter throws while the rule classifies the case.</param>
-    internal sealed record Row(string Name, Func<Exception> Make, bool Benign, bool FilterThrows);
+    /// <param name="Unobserved">The verdict on an Avalonia app's unobserved path, where it differs from
+    /// <paramref name="Benign"/> or the row is about that path; read through <see cref="BenignUnobserved"/>.</param>
+    internal sealed record Row(string Name, Func<Exception> Make, bool Benign, bool FilterThrows, bool? Unobserved = null)
+    {
+        /// <summary>
+        /// The verdict on an Avalonia app's unobserved path: the rule with the filter
+        /// <c>EntryPointOptions()</c> passes on, which also calls a cancellation benign.
+        /// </summary>
+        internal bool BenignUnobserved => Unobserved ?? Benign;
+    }
 
     /// <summary>Stands in for the exceptions a host knows to be harmless, the Linux D-Bus portal ones.</summary>
     internal sealed class BenignNoise() : Exception("benign noise, as the D-Bus portal ones are");

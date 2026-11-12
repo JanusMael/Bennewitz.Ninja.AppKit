@@ -192,10 +192,15 @@ public sealed class AvaloniaDiagnosticsOptions
     /// reported is a repeat: it is counted rather than logged, and no failure is shown twice; one first
     /// seen while another dialog was open is shown at its first repeat once that dialog has closed. A
     /// line gives a failure's count when the dialog shown for it closes and when the <c>FlushLog</c> of
-    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> runs at exit. Avalonia raises each exception
-    /// this handles a second time, later, as a task exception nobody observed, and those options neither
-    /// log that second report nor write it on stderr. An exception that a handler subscribed before this
-    /// one has already handled is left alone, its second report included.
+    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> runs at exit. An exception that a handler
+    /// subscribed before this one has already handled is left alone.
+    /// </para>
+    /// <para>
+    /// Avalonia raises every exception the UI thread lets escape a second time, later, as a task
+    /// exception nobody observed. While this or <see cref="ShowUnobservedTaskExceptions"/> is set, the
+    /// handler is subscribed and remembers each exception, whoever handles it, and those options neither
+    /// log, show nor write on stderr that second report. With this false the handler handles nothing,
+    /// and with both false nothing is installed.
     /// </para>
     /// <para>
     /// ⚠ <b>An app with a UI-thread handler of its own</b>, subscribed after <c>InstallAvaloniaHooks</c>,
@@ -206,10 +211,44 @@ public sealed class AvaloniaDiagnosticsOptions
     /// </para>
     /// <para>
     /// Set it to <see langword="false"/>, too, wherever an exception on the UI thread must still end the
-    /// process: a smoke run that proves a build by its exit code, for one.
+    /// process: a smoke run that proves a build by its exit code, for one, which sets
+    /// <see cref="ShowUnobservedTaskExceptions"/> to <see langword="false"/> as well.
     /// </para>
     /// </remarks>
     public bool HandleUiThreadExceptions { get; init; } = true;
+
+    /// <summary>
+    /// Shows a task exception nobody observed in a <see cref="Dialogs.FatalErrorDialog"/>, as the
+    /// UI-thread handler shows a failure on the UI thread, unless it is benign. Read by the options
+    /// <see cref="AvaloniaDiagnostics.EntryPointOptions"/> returns, when an exception arrives. Defaults to
+    /// <see langword="true"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// With it set, those options' callback logs such an exception at Error and shows it through the
+    /// UI-thread handler's gate and repeat counting: one dialog at a time, and one for each failure,
+    /// whether it came on the UI thread or as a task exception nobody observed; a repeat is counted,
+    /// never logged in full again. The failure is the exception the task failed with, when it failed with
+    /// exactly one. The dialog opens on the UI thread, through the dispatcher
+    /// <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/> recorded; before that has run, and once the
+    /// app has shut down, the exception is logged and not shown. With it unset, the exception is logged at
+    /// Warning and not shown. Either way, a benign one is logged at Debug and shows nothing, and the
+    /// exception still reaches stderr unless it is benign.
+    /// </para>
+    /// <para>
+    /// On this path an exception that is nothing but cancellations, <see cref="OperationCanceledException"/>
+    /// and <see cref="TaskCanceledException"/>, is benign, whatever this says: when a garbage collection
+    /// finds it, it is abandoned work, not a failure anyone can act on. One beside a real failure is not.
+    /// </para>
+    /// <para>
+    /// It is separate from <see cref="HandleUiThreadExceptions"/>, which decides whether an exception on
+    /// the UI thread ends the process: this decides only whether an unobserved one is shown, and an
+    /// unobserved one never ends it. Set it to <see langword="false"/> where no dialog may open, as in a
+    /// smoke run that proves a build by its exit code, and in an app that shows a dialog of its own for
+    /// these exceptions, which would otherwise show two.
+    /// </para>
+    /// </remarks>
+    public bool ShowUnobservedTaskExceptions { get; init; } = true;
 
     /// <summary>
     /// Marks the exceptions the host knows to be harmless, such as the Linux D-Bus portal ones, so that
@@ -226,6 +265,11 @@ public sealed class AvaloniaDiagnosticsOptions
     /// exception nobody observed always arrives as an aggregate, so the filter is written for the
     /// exceptions inside it. A filter that throws counts as not benign, and its throw is logged beside
     /// the exception.
+    /// </para>
+    /// <para>
+    /// The options also call a task exception nobody observed benign when it is nothing but
+    /// cancellations (<see cref="ShowUnobservedTaskExceptions"/>), without asking this filter about them.
+    /// The UI-thread handler asks this filter alone.
     /// </para>
     /// <para>
     /// ⚠ <b>It runs on whichever thread raised the exception</b>: the UI thread, or the finalizer thread

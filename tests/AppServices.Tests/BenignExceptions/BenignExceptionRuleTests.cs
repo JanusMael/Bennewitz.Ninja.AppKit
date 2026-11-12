@@ -10,7 +10,9 @@ namespace AppServices.Tests.BenignExceptions;
 /// <remarks>
 /// The behaviour each copy drives is held to the same rows where it is tested: what reaches stderr in
 /// <c>AppMainTests</c>; the UI-thread handler's level and dialog in <c>UiThreadExceptionHandlerTests</c>;
-/// and the level <c>EntryPointOptions()</c>' callback logs at in <c>AvaloniaDiagnosticsEntryPointTests</c>.
+/// the level <c>EntryPointOptions()</c>' callback logs at in <c>AvaloniaDiagnosticsEntryPointTests</c>;
+/// and, on an Avalonia app's unobserved path, what is logged, shown and written on stderr in
+/// <c>UiThreadExceptionHandlerTests</c>.
 /// </remarks>
 public sealed class BenignExceptionRuleTests
 {
@@ -64,8 +66,8 @@ public sealed class BenignExceptionRuleTests
     [Fact]
     public void The_table_holds_every_case_of_the_rule()
     {
-        Assert.True(BenignExceptionTable.Rows.Count == 11,
-            $"The table has {BenignExceptionTable.Rows.Count} rows where 11 are expected. A row added or "
+        Assert.True(BenignExceptionTable.Rows.Count == 16,
+            $"The table has {BenignExceptionTable.Rows.Count} rows where 16 are expected. A row added or "
             + "removed on purpose updates this count; a lower count without a removal means rows were lost.");
         Assert.NotEmpty(BenignExceptionTable.BenignRows);
         Assert.NotEmpty(BenignExceptionTable.NotBenignRows);
@@ -73,6 +75,12 @@ public sealed class BenignExceptionRuleTests
         Assert.Contains(BenignExceptionTable.Rows, row => row.Make() is AggregateException { InnerExceptions.Count: 0 });
         Assert.Contains(BenignExceptionTable.Rows,
             row => row.Make() is AggregateException aggregate && aggregate.InnerExceptions.Any(e => e is AggregateException));
+
+        // The two paths' verdicts differ for cancellations alone, and a cancellation beside a real failure
+        // is not benign on either.
+        Assert.Contains(BenignExceptionTable.Rows, row => row.BenignUnobserved && !row.Benign);
+        Assert.Contains(BenignExceptionTable.Rows, row => !row.BenignUnobserved
+            && row.Make() is AggregateException aggregate && aggregate.InnerExceptions.Any(e => e is OperationCanceledException));
     }
 
     private static void AssertFilterFailure(BenignExceptionTable.Row expected, Exception? filterFailure)
