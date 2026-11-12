@@ -10,7 +10,7 @@ completing the same way whether or not anything did.
 | `Bennewitz.Ninja.AppServices.Abstractions` | The contracts and the dialog vocabulary: shell launching, environment, sharing, dialogs and pickers. Framework-free. |
 | `Bennewitz.Ninja.AppServices` | Default implementations: shell launching, environment probing, sharing and a native error dialog. Needs an operating system, not a UI framework, so it works from a CLI, a service or a test. |
 | `Bennewitz.Ninja.AppServices.Logging` | Serilog sinks for desktop applications, starting with a bucketed rolling file sink that keeps a bounded number of files per bucket. |
-| `Bennewitz.Ninja.AppServices.Avalonia` | Avalonia implementations — dialog service, file pickers, fatal and non-fatal dialogs — the bridge that routes Avalonia's logger and its binding errors into Serilog, and a handler for the exceptions the UI thread lets escape. Its `EntryPointOptions` gives an Avalonia app's entry point the fatal dialog and the log. |
+| `Bennewitz.Ninja.AppServices.Avalonia` | Avalonia implementations — dialog service, file pickers, fatal and non-fatal dialogs — the bridge that routes Avalonia's logger and its binding errors into Serilog, and a handler for the exceptions the UI thread lets escape. Its `EntryPointOptions` gives an Avalonia app's entry point the fatal dialog, a dialog for a task exception nobody observed, and the log. |
 | `Bennewitz.Ninja.AppServices.EntryPoint` | One entry point for console, web and desktop apps: exit codes a script can read, a fatal report on stderr, Ctrl+C, `--version`, and the app's log flushed on every exit. References nothing but the framework, and is native AOT compatible. |
 
 ## Install
@@ -88,15 +88,37 @@ exception handled:
 | Any other | Logged at Error and shown in a `FatalErrorDialog` titled `Application Error — {AppName}`; the app keeps running |
 | Another, while that dialog is open | Logged at Error, and not shown then; if it repeats, its first repeat after that dialog closes is shown |
 | A repeat: the type, message and throw site of one already reported | Counted, never logged in full again, and never shown twice; a line gives its count when its dialog closes and when `EntryPointOptions()`' `FlushLog` runs |
-| Avalonia's second report of any of these: the same exception, raised again at a later garbage collection as a task exception nobody observed | Neither logged nor written on stderr by `EntryPointOptions()`, so the handler's report is the only one |
-| One a handler subscribed before the package's has already handled | Left alone, its second report included |
+| Avalonia's second report of any of these: the same exception, raised again at a later garbage collection as a task exception nobody observed | Neither logged, shown nor written on stderr by `EntryPointOptions()`, so the handler's report is the only one |
+| One a handler subscribed before the package's has already handled | Left alone; its second report is neither logged, shown nor written on stderr either |
 
-The handler is installed once, however often `InstallAvaloniaHooks()` is called, and
-`HandleUiThreadExceptions = false` installs nothing.
+The handler is installed once, however often `InstallAvaloniaHooks()` is called.
+`HandleUiThreadExceptions = false` leaves every exception to the app, and the handler then only
+remembers each one, so that its second report is still known; with `ShowUnobservedTaskExceptions =
+false` as well, nothing is installed.
+
+## Task exceptions nobody observed
+
+A task that fails while nothing awaits it, a background save, backup or fetch, reports nothing until
+a garbage collection finds it. In an Avalonia app run by `AppMain` with `EntryPointOptions()`, it is
+then shown as a failure on the UI thread is, so it is not lost:
+
+| The exception | What happens |
+|---|---|
+| Benign, by `IsBenignException` | Logged at Debug and kept off stderr; nothing is shown |
+| Nothing but cancellations, `OperationCanceledException` or `TaskCanceledException` | Benign whatever `IsBenignException` says: abandoned work, not a failure anyone can act on. One beside a real failure is not benign |
+| Any other | Written on stderr, logged at Error, and shown in a `FatalErrorDialog`, through the same one-at-a-time gate and repeat counting as a failure on the UI thread: one failure is shown once, whichever way it comes |
+| Any other, with `ShowUnobservedTaskExceptions = false` | Written on stderr and logged at Warning; nothing is shown |
+| Avalonia's second report of an exception the UI thread let escape | Neither logged, shown nor written on stderr |
+
+The dialog shows the exception the task failed with, when it failed with exactly one; a task that
+several failures faulted, as `Task.WhenAll` can be, is shown as its `AggregateException`. The runtime
+raises the exception on its finalizer thread, and the dialog is posted to the UI thread and never
+waited for. Before `InstallAvaloniaHooks()` has run, and once the app has shut down, the exception is
+logged and not shown.
 
 `IsBenignException` is one filter for both paths: the handler reads it, and `EntryPointOptions()`
-passes it on, so a benign task exception nobody observed is kept off stderr and logged at Debug,
-where any other is logged at Warning. Set it where logging is configured:
+passes it on, so a benign task exception nobody observed is kept off stderr and logged at Debug.
+Set it where logging is configured:
 
 ```csharp
 AvaloniaDiagnostics.ConfigureLogging(new AvaloniaDiagnosticsOptions
@@ -113,6 +135,32 @@ observed always arrives as one, so a filter is written for the exceptions inside
 throws counts as not benign, and its throw is logged beside the exception. The filter runs on
 whichever thread raised the exception, the UI thread or the finalizer thread, so it must be quick
 and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
+
+## Upgrading from 2026.4.1112
+
+- **A task exception nobody observed is shown, by default.** One that is not benign is logged at
+  Error, where `2026.4.1112` logged it at Warning, and shown in a `FatalErrorDialog`.
+  `ShowUnobservedTaskExceptions = false` keeps `2026.4.1112`'s Warning and no dialog. A smoke run that
+  proves a build by its exit code sets both switches from its flag, since an open dialog keeps the run
+  alive:
+
+  ```csharp
+  HandleUiThreadExceptions = !smoke,
+  ShowUnobservedTaskExceptions = !smoke,
+  ```
+
+- **An app that shows a dialog of its own for these exceptions**, from a callback that wraps
+  `OnUnobservedTaskException`, drops it or sets `ShowUnobservedTaskExceptions = false`; otherwise one
+  failure shows two dialogs.
+- **An unobserved exception that is nothing but cancellations is benign**: logged at Debug and kept off
+  stderr, where `2026.4.1112` logged it at Warning and wrote it on stderr. One beside a real failure is
+  not benign, and a cancellation that escapes on the UI thread is handled as before.
+- **The second report of a UI-thread exception an app's own handler dealt with is no longer logged.**
+  `2026.4.1112` knew the second report only of what the package's handler handled, so an app on the
+  second or third way out below had it logged at Warning and written on stderr. The handler is now
+  subscribed while either switch is on, and remembers every exception the dispatcher reports.
+- A repeat's count line begins "An exception repeated", where it began "A UI-thread exception
+  repeated", since a failure may now come either way.
 
 ## Upgrading from 2026.4.1110
 

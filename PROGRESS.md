@@ -117,7 +117,7 @@ the app has shut down rests on Avalonia 12.1.3's `Dispatcher.InvokeAsyncImpl`, w
 for a dispatcher that has shut down and aborts the post without a throw (read in its source): no test
 shuts down the headless dispatcher, which every later test shares. Package validation against
 `2026.4.1112`, packed as the next day's build, reports no breaking change in `.EntryPoint` or
-`.Avalonia`.
+`.Avalonia`. `docs/appservices.md` gains "Upgrading from 2026.4.1112".
 
 **Next, in order:**
 1. **Release AppServices with `plans/00003`** (its step 4), on the maintainer's word, through
