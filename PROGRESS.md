@@ -82,6 +82,11 @@ maintainer's choice of 2026-11-11, the handler remembers, weakly, each exception
 the shared table is thrown for real inside an `AppMain` run and its second report collected there, and
 each of seven planted breaks turns a test red.
 
+**Avalonia and drivable-UI lessons go to Inspections** from 2026-11-12, by the maintainer's choice:
+the root `AGENTS.md` carries every template's paragraph, which it had lacked since the merge.
+Avalonia 12.1.3's second report of a UI-thread exception went to the XamlQuality session the same
+day, for `docs/avalonia-gotchas.md`.
+
 **Next, in order:**
 1. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
    `2026.4.1112`, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
