@@ -33,7 +33,9 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 ///       etc. are all live). Installs <see cref="BindingValidationErrorLogger"/> to capture
 ///       binding-coercion errors via the <c>DataValidationErrors.ErrorsProperty</c>
 ///       attached-property pipeline, and the handler for exceptions nothing on the UI
-///       thread caught (<see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/>).
+///       thread caught (<see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/>),
+///       which also serves the dialogs for task exceptions nobody observed
+///       (<see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>).
 ///     </description>
 ///   </item>
 /// </list>
@@ -102,6 +104,12 @@ public static class AvaloniaDiagnostics
     /// arrives: <see langword="null"/>, so nothing is benign, before <see cref="ConfigureLogging"/> has run.
     /// </summary>
     internal static Func<Exception, bool>? BenignExceptionFilter => _options?.IsBenignException;
+
+    /// <summary>
+    /// The host's <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>, read when an
+    /// exception arrives: its default, <see langword="true"/>, before <see cref="ConfigureLogging"/> has run.
+    /// </summary>
+    internal static bool ShowsUnobservedTaskExceptions => _options?.ShowUnobservedTaskExceptions ?? true;
 
     /// <summary>
     /// Configures <see cref="Log.Logger"/> and (optionally) redirects
@@ -186,10 +194,13 @@ public static class AvaloniaDiagnostics
     ///         pipeline.</item>
     ///   <item>Subscribes the handler for exceptions nothing on the UI thread caught
     ///         to <see cref="Dispatcher.UIThread"/>'s
-    ///         <see cref="Dispatcher.UnhandledException"/> (when
-    ///         <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> is set,
-    ///         as it is by default): each is logged, and shown unless it is benign, and
-    ///         the app keeps running.</item>
+    ///         <see cref="Dispatcher.UnhandledException"/>, and records that dispatcher (when
+    ///         <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> or
+    ///         <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> is set,
+    ///         as both are by default). With the first set, each exception is logged, and
+    ///         shown unless it is benign, and the app keeps running. Either way, each is
+    ///         remembered, so that Avalonia's second report of it is known, and the dialog
+    ///         for a task exception nobody observed opens on that dispatcher.</item>
     /// </list>
     /// <para>
     /// <strong>Must be called from <c>App.OnFrameworkInitializationCompleted</c></strong>
@@ -223,9 +234,11 @@ public static class AvaloniaDiagnostics
             BindingValidationErrorLogger.Install();
         }
 
-        if (options.HandleUiThreadExceptions)
+        // ⛔ One subscription whenever either switch is on (plans/00003, decision 4): the second report of
+        // an exception an app's own handler dealt with is known only to a handler that saw it.
+        if (options.HandleUiThreadExceptions || options.ShowUnobservedTaskExceptions)
         {
-            UiThreadExceptions.Install(Dispatcher.UIThread);
+            UiThreadExceptions.Install(Dispatcher.UIThread, handle: options.HandleUiThreadExceptions);
         }
     }
 
@@ -328,10 +341,11 @@ public static class AvaloniaDiagnostics
     /// <summary>
     /// The options <see cref="AppMain.RunDesktop"/> takes in an Avalonia app: a failure is logged as
     /// fatal and shown in the native fatal-error dialog; a task exception nobody observed is logged at
-    /// Debug when <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/> calls it benign, and as a
-    /// warning otherwise, unless it is Avalonia's second report of an exception the UI-thread handler has
-    /// handled, which is neither logged nor written on stderr; and on every exit the UI-thread handler's
-    /// pending repeat counts are written, then the log is closed and flushed.
+    /// Debug when it is benign, and otherwise at Error and shown in a <see cref="FatalErrorDialog"/>, or
+    /// at Warning and not shown when <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>
+    /// is off, unless it is Avalonia's second report of an exception the UI thread let escape, which is
+    /// neither logged, shown nor written on stderr; and on every exit the pending repeat counts are
+    /// written, then the log is closed and flushed.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -342,17 +356,36 @@ public static class AvaloniaDiagnostics
     /// ⭐ <b>The host's one filter is passed on.</b> The options' <c>IsBenignException</c> reads
     /// <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/> when an exception arrives, not when the
     /// options are built: they are built in <c>Main</c>, before <see cref="ConfigureLogging"/> has run,
-    /// and until it has, nothing is benign. The entry point keeps a benign task exception nobody
-    /// observed off stderr, and the callback logs it at Debug. Neither shows a dialog for one: by the
-    /// time a garbage collection finds it, its caller is gone, and a dialog would offer nothing to act on.
+    /// and until it has, the host's filter calls nothing benign. The entry point keeps a benign task
+    /// exception nobody observed off stderr, and the callback logs it at Debug and shows nothing.
+    /// </para>
+    /// <para>
+    /// ⭐ <b>A task exception nobody observed is shown as a UI-thread failure is</b> (<c>plans/00003</c>):
+    /// a background save, backup or fetch that fails unobserved is otherwise silent in a desktop app.
+    /// With <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> on, the callback logs
+    /// one that is not benign at Error and shows it through the UI-thread handler's gate and repeat
+    /// counting: one dialog at a time, and one for each failure, whichever path reports it. The failure
+    /// is the exception the task failed with, when it failed with exactly one. The callback runs on the
+    /// finalizer thread and posts the dialog to the dispatcher <see cref="InstallAvaloniaHooks"/>
+    /// recorded, never waiting for it; before that has run, and once the app has shut down, the
+    /// exception is logged and not shown. With the switch off, it is logged at Warning and not shown.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>On this path a cancellation is benign.</b> The filter the options pass on also calls an
+    /// <see cref="OperationCanceledException"/> benign, <see cref="TaskCanceledException"/> included, so a
+    /// task exception nobody observed that is nothing but cancellations is logged at Debug, shown nothing
+    /// and kept off stderr, whatever the switch says: by the time a garbage collection finds it, it is
+    /// abandoned work, not a failure anyone can act on. One beside a real failure is not benign. The
+    /// UI-thread handler does not read this rule, so a cancellation that escapes on the UI thread is the
+    /// host's filter's alone to call benign.
     /// </para>
     /// <para>
     /// ⚠ <b>Avalonia reports a UI-thread exception twice.</b> Avalonia 12.1.3 also puts every exception a
     /// posted job throws in that job's task, which nothing reads, so the runtime raises it again, at a
     /// later garbage collection, as a task exception nobody observed. The options know that second report
-    /// of whatever the UI-thread handler has handled: the filter they pass on calls it benign, which keeps
-    /// it off stderr, and their callback does not log it, so the handler's report is the only one. An
-    /// exception the handler left alone is not known here, and an empty aggregate thrown on the UI thread
+    /// of whatever the UI thread let escape, whoever handled it, while either switch is on: the filter
+    /// they pass on calls it benign, which keeps it off stderr, and their callback neither logs nor shows
+    /// it, so the report on the UI thread is the only one. An empty aggregate thrown on the UI thread
     /// flattens to nothing, so the entry point reports its second report before any filter runs.
     /// </para>
     /// <para>
@@ -382,17 +415,21 @@ public static class AvaloniaDiagnostics
                 Log.CloseAndFlush();
             }
         },
-        IsBenignException = IsBenignOrHandledOnUiThread,
+        IsBenignException = IsBenignUnobserved,
     };
 
-    // The filter the options pass on: the host's, and whatever the UI-thread handler has handled, whose
-    // second report Avalonia raises as a task exception nobody observed, and which is no new failure.
-    private static bool IsBenignOrHandledOnUiThread(Exception exception) =>
-        UiThreadExceptions.WasHandled(exception) || (BenignExceptionFilter is { } filter && filter(exception));
+    // The filter the options pass on, which decides what reaches stderr: whatever the UI thread let
+    // escape, whose second report Avalonia raises as a task exception nobody observed and which is no new
+    // failure; a cancellation, which on this path is abandoned work (plans/00003, decision 7); and what
+    // the host's filter calls benign.
+    private static bool IsBenignUnobserved(Exception exception) =>
+        UiThreadExceptions.WasSeen(exception)
+        || exception is OperationCanceledException
+        || (BenignExceptionFilter is { } filter && filter(exception));
 
     // The callback is given the exception without the entry point's verdict, so it applies the rule
-    // again, with the same filter, to choose its level. Avalonia's second report of an exception the
-    // UI-thread handler has handled is not logged at all: the handler logged it, and counts its repeats.
+    // again, with the same filter, to choose what to do. Avalonia's second report of an exception the UI
+    // thread let escape is neither logged nor shown: the report on the UI thread was the only one due.
     private static void LogUnobservedTaskException(Exception exception)
     {
         if (IsSecondReport(exception))
@@ -400,10 +437,16 @@ public static class AvaloniaDiagnostics
             return;
         }
 
-        bool benign = BenignExceptionRule.IsBenign(IsBenignOrHandledOnUiThread, exception, out Exception? filterFailure);
+        bool benign = BenignExceptionRule.IsBenign(IsBenignUnobserved, exception, out Exception? filterFailure);
         if (benign)
         {
             Log.Debug(exception, "A benign task exception nobody observed");
+            return;
+        }
+
+        if (ShowsUnobservedTaskExceptions)
+        {
+            UiThreadExceptions.ReportUnobserved(exception, filterFailure);
             return;
         }
 
@@ -416,9 +459,9 @@ public static class AvaloniaDiagnostics
     }
 
     // A task exception nobody observed arrives wrapped, and Avalonia's second report wraps exactly the
-    // exception the handler handled; an aggregate the handler handled is known itself, empty or not.
+    // exception the dispatcher reported; an aggregate it reported is known itself, empty or not.
     private static bool IsSecondReport(Exception exception) =>
-        UiThreadExceptions.WasHandled(exception)
+        UiThreadExceptions.WasSeen(exception)
         || (exception is AggregateException { InnerExceptions.Count: > 0 } aggregate
-            && aggregate.InnerExceptions.All(UiThreadExceptions.WasHandled));
+            && aggregate.InnerExceptions.All(UiThreadExceptions.WasSeen));
 }
