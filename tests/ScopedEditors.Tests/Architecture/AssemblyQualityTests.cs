@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Bennewitz.Ninja.AssemblyQuality;
 using Bennewitz.Ninja.AssemblyQuality.Rules;
 
@@ -29,6 +30,12 @@ namespace ScopedEditors.Tests.Architecture;
 /// <para>
 /// BNAQ1003's forbidden references come from <see cref="LayeringTests.Tiers"/> and
 /// <see cref="LayeringTests.ForeignFamilies"/>, not from a copy: one table, two checks.
+/// </para>
+/// <para>
+/// BNAQ1005's allowed names are the repository's two grant files, read at its root:
+/// <c>AssemblyInfo.InternalsVisibleTo.cs</c>, which <c>repo-conventions grants</c> generates, and
+/// <c>AssemblyInfo.InternalsVisibleTo.External.cs</c>. AppServices' tests run the same rule over its
+/// own assemblies; until 2026-11-12 nothing ran it over these.
 /// </para>
 /// </remarks>
 public sealed class AssemblyQualityTests
@@ -101,6 +108,29 @@ public sealed class AssemblyQualityTests
         Assert.Empty(result.Skipped);
         Assert.True(result.Inspected > 0, "BNAQ1004 inspected no namespaces, so it proved nothing.");
     }
+
+    [Fact]
+    public void BNAQ1005_every_friend_grant_names_an_allowed_assembly()
+    {
+        string[] allowed =
+        [
+            .. GrantedNames("AssemblyInfo.InternalsVisibleTo.cs"),
+            .. GrantedNames("AssemblyInfo.InternalsVisibleTo.External.cs"),
+        ];
+
+        AssemblyRuleResult result = new FriendGrantRule(allowed).Analyze(AssemblyScanContext.Of(Shipped));
+
+        Assert.Empty(result.Findings);
+        Assert.Empty(result.Skipped);
+        Assert.True(result.Inspected > 0, "BNAQ1005 inspected no grant, but every shipped assembly "
+            + "compiles the generated grants, so the scan missed them.");
+    }
+
+    /// <summary>The names a grant file at the repository root grants to, comment lines left out.</summary>
+    private static IEnumerable<string> GrantedNames(string file) =>
+        File.ReadLines(Path.Combine(RepoRoot(), file))
+            .Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal))
+            .SelectMany(line => Regex.Matches(line, "InternalsVisibleTo\\(\"([^\"]+)\"\\)").Select(m => m.Groups[1].Value));
 
     private static Assembly LoadFromOutput(string name)
     {
