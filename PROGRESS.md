@@ -94,12 +94,22 @@ CodeQuality came with the `2026.4.1111` sync at its defaults, the family's decis
 `BNCQ1001` stays off where `BNAQ1001` already holds; `BNAQ1006` stays unadopted.
 
 **Next, in order:**
-1. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
-   `2026.4.1112`, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
-   unobserved handler and its rebuilt options. OpenForge2k's copy of ClaudeForge holds `2026.3.924`
-   until it can make the same change. Templates, told the same day, takes `2026.4.1112` with
-   `bbavalonia`'s `HandleUiThreadExceptions = !smoke` in the same sync.
-2. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+1. **`plans/00003`, decided 2026-11-12 and to be drafted.** ClaudeForge asked that a task exception
+   nobody observed, when not benign, be logged at Error and shown in the `FatalErrorDialog`, as a
+   UI-thread failure is: it shows one today, and a wrapper of its own cannot tell Avalonia's second
+   report apart, so one failure could show two dialogs. The maintainer chose a new
+   `AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions`, separate from `HandleUiThreadExceptions`
+   and on by default. The dialog goes through the UI-thread handler's gate and repeat counting, and
+   never for a second report; a benign exception stays at Debug with no dialog. It supersedes
+   `plans/00002`'s decision 5. Then its approval, the implementation, an AppServices release, and
+   `bbavalonia`'s `ShowUnobservedTaskExceptions = !smoke` beside its smoke line.
+2. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
+   the version, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
+   unobserved handler and its rebuilt options. It holds its bump until the release that carries
+   `plans/00003`. OpenForge2k's copy of ClaudeForge holds `2026.3.924` until it can make the same
+   change. Templates took `2026.4.1112` with `bbavalonia`'s `HandleUiThreadExceptions = !smoke` in
+   JanusMael/Bennewitz.Ninja.Templates#94, not yet released.
+3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1112`.
 
