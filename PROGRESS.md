@@ -47,8 +47,8 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
 
-**`plans/00002`, the UI-thread exception hook, is on `main` and not yet released** (approved
-2026-11-11; its steps 2 to 4). `InstallAvaloniaHooks()` installs a handler on the UI thread's
+**`plans/00002`, the UI-thread exception hook, shipped in AppServices `2026.4.1112`** (approved
+2026-11-11; its steps 2 to 6, see Published). `InstallAvaloniaHooks()` installs a handler on the UI thread's
 `Dispatcher.UnhandledException`, on by default and off with `HandleUiThreadExceptions = false`. It
 marks every exception handled, logs a benign one at Debug, and logs any other at Error and shows it
 in a `FatalErrorDialog`, one dialog at a time; a repeat is counted rather than logged, with a count
@@ -83,21 +83,14 @@ the shared table is thrown for real inside an `AppMain` run and its second repor
 each of seven planted breaks turns a test red.
 
 **Next, in order:**
-1. **AppServices' next release carries `plans/00002`**: its step 5, on the maintainer's word. Then its
-   step 6: ClaudeForge is told what it must change in one commit, and that OpenForge2k's copy of it
-   holds its version until it can make the same change; Templates is told the version, and the line
-   `bbavalonia` needs in the same sync, `HandleUiThreadExceptions = !smoke`.
+1. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
+   `2026.4.1112`, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
+   unobserved handler and its rebuilt options. OpenForge2k's copy of ClaudeForge holds `2026.3.924`
+   until it can make the same change. Templates, told the same day, takes `2026.4.1112` with
+   `bbavalonia`'s `HandleUiThreadExceptions = !smoke` in the same sync.
 2. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
-   eight ids: each pushed at `2026.4.1110`.
-
-## On `main`, not yet released
-
-| Package | Change |
-|---|---|
-| `Bennewitz.Ninja.AppServices.EntryPoint` | `AppMainOptions` is a `sealed record` with `IsBenignException` (`plans/00002`, step 2). Binary compatible with `2026.4.1110`, by package validation |
-| `Bennewitz.Ninja.AppServices.Avalonia` | `InstallAvaloniaHooks()` installs the UI-thread handler, on by default, and `AvaloniaDiagnosticsOptions` gains `HandleUiThreadExceptions` and `IsBenignException`; `EntryPointOptions()` passes the filter on, logs a benign unobserved exception at Debug, keeps Avalonia's second report of a handled UI-thread exception off stderr and out of the log, and writes the pending repeat counts before it flushes (`plans/00002`, step 3). Binary compatible with `2026.4.1110`, by package validation, but **a change of behaviour for an app with a UI-thread handler of its own** |
-| All five | The packed README, `docs/appservices.md`, describes the hook and the filter, and gains "Upgrading from 2026.4.1110" (`plans/00002`, step 4) |
+   eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1112`.
 
 ## Drift from `plans/00002`
 
@@ -140,6 +133,7 @@ All five ids ship together at every version.
 
 | Version | Tag | Verified |
 |---|---|---|
+| `2026.4.1112` | `appservices/v2026.4.1112` | `plans/00002`; release run `43253366608`, after GitHub failed to start the 2026-11-11 preflights (`startup_failure`, an internal error). All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `44438c7`, and a project with nuget.org as its only source restored them |
 | `2026.4.1110` | `appservices/v2026.4.1110` | First from AppKit; release run `42842847404`. All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `a1f42db`, and a project with nuget.org as its only source restored them |
 | `2026.4.1103` | `v2026.4.1103` | All five ids listed by the nuget.org flat-container, and a project with nuget.org as its only source restored them |
 | `2026.4.1031` | `v2026.4.1031` | Listed; release run `41231829335` |
