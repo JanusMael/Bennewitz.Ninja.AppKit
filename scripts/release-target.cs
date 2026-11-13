@@ -14,6 +14,10 @@
 // version is permanent, so a malformed one is refused while that is still free. Templates'
 // 2026.3.1001 went out from a tag nothing checked; 1 October is in the fourth quarter.
 //
+// ⛔ AND IT NEVER GOES BACKWARDS: a version below the newest that nuget.org lists for one of the
+// release's ids is refused, the maintainer's decision of 2026-11-11. nuget.org would take it without
+// a word, for good. A version nuget.org already lists is let through, as its push is skipped.
+//
 // ⭐ A FAMILY'S RELEASE NOTES are its own (plans/00011 decision 6): the commits since its previous tag
 // that touched its projects or its README, and those descending from that tag that touched a build
 // input every package shares. GitHub's generated notes list every pull request in the repository.
@@ -35,6 +39,7 @@
 //   notes        writes the family's release notes, from --previous to HEAD, to the --out file. With
 //                no previous tag it says the release is the family's first. Run it once restored.
 //   --root DIR   read the repository from DIR instead of the current directory
+//   --feed URL   read resolve's version floor from this NuGet flat container instead of nuget.org's
 //
 // Exit codes: 0 resolved, 1 refused, 2 usage.
 
@@ -49,7 +54,7 @@ if (verb is not ("resolve" or "projects" or "notes"))
     return Usage("the first argument must be 'resolve', 'projects' or 'notes'.");
 }
 
-string? eventName = null, refName = null, version = null, family = null, githubEnv = null, outFile = null, root = null, previousTag = null;
+string? eventName = null, refName = null, version = null, family = null, githubEnv = null, outFile = null, root = null, previousTag = null, feed = null;
 for (int i = 1; i < args.Length; i++)
 {
     switch (args[i])
@@ -62,6 +67,7 @@ for (int i = 1; i < args.Length; i++)
         case "--out" when i + 1 < args.Length: outFile = args[++i]; break;
         case "--root" when i + 1 < args.Length: root = args[++i]; break;
         case "--previous" when i + 1 < args.Length: previousTag = args[++i]; break;
+        case "--feed" when i + 1 < args.Length: feed = args[++i]; break;
         default: return Usage($"unknown or incomplete argument '{args[i]}'.");
     }
 }
@@ -111,6 +117,7 @@ int Resolve()
     {
         throw new Refused($"The {releaseFamily} family names {string.Join(", ", undeclared)}, which packages.push does not. The families' ids must be exactly packages.push; `repo-conventions check` says the same.");
     }
+    Floor.Check(feed ?? Floor.NuGetOrg, releaseVersion, ids);
 
     string tag = releaseFamily.Length == 0 ? "v" + releaseVersion : $"{releaseFamily}/v{releaseVersion}";
     string previous = "", latest = "";
@@ -258,7 +265,7 @@ string[] FamilyProjects(string key, string[] ids)
 static int Usage(string problem)
 {
     Console.Error.WriteLine("release-target: " + problem);
-    Console.Error.WriteLine("usage: release-target (resolve --event push --ref <tag> | resolve --event workflow_dispatch --version <v> [--family <f>]) [--github-env <file>] | projects --family <f> [--out <file>] | notes --family <f> [--previous <tag>] --out <file>; [--root DIR]");
+    Console.Error.WriteLine("usage: release-target (resolve --event push --ref <tag> | resolve --event workflow_dispatch --version <v> [--family <f>]) [--github-env <file>] [--feed <url>] | projects --family <f> [--out <file>] | notes --family <f> [--previous <tag>] --out <file>; [--root DIR]");
     return 2;
 }
 
@@ -352,6 +359,104 @@ static class Release
         }
     }
 
+}
+
+/// <summary>
+/// The version floor, the maintainer's decision of 2026-11-11: a release may not publish a version
+/// below the newest that nuget.org lists for one of its ids. nuget.org takes a lower version without
+/// a word, and it is permanent; every tag is typed by hand.
+/// </summary>
+/// <remarks>
+/// A version nuget.org already lists is let through, below the newest or not: <c>--skip-duplicate</c>
+/// makes its push a no-op, so a re-run of a release publishes nothing new. An id nuget.org has never
+/// seen has no floor. A prerelease counts by its numbers, so 2026.4.1022 is above 2026.4.1022-beta.
+/// </remarks>
+static class Floor
+{
+    /// <summary>nuget.org's flat container, which lists every version of an id, unlisted ones too.</summary>
+    public const string NuGetOrg = "https://api.nuget.org/v3-flatcontainer/";
+
+    public static void Check(string feed, string version, string[] ids)
+    {
+        Version release = Normalized(Version.Parse(version));
+        using HttpClient client = new() { BaseAddress = new Uri(feed.EndsWith('/') ? feed : feed + "/"), Timeout = TimeSpan.FromSeconds(30) };
+        foreach (string id in ids)
+        {
+            string[] listed = Listed(client, id, version);
+            if (listed.Contains(version, StringComparer.OrdinalIgnoreCase))
+            {
+                Console.Error.WriteLine($"nuget.org already lists {id} {version}; its push will skip it.");
+                continue;
+            }
+
+            (Version Number, string Text)[] numbered = [.. listed
+                .Select(text => (Number: Number(text), Text: text))
+                .Where(entry => entry.Number is not null)
+                .Select(entry => (entry.Number!, entry.Text))];
+            if (numbered.Length == 0)
+            {
+                Console.Error.WriteLine($"nuget.org lists no {id}; this is its first release.");
+                continue;
+            }
+
+            (Version Number, string Text) newest = numbered.MaxBy(entry => entry.Number);
+            if (release < newest.Number)
+            {
+                throw new Refused($"nuget.org lists {id} {newest.Text}, newer than {version}. It would take the lower version without a word, and keep it for good. A version is the date of its release, so tag today's; a re-run of a version nuget.org lists is let through.");
+            }
+            Console.Error.WriteLine($"nuget.org's newest {id} is {newest.Text}, below {version}.");
+        }
+    }
+
+    // The versions the flat container lists for the id, or none where it has never seen it.
+    private static string[] Listed(HttpClient client, string id, string version)
+    {
+        string unknown = $"so whether {version} is below its newest is unknown. Nothing is published until it is.";
+        try
+        {
+            using HttpRequestMessage request = new(HttpMethod.Get, id.ToLowerInvariant() + "/index.json");
+            using HttpResponseMessage response = client.Send(request);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return [];
+            }
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new Refused($"nuget.org answered {(int)response.StatusCode} {response.ReasonPhrase} for {id}'s versions, {unknown}");
+            }
+
+            using Stream body = response.Content.ReadAsStream();
+            JsonArray? versions = JsonNode.Parse(body)?["versions"] as JsonArray;
+            if (versions is null)
+            {
+                throw new Refused($"nuget.org's answer for {id}'s versions lists none, {unknown}");
+            }
+            return [.. versions.Select(node => node is JsonValue value && value.TryGetValue(out string? text) ? text : "").Where(text => text.Length > 0)];
+        }
+        catch (HttpRequestException error)
+        {
+            throw new Refused($"nuget.org could not be reached for {id}'s versions ({error.Message}), {unknown}");
+        }
+        catch (TaskCanceledException)
+        {
+            throw new Refused($"nuget.org did not answer for {id}'s versions within {client.Timeout.TotalSeconds:0} seconds, {unknown}");
+        }
+        catch (JsonException error)
+        {
+            throw new Refused($"nuget.org's answer for {id}'s versions is not JSON ({error.Message}), {unknown}");
+        }
+    }
+
+    // A listed version's numbers, its prerelease and build metadata aside, or null where it has none.
+    private static Version? Number(string text)
+    {
+        int end = text.IndexOfAny(['-', '+']);
+        return Version.TryParse(end < 0 ? text : text[..end], out Version? parsed) ? Normalized(parsed) : null;
+    }
+
+    // 2026.4.1022 and 2026.4.1022.0 are one version; System.Version orders the shorter below.
+    private static Version Normalized(Version version) =>
+        new(version.Major, version.Minor, Math.Max(version.Build, 0), Math.Max(version.Revision, 0));
 }
 
 /// <summary>The repository's release tags, <c>v&lt;version&gt;</c> and <c>&lt;family&gt;/v&lt;version&gt;</c>, read with <c>git tag</c>.</summary>
@@ -621,16 +726,22 @@ static class Evaluation
     public static JsonObject? Properties(string output) => Json(output)?["Properties"] as JsonObject;
 
     /// <summary><c>dotnet msbuild -getProperty</c>/<c>-getItem</c>'s whole JSON, or null.</summary>
+    /// <remarks>
+    /// ⚠ From the first brace to the last, never to the end: on GitHub's runners MSBuild sometimes
+    /// adds "MSBuild server unavailable: … Falling back to an in-process build." after a good answer,
+    /// and read to the end, that line made the JSON unreadable (Templates#94's CI, 2026-11-12).
+    /// </remarks>
     public static JsonObject? Json(string output)
     {
         int start = output.IndexOf('{');
-        if (start < 0)
+        int end = output.LastIndexOf('}');
+        if (start < 0 || end < start)
         {
             return null;
         }
         try
         {
-            return JsonNode.Parse(output[start..]) as JsonObject;
+            return JsonNode.Parse(output[start..(end + 1)]) as JsonObject;
         }
         catch (JsonException)
         {

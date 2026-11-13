@@ -86,7 +86,8 @@ jobs:
       # The version comes from the TAG, not from a file, so the tag and the package agree by
       # construction rather than by someone remembering to bump both. Sets VERSION, TAG, FAMILY,
       # IDS, PREVIOUS_TAG and LATEST for every step below; refuses a tag or a dispatch that names no
-      # release this repository makes, and a version that is not YYYY.Q.MMDD.
+      # release this repository makes, a version that is not YYYY.Q.MMDD, and one below the newest
+      # nuget.org lists for one of the ids, unless nuget.org already lists it (a re-run).
       - name: Resolve what this release publishes
         if: env.RELEASING == 'true'
         env:

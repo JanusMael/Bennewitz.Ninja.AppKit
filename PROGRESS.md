@@ -13,27 +13,34 @@ one solution, one set of pins and one CI. Both families first released from here
 DiffView does not live here. The plan brought it too, and the maintainer took it out on 2026-11-06:
 development stays in Bennewitz.Ninja.DiffView, which is not archived.
 
-**Synced to Bennewitz.Ninja.Templates `2026.4.1111`** on 2026-11-11, on the maintainer's word.
+**Synced to Bennewitz.Ninja.Templates `2026.4.1113`** on 2026-11-13, on the maintainer's word.
 
-- **The conventions script is that release's.** `scripts/repo-conventions.cs` now also fails a
-  repository whose release does not resolve through `release-target.cs`, and one that does not pin
-  AssemblyQuality. This repository meets both.
-- **`Bennewitz.Ninja.CodeQuality` `2026.4.1104` is referenced privately**, every rule at its default,
-  the family's decision of 2026-11-10. It reported two `BNCQ1009` findings, both in tests and neither
-  able to end a process unintentionally, and each is suppressed where it stands with its reason:
+- **The scripts are that release's.** `scripts/release-target.cs` now refuses a release below the
+  newest version nuget.org lists for one of its family's ids, unless nuget.org already lists it (a
+  re-run). It and `scripts/repo-conventions.cs` read MSBuild's JSON from the first brace to the last,
+  and `check` now also requires the CodeQuality pin, which this repository has.
+- **`Bennewitz.Ninja.CodeQuality` rises from `2026.4.1104` to `2026.4.1111`**, every rule at its
+  default, the family's decision of 2026-11-10. It reports nothing new. The two `BNCQ1009` findings
+  of the `2026.4.1111` sync stay suppressed where they stand, each with its reason:
   - `EntryPointProbe`'s `background` thread throws on purpose;
   - `EntryPointWebProbeTests`' thread catches the one exception its invoke can throw.
-- **The pins are as the sync to `2026.4.1109` left them.**
+- **No other pin moved.**
   - AutoVersioning `2026.4.1031` and xunit.v3 `4.0.3`.
-  - In the tests, AssemblyQuality `2026.4.1031` and XamlQuality `2026.4.1109`.
+  - In the tests, AssemblyQuality `2026.4.1031` and XamlQuality `2026.4.1109`; XamlQuality
+    `2026.4.1111` is out, and taking it is a change of its own.
   - Avalonia stays `12.1.3`, the floor every consumer inherits.
-- **Verified on Windows:**
+- **Verified on Windows, CI's jobs step by step:**
   - the build passed with warnings as errors;
-  - 468 tests, 453 passed and 15 skipped as before;
+  - 649 tests, 634 passed and 15 skipped as before;
   - pack and `assert-packages` passed;
-  - `check` conforms.
-
-  The AOT and trim jobs run in CI.
+  - `check` conforms;
+  - the native AOT probe published on win-x64 without a warning and passed its contract, 18 tests
+    with 4 skipped for Windows' signals;
+  - the trimmed publish matched its baseline, 3 expected warnings and none new.
+- **The floor, against nuget.org:** `resolve` let AppServices `2026.4.1113` and `2026.4.1112`
+  through as re-runs, by dispatch and by tag, and ScopedEditors `2026.4.1113`, above its newest,
+  `2026.4.1110`. It refused AppServices `2026.4.1111` and `2026.1.101`, and ScopedEditors
+  `2026.4.1104` and `2026.3.930`, each with the floor's message.
 
 Neither family's packages changed, so the sync released nothing.
 
@@ -133,9 +140,8 @@ shuts down the headless dispatcher, which every later test shares. Package valid
 2. **Templates' change is its own** (`plans/00003` step 5, told on 2026-11-13), and
    JanusMael/Bennewitz.Ninja.Templates#97 makes it, the maintainer's choice that day: the four app
    templates pin `2026.4.1113`, and `bbavalonia` sets `ShowUnobservedTaskExceptions = !App.Smoke`
-   beside its `HandleUiThreadExceptions = !App.Smoke`. It was open on 2026-11-13; until it merges,
-   Templates' `main` pins `2026.4.1112`, since JanusMael/Bennewitz.Ninja.Templates#95. Templates has
-   released nothing since `2026.4.1111`, and its release waits for the maintainer's word.
+   beside its `HandleUiThreadExceptions = !App.Smoke`. It merged on 2026-11-13, and Templates
+   `2026.4.1113`, released that day, ships it.
 3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1113`.
