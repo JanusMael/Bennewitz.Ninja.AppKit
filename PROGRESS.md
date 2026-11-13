@@ -41,6 +41,10 @@ development stays in Bennewitz.Ninja.DiffView, which is not archived.
   through as re-runs, by dispatch and by tag, and ScopedEditors `2026.4.1113`, above its newest,
   `2026.4.1110`. It refused AppServices `2026.4.1111` and `2026.1.101`, and ScopedEditors
   `2026.4.1104` and `2026.3.930`, each with the floor's message.
+- **`docs/publishing.md` describes the floor** since 2026-11-13, beside the quarter rule and in two
+  rows of its failure table, its wording from Templates' `docs/repository-conventions.md`. The sync
+  brought the floor without it, and Templates' own runbook, `templates/bbpkg/docs/publishing.md`,
+  lacked it too that day; Templates was told.
 
 Neither family's packages changed, so the sync released nothing.
 

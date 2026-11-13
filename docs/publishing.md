@@ -96,6 +96,12 @@ a version that can never be replaced, and the recovery is to wait for tomorrow.
 The release refuses a version of any other shape, and one whose quarter is not its date's:
 `2026.3.1001` is refused, because 1 October is in the fourth quarter.
 
+It also refuses a version below the newest that nuget.org lists for one of the family's ids, which
+nuget.org would take quietly and keep: a version is the date of its release, so tag today's. A
+version nuget.org already lists is let through, as a re-run's push is skipped; an id it has never
+seen has no floor; and when nuget.org cannot be read, the release is refused. Each refusal comes
+before anything is built.
+
 ⛔ **A published version is permanent.** It cannot be replaced, re-pushed, or corrected — only
 superseded by a higher one, or unlisted.
 
@@ -162,6 +168,8 @@ either dispatch the workflow by hand or cut the next day's version.
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Refused before the build: *"nuget.org lists `<id>` `<version>`, newer than …"* | The version is below one nuget.org already has, as from a tag with an old date | Tag today's version. Nothing was published |
+| Refused before the build: *"… so whether `<version>` is below its newest is unknown"* | nuget.org's flat container could not be read: unreachable, too slow, or an error | `gh run rerun` once nuget.org answers. Nothing was published |
 | `NuGet/login` returns **403** | Job is missing `id-token: write` | It is present in `release.yml`; if it was edited, restore it |
 | Token exchange **401**, *"No matching trust policy owned by user"* | The name in `NUGET_USER`, the policy's owner, or the policy's scope | Work the list below — the message is identical for all three |
 | **Push unauthorized** | The policy is owned by a different account than the package | Confirm the policy owner on nuget.org |
