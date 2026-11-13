@@ -91,7 +91,7 @@ posted job's cancellation, reported as a failure twice; a post to a dispatcher t
 dropped without a word; and `Dispatcher.UIThread`, read on another thread before any dispatcher
 exists, binding the UI thread there. A correction went with them: the second report was seen in a
 run hosting a headless session, not in an application on a real platform. All of it is in
-JanusMael/Bennewitz.Ninja.Inspections#139, still open on 2026-11-13.
+JanusMael/Bennewitz.Ninja.Inspections#139, merged on 2026-11-13.
 
 **ScopedEditors runs `BNAQ1005`** from 2026-11-12, by the maintainer's choice, so both families'
 tests run `BNAQ1001` to `BNAQ1005`; until then nothing checked what ScopedEditors' compiled assemblies
