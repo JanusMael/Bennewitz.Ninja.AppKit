@@ -130,11 +130,12 @@ shuts down the headless dispatcher, which every later test shares. Package valid
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-2. **Templates' change is its own** (`plans/00003` step 5, told on 2026-11-13): `bbavalonia` takes
-   `2026.4.1113` with `ShowUnobservedTaskExceptions = !App.Smoke` beside its
-   `HandleUiThreadExceptions = !App.Smoke`. Its `main` pins `2026.4.1112` since
-   JanusMael/Bennewitz.Ninja.Templates#95, which brought the UI-thread line; Templates has released
-   nothing since `2026.4.1111`.
+2. **Templates' change is its own** (`plans/00003` step 5, told on 2026-11-13), and
+   JanusMael/Bennewitz.Ninja.Templates#97 makes it, the maintainer's choice that day: the four app
+   templates pin `2026.4.1113`, and `bbavalonia` sets `ShowUnobservedTaskExceptions = !App.Smoke`
+   beside its `HandleUiThreadExceptions = !App.Smoke`. It was open on 2026-11-13; until it merges,
+   Templates' `main` pins `2026.4.1112`, since JanusMael/Bennewitz.Ninja.Templates#95. Templates has
+   released nothing since `2026.4.1111`, and its release waits for the maintainer's word.
 3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1113`.
@@ -184,6 +185,15 @@ shuts down the headless dispatcher, which every later test shares. Package valid
   in neither copy of `BenignExceptionRule`.
 - **`bbavalonia`'s smoke line came in JanusMael/Bennewitz.Ninja.Templates#95**, where the plan's
   "What exists" has #94: both merged on 2026-11-12, and Templates has released neither.
+- **The 120 s smoke hang in the plan's "What exists" was most likely not the dialog.** `bbavalonia`
+  ends a smoke run by posting `desktop.Shutdown(0)` from an `Opened` handler that `App` subscribes
+  after the window is built, and an explicit shutdown ends a run whatever windows are open; the
+  `FatalErrorDialog` is modeless, so it never stops that shutdown from running. A throw from the
+  window's own handler most likely ended the event before `App`'s ran (read in
+  JanusMael/Bennewitz.Ninja.Templates#97's `App.axaml.cs`, not measured). Templates' canary of
+  2026-11-13, an unobserved exception with the switch forced on, exited 0 in 3 s.
+  `docs/appservices.md` said an open dialog keeps a smoke run alive; it now says which runs one holds
+  open.
 
 ## What the merge changed for consumers
 

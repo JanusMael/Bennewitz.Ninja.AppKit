@@ -141,13 +141,17 @@ and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
 - **A task exception nobody observed is shown, by default.** One that is not benign is logged at
   Error, where `2026.4.1112` logged it at Warning, and shown in a `FatalErrorDialog`.
   `ShowUnobservedTaskExceptions = false` keeps `2026.4.1112`'s Warning and no dialog. A smoke run that
-  proves a build by its exit code sets both switches from its flag, since an open dialog keeps the run
-  alive:
+  proves a build by its exit code sets both switches from its flag:
 
   ```csharp
   HandleUiThreadExceptions = !smoke,
   ShowUnobservedTaskExceptions = !smoke,
   ```
+
+  The first lets a UI-thread failure end the run. The second keeps the run from opening a dialog,
+  which never blocks the UI thread but, like any window, holds open an app that ends when its last
+  window closes. An unobserved exception leaves the exit code alone either way, and reaches stderr
+  unless it is benign.
 
 - **An app that shows a dialog of its own for these exceptions**, from a callback that wraps
   `OnUnobservedTaskException`, drops it or sets `ShowUnobservedTaskExceptions = false`; otherwise one
