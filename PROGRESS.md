@@ -85,8 +85,13 @@ each of seven planted breaks turns a test red.
 
 **Avalonia and drivable-UI lessons go to Inspections** from 2026-11-12, by the maintainer's choice:
 the root `AGENTS.md` carries every template's paragraph, which it had lacked since the merge.
-Avalonia 12.1.3's second report of a UI-thread exception went to the XamlQuality session the same
-day, for `docs/avalonia-gotchas.md`.
+Four went to the XamlQuality session that day, for `docs/avalonia-gotchas.md`, each read in Avalonia
+12.1.3's source or seen in this repository's tests: its second report of a UI-thread exception; a
+posted job's cancellation, reported as a failure twice; a post to a dispatcher that has shut down,
+dropped without a word; and `Dispatcher.UIThread`, read on another thread before any dispatcher
+exists, binding the UI thread there. A correction went with them: the second report was seen in a
+run hosting a headless session, not in an application on a real platform. All of it is in
+JanusMael/Bennewitz.Ninja.Inspections#139, still open on 2026-11-13.
 
 **ScopedEditors runs `BNAQ1005`** from 2026-11-12, by the maintainer's choice, so both families'
 tests run `BNAQ1001` to `BNAQ1005`; until then nothing checked what ScopedEditors' compiled assemblies
@@ -94,8 +99,8 @@ grant. A stray grant planted in `ScopedEditors.Abstractions` failed it alone, 1 
 CodeQuality came with the `2026.4.1111` sync at its defaults, the family's decision of 2026-11-10, so
 `BNCQ1001` stays off where `BNAQ1001` already holds; `BNAQ1006` stays unadopted.
 
-**`plans/00003`, task exceptions nobody observed shown as UI-thread failures are, is built and not
-yet released** (approved 2026-11-12; its steps 1 to 3). ClaudeForge asked for it: a wrapper of its own
+**`plans/00003`, task exceptions nobody observed shown as UI-thread failures are, shipped in
+AppServices `2026.4.1113`** (approved 2026-11-12; its steps 1 to 5, see Published). ClaudeForge asked for it: a wrapper of its own
 around the callback cannot tell Avalonia's second report apart, so one failure could show two
 dialogs. `AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions`, on by default and separate from
 `HandleUiThreadExceptions` by the maintainer's choice, has `EntryPointOptions()`' callback log a task
@@ -120,20 +125,19 @@ shuts down the headless dispatcher, which every later test shares. Package valid
 `.Avalonia`. `docs/appservices.md` gains "Upgrading from 2026.4.1112".
 
 **Next, in order:**
-1. **Release AppServices with `plans/00003`** (its step 4), on the maintainer's word, through
-   `docs/publishing.md`, then its Published row. Then step 5: tell ClaudeForge the version, for its
-   one-commit change with no unobserved handler of its own, and that an unobserved exception that is
-   nothing but cancellations is benign now; tell Templates the version and the line `bbavalonia` needs
-   beside its smoke line, `ShowUnobservedTaskExceptions = !App.Smoke`.
-2. **ClaudeForge's change is its own** (`plans/00002`, step 6, told on 2026-11-12): in one commit, take
-   the version, set its classifier as `IsBenignException`, and delete its UI-thread handler, its
-   unobserved handler and its rebuilt options. It holds its bump until the release that carries
-   `plans/00003`. OpenForge2k's copy of ClaudeForge holds `2026.3.924` until it can make the same
-   change. Templates took `2026.4.1112` with `bbavalonia`'s `HandleUiThreadExceptions = !smoke` in
-   JanusMael/Bennewitz.Ninja.Templates#94, not yet released.
+1. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
+   2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
+   `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
+   options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
+   `2026.3.924` until it can make the same change.
+2. **Templates' change is its own** (`plans/00003` step 5, told on 2026-11-13): `bbavalonia` takes
+   `2026.4.1113` with `ShowUnobservedTaskExceptions = !App.Smoke` beside its
+   `HandleUiThreadExceptions = !App.Smoke`. Its `main` pins `2026.4.1112` since
+   JanusMael/Bennewitz.Ninja.Templates#95, which brought the UI-thread line; Templates has released
+   nothing since `2026.4.1111`.
 3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
-   eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1112`.
+   eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1113`.
 
 ## Drift from `plans/00002`
 
@@ -178,6 +182,8 @@ shuts down the headless dispatcher, which every later test shares. Package valid
   dialog posted for a failure that has been offered one since opens nothing; and the cancellation
   rule asks the host's filter nothing about a cancellation and lives in `EntryPointOptions()`' filter,
   in neither copy of `BenignExceptionRule`.
+- **`bbavalonia`'s smoke line came in JanusMael/Bennewitz.Ninja.Templates#95**, where the plan's
+  "What exists" has #94: both merged on 2026-11-12, and Templates has released neither.
 
 ## What the merge changed for consumers
 
@@ -197,6 +203,7 @@ All five ids ship together at every version.
 
 | Version | Tag | Verified |
 |---|---|---|
+| `2026.4.1113` | `appservices/v2026.4.1113` | `plans/00003`; release run `43448071372`. All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `d14b1c5`, and a project with nuget.org as its only source restored them |
 | `2026.4.1112` | `appservices/v2026.4.1112` | `plans/00002`; release run `43253366608`, after GitHub failed to start the 2026-11-11 preflights (`startup_failure`, an internal error). All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `44438c7`, and a project with nuget.org as its only source restored them |
 | `2026.4.1110` | `appservices/v2026.4.1110` | First from AppKit; release run `42842847404`. All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `a1f42db`, and a project with nuget.org as its only source restored them |
 | `2026.4.1103` | `v2026.4.1103` | All five ids listed by the nuget.org flat-container, and a project with nuget.org as its only source restored them |
