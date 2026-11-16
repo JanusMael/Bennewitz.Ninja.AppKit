@@ -6,6 +6,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI;
+using Bennewitz.Ninja.AppServices.Dialogs;
 using Bennewitz.Ninja.AppServices.EntryPoint;
 using Serilog;
 using Serilog.Core;
@@ -33,9 +34,18 @@ namespace AppServices.Tests.AvaloniaUI;
 /// collection comes: that collection, not the test's, is what must find it.
 /// </para>
 /// <para>
+/// ⛔ <b>A test that needs the UI thread awaits its dispatch, and never blocks on it.</b> Avalonia
+/// 12.1.3's headless session completes a dispatch's task on the session's own thread without
+/// <c>RunContinuationsAsynchronously</c>, so the rest of an async test, and xUnit's start of the next
+/// test, can run on that thread; a blocking wait there for a dispatch that only that thread runs never
+/// ends. CI's order ran a blocking wait right after an async headless test, and the run hung
+/// (2026-11-16). <see cref="InAnAppMainRunOnTheUiThread"/> awaits.
+/// </para>
+/// <para>
 /// ⚠ <see cref="AvaloniaDiagnostics"/>, <see cref="Log.Logger"/> and stderr are process-wide: every test
 /// starts from <c>ResetForTests</c>, collects what earlier tests left before its run hooks in, and puts
-/// them back. This assembly runs serially (Parallelization.cs).
+/// them back. This assembly runs serially (Parallelization.cs). The native fatal dialog is suppressed,
+/// so that a run whose work throws fails its test rather than waiting for someone to close a dialog.
 /// </para>
 /// </remarks>
 public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
@@ -49,13 +59,18 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
         Path.Combine(Path.GetTempPath(), "bb-appservices-fail-on-unobserved-" + Guid.NewGuid().ToString("N"));
     private readonly CollectingSink _sink = new();
 
-    public FailOnUnobservedTaskExceptionsTests() => AvaloniaDiagnostics.ResetForTests();
+    public FailOnUnobservedTaskExceptionsTests()
+    {
+        AvaloniaDiagnostics.ResetForTests();
+        NativeErrorDialog.SuppressForTests = true;
+    }
 
     private static HeadlessUnitTestSession Session =>
         HeadlessUnitTestSession.GetOrStartForAssembly(Assembly.GetExecutingAssembly());
 
     public void Dispose()
     {
+        NativeErrorDialog.Reset();
         Log.Logger = _originalLogger;
         AvaloniaDiagnostics.ResetForTests();
 
@@ -110,12 +125,13 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
 
     [Theory]
     [MemberData(nameof(BenignExceptionTable.AllRows), MemberType = typeof(BenignExceptionTable))]
-    public void Avalonia_s_second_report_of_a_UI_thread_exception_is_not_counted(string row)
+    public async Task Avalonia_s_second_report_of_a_UI_thread_exception_is_not_counted(string row)
     {
         Exception thrown = BenignExceptionTable.Get(row).Make();
         bool arrived = false;
+        int code = -1;
 
-        (int code, _) = InAnAppMainRun(raised => InADispatch(() =>
+        await InAnAppMainRunOnTheUiThread(raised =>
         {
             // The handler is what remembers the exception, so it is installed; its dialog is not the subject.
             Configure(fail: true, handle: true);
@@ -125,8 +141,8 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
             Dispatcher.UIThread.Post(() => throw thrown);
             Dispatcher.UIThread.RunJobs();
             arrived = CollectUntil(() => raised.Any(each => WrapsOnly(thrown, each)));
-            return CallTheExitHandler(0);
-        }));
+            code = CallTheExitHandler(0);
+        });
 
         // The control: Avalonia did report the exception a second time, before the exit handler ran.
         Assert.True(arrived, "Avalonia raised no second report, so this test proves nothing.");
@@ -156,12 +172,13 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
     [Theory]
     [InlineData("before ConfigureLogging")]
     [InlineData("before InstallAvaloniaHooks")]
-    public void A_task_exception_reported_earlier_in_the_run_is_counted(string when)
+    public async Task A_task_exception_reported_earlier_in_the_run_is_counted(string when)
     {
         Exception thrown = new InvalidOperationException(Failed);
         bool arrived = false;
+        int code = -1;
 
-        (int code, _) = InAnAppMainRun(raised => InADispatch(() =>
+        await InAnAppMainRunOnTheUiThread(raised =>
         {
             if (when == "before InstallAvaloniaHooks")
             {
@@ -177,8 +194,8 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
             }
 
             AvaloniaDiagnostics.InstallAvaloniaHooks();
-            return CallTheExitHandler(0);
-        }));
+            code = CallTheExitHandler(0);
+        });
 
         Assert.True(arrived, "The abandoned task's exception was never raised.");
         Assert.Equal(1, code);
@@ -311,6 +328,8 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
         TextWriter originalError = Console.Error;
         StringWriter stderr = new();
 
+        bool finished = false;
+
         // Whatever an earlier test left unobserved is raised now, before the run hooks in.
         GC.Collect();
         GC.WaitForPendingFinalizers();
@@ -318,15 +337,16 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
         try
         {
             int code = AppMain.RunDesktop(typeof(FailOnUnobservedTaskExceptionsTests).Assembly, [],
-                _ => work(unobserved),
-                options with
+                _ =>
                 {
-                    OnUnobservedTaskException = raised =>
-                    {
-                        unobserved.Enqueue(raised);
-                        options.OnUnobservedTaskException!(raised);
-                    },
-                });
+                    int returned = work(unobserved);
+                    finished = true;
+                    return returned;
+                },
+                WithUnobservedRecorded(options, unobserved));
+
+            // A work that threw exits 1 too, which a test expecting 1 would otherwise take for its answer.
+            Assert.True(finished, $"The work threw, and AppMain reported it: {NativeErrorDialog.LastSuppressedCall.Message}");
             return (code, stderr.ToString());
         }
         finally
@@ -335,9 +355,49 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
         }
     }
 
-    /// <summary>Runs <paramref name="body"/> inside one <c>Session.Dispatch</c>, as a desktop app's work runs on its UI thread, and waits for it.</summary>
-    private static int InADispatch(Func<int> body) =>
-        Session.Dispatch(body, CancellationToken.None).GetAwaiter().GetResult();
+    /// <summary>
+    /// Runs <paramref name="body"/> inside one <c>Session.Dispatch</c>, as a desktop app's work runs on its
+    /// UI thread, inside an <c>AppMain</c> run with <c>EntryPointOptions()</c>. The body is handed every task
+    /// exception nobody observed that the run's callback is given, as it arrives.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ The dispatch is awaited, never waited for: see the class's remarks. So the run is the entry
+    /// point's async one, and the exit code the body's exit handler leaves is the test's to read.
+    /// </remarks>
+    private static async Task InAnAppMainRunOnTheUiThread(Action<ConcurrentQueue<Exception>> body)
+    {
+        ConcurrentQueue<Exception> unobserved = new();
+        AppMainOptions options = AvaloniaDiagnostics.EntryPointOptions();
+        TextWriter originalError = Console.Error;
+
+        // Whatever an earlier test left unobserved is raised now, before the run hooks in.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        Console.SetError(new StringWriter());
+        try
+        {
+            int exit = await AppMain.RunHostAsync(typeof(FailOnUnobservedTaskExceptionsTests).Assembly, [],
+                _ => Session.Dispatch(() => body(unobserved), CancellationToken.None),
+                WithUnobservedRecorded(options, unobserved));
+
+            Assert.True(exit == 0, $"The work threw, and AppMain reported it: {NativeErrorDialog.LastSuppressedCall.Message}");
+        }
+        finally
+        {
+            Console.SetError(originalError);
+        }
+    }
+
+    /// <summary><paramref name="options"/>, with every task exception nobody observed recorded before its callback runs.</summary>
+    private static AppMainOptions WithUnobservedRecorded(AppMainOptions options, ConcurrentQueue<Exception> unobserved) =>
+        options with
+        {
+            OnUnobservedTaskException = raised =>
+            {
+                unobserved.Enqueue(raised);
+                options.OnUnobservedTaskException!(raised);
+            },
+        };
 
     /// <summary>
     /// A task that failed and that nothing references: its exception stays unobserved until a collection
