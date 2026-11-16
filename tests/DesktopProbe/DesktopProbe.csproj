@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <!-- An Avalonia app on Avalonia's headless platform, so that it runs where no display is, CI's
+       runners included: the desktop lifetime, its Exit and its exit code are the real ones. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\AppServices.AvaloniaUI\AppServices.AvaloniaUI.csproj" />
+    <PackageReference Include="Avalonia.Headless" />
+  </ItemGroup>
+</Project>

@@ -18,6 +18,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AppServices.Tests/AppServices.Tests.csproj" />
+    <Project Path="tests/DesktopProbe/DesktopProbe.csproj" />
     <Project Path="tests/EntryPointProbe/EntryPointProbe.csproj" />
     <Project Path="tests/EntryPointWebProbe/EntryPointWebProbe.csproj" />
     <Project Path="tests/ScopedEditors.Tests/ScopedEditors.Tests.csproj" />

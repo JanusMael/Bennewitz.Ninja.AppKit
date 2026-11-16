@@ -131,6 +131,27 @@ shuts down the headless dispatcher, which every later test shares. Package valid
 `2026.4.1112`, packed as the next day's build, reports no breaking change in `.EntryPoint` or
 `.Avalonia`. `docs/appservices.md` gains "Upgrading from 2026.4.1112".
 
+**`plans/00004`, a smoke run that fails on a task exception nobody observed, is built** (approved
+2026-11-16; its steps 1 to 4), for the next AppServices release. The maintainer chose it on
+2026-11-13, through `choices` in the Templates session: a smoke run proves a build by its exit code,
+and a background failure no collection found before the run ended never reached it.
+`AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions`, off by default, has `InstallAvaloniaHooks()`
+subscribe a handler to the lifetime's `Exit`. There `GC.Collect` and `GC.WaitForPendingFinalizers` run
+twice, and an exit code of 0 becomes 1 when `EntryPointOptions()`' callback has counted, from the
+start of the run and whatever `ShowUnobservedTaskExceptions` says, a task exception nobody observed
+that is not benign. Avalonia's second report and a benign exception are not counted, a code the app
+set is kept, and a lifetime without `Exit` gets a Warning. `AppMain` is unchanged.
+`tests/DesktopProbe`, an Avalonia app on the headless platform run as a child process, proves
+Avalonia's own wiring: `StartWithClassicDesktopLifetime` runs there, and with the switch on, a task
+abandoned once its window opened, and found only by the handler's collection, makes the run exit 1
+with the exception on stderr; with it off, a reported one leaves 0. The handlers took 4.4 to 5.3 ms
+at exit in a run with nothing to report, 48.8 to 58.6 ms in one whose exception that collection
+found and reported, and 0.1 to 0.2 ms with the switch off (five runs each, Windows, Release,
+2026-11-16). Build with warnings as errors, 709 tests (694 passed, 15 skipped as before), and
+`check`, which conforms, pass on Windows. Each of 12 planted breaks turned the tests aimed at it red.
+Package validation against `2026.4.1113` reports no breaking change in `.EntryPoint` or `.Avalonia`,
+and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading from 2026.4.1113".
+
 **Next, in order:**
 1. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
    2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
@@ -142,7 +163,10 @@ shuts down the headless dispatcher, which every later test shares. Package valid
    templates pin `2026.4.1113`, and `bbavalonia` sets `ShowUnobservedTaskExceptions = !App.Smoke`
    beside its `HandleUiThreadExceptions = !App.Smoke`. It merged on 2026-11-13, and Templates
    `2026.4.1113`, released that day, ships it.
-3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+3. **AppServices' next release carries `plans/00004`**, on the maintainer's word (its step 5). Then
+   Templates is told the version, and the line `bbavalonia` needs beside its other two,
+   `FailOnUnobservedTaskExceptions = App.Smoke` (its step 6); the change to the template is Templates'.
+4. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1113`.
 
@@ -200,6 +224,26 @@ shuts down the headless dispatcher, which every later test shares. Package valid
   2026-11-13, an unobserved exception with the switch forced on, exited 0 in 3 s.
   `docs/appservices.md` said an open dialog keeps a smoke run alive; it now says which runs one holds
   open.
+
+## Drift from `plans/00004`
+
+- **More is tested than the plan names.** Every row of the shared table runs with
+  `ShowUnobservedTaskExceptions` on and off, which decision 2's "whatever it says" asks for. A test
+  proves the second round of collection: an object whose finalizer abandons a faulted task, found
+  only by that round, and both one round and the request's three steps turn it red. The count is
+  shown to run from before `ConfigureLogging` as well as before `InstallAvaloniaHooks()`.
+- **That the handler is subscribed once is guarded by its code alone.** No test can see a lifetime's
+  subscribers without reading Avalonia's private field, and a second subscription would change only
+  the pause: the second call finds the code already 1.
+- **What the plan leaves open, settled here:**
+  - the handler reads the switch itself as well, so a call with it off changes nothing;
+  - the count's line is logged at Error, with the count as `UnobservedCount`, and nothing is logged
+    when the app's own code is kept;
+  - the Warning names the lifetime's type, or `none`;
+  - the tests and the probe abandon a task faulted through a `TaskCompletionSource`, never run, so
+    that no pool thread still holds it when the handler's collection comes.
+- **The probe takes its switches as arguments**, `fail`, `drop` and `collect`, and times the handler
+  between two `Exit` handlers of its own, subscribed before `InstallAvaloniaHooks()` and after it.
 
 ## What the merge changed for consumers
 

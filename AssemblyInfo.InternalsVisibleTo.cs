@@ -17,6 +17,7 @@
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.EntryPoint")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.Logging")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("AppServices.Tests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DesktopProbe")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EntryPointProbe")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("EntryPointWebProbe")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("ScopedEditors.Abstractions")]
