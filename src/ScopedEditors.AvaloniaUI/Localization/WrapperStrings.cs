@@ -61,6 +61,10 @@ public static class WrapperStrings
             nameof(TipUndocumented) => "Undocumented setting — not in the official documentation",
             nameof(TipShowSuggestions) => "Show suggestions",
             nameof(TipNewSetting) => "New setting — added since your last session",
+            nameof(TipBrowse) => "Pick the path instead of typing it",
+            nameof(TipRemoveItem) => "Remove this item from the list",
+            nameof(TipNewItem) => "Type an item to add to the list",
+            nameof(TipAddItem) => "Add the typed item to the list",
             nameof(LabelOverridden) => "(overridden)",
             nameof(LabelReset) => "Reset",
             nameof(LabelSpinnerIncrease) => "Increase value",
@@ -87,6 +91,18 @@ public static class WrapperStrings
 
     /// <summary>Tooltip for the ✨ NEW-since-last-session badge.</summary>
     public static string TipNewSetting => Resolver(nameof(TipNewSetting));
+
+    /// <summary>Tooltip for the path editor's Browse button, which opens the host's picker.</summary>
+    public static string TipBrowse => Resolver(nameof(TipBrowse));
+
+    /// <summary>Tooltip for the × button beside each item of a string-array editor.</summary>
+    public static string TipRemoveItem => Resolver(nameof(TipRemoveItem));
+
+    /// <summary>Tooltip for the string-array editor's new-item text box.</summary>
+    public static string TipNewItem => Resolver(nameof(TipNewItem));
+
+    /// <summary>Tooltip for the string-array editor's Add button.</summary>
+    public static string TipAddItem => Resolver(nameof(TipAddItem));
 
     /// <summary>"(overridden)" label shown next to the scope chiclet when ≥2 scopes have data.</summary>
     public static string LabelOverridden => Resolver(nameof(LabelOverridden));

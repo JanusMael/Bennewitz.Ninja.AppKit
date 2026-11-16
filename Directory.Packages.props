@@ -49,7 +49,7 @@
          shipped references them. A rule's reading here is a measurement against these versions, so
          a move re-opens every rule. -->
     <PackageVersion Include="Bennewitz.Ninja.AssemblyQuality" Version="2026.4.1031" />
-    <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.4.1109" />
+    <PackageVersion Include="Bennewitz.Ninja.XamlQuality" Version="2026.4.1111" />
   </ItemGroup>
 
   <ItemGroup Label="Testing">

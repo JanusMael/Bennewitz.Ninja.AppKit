@@ -17,6 +17,7 @@
         <conv:AppSeverityToGlyphConverter x:Key="SeverityToGlyph" />
         <conv:AppSeverityToFontSizeConverter x:Key="SeverityToFontSize" />
         <conv:AppSeverityToTintBrushConverter x:Key="SeverityToTint" />
+        <conv:FirstNonBlankConverter x:Key="FirstNonBlank" />
     </UserControl.Resources>
 
     <!-- IsEnabled is NOT on the outer Border so the lock icon can show its tooltip.
@@ -238,6 +239,16 @@
                          visible, and Avalonia leaves an invisible control out of the automation
                          tree (ControlAutomationPeer.GetChildrenCore, 12.1.3). -->
 
+                    <!-- 2026-11-16 — Every input on the row declares a tooltip (XamlQuality BNXQ1011):
+                         neither its automation name nor its id is shown to the person pointing at it.
+                         A value input's tip is the property's Description, or its DisplayName when it
+                         has none. The MultiBinding lists the two in that order and FirstNonBlankConverter
+                         takes the first with something in it, because a tip bound to a missing
+                         description renders nothing. ToolTip.ShowOnDisabled, because a locked row
+                         disables its editor and a locked row is where someone points to ask what it is.
+                         The row's other controls take a WrapperStrings tip, which a host's Resolver
+                         localises with the rest. -->
+
                     <!-- Boolean: tri-state CheckBox with coloured status label
                          (null=Unset/gray, true=Enabled/green, false=Disabled/red) -->
                     <DataTemplate x:DataType="vm:BooleanPropertyEditorViewModel">
@@ -247,7 +258,15 @@
                                       VerticalAlignment="Center"
                                       AutomationProperties.AutomationId="{Binding Path}"
                                       AutomationProperties.Name="{Binding DisplayName}"
-                                      AutomationProperties.HelpText="{Binding Description}" />
+                                      AutomationProperties.HelpText="{Binding Description}"
+                                      ToolTip.ShowOnDisabled="True">
+                                <ToolTip.Tip>
+                                    <MultiBinding Converter="{StaticResource FirstNonBlank}">
+                                        <Binding Path="Description" />
+                                        <Binding Path="DisplayName" />
+                                    </MultiBinding>
+                                </ToolTip.Tip>
+                            </CheckBox>
                             <TextBlock Text="{Binding Value, Converter={StaticResource BoolToStatusText}}"
                                        Foreground="{Binding Value, Converter={StaticResource BoolToStatusBrush}}"
                                        FontSize="11"
@@ -265,7 +284,15 @@
                                  HorizontalAlignment="Left"
                                  AutomationProperties.AutomationId="{Binding Path}"
                                  AutomationProperties.Name="{Binding DisplayName}"
-                                 AutomationProperties.HelpText="{Binding Description}" />
+                                 AutomationProperties.HelpText="{Binding Description}"
+                                 ToolTip.ShowOnDisabled="True">
+                            <ToolTip.Tip>
+                                <MultiBinding Converter="{StaticResource FirstNonBlank}">
+                                    <Binding Path="Description" />
+                                    <Binding Path="DisplayName" />
+                                </MultiBinding>
+                            </ToolTip.Tip>
+                        </TextBox>
                     </DataTemplate>
 
                     <!-- Path -->
@@ -276,10 +303,19 @@
                                      Width="360"
                                      AutomationProperties.AutomationId="{Binding Path}"
                                      AutomationProperties.Name="{Binding DisplayName}"
-                                     AutomationProperties.HelpText="{Binding Description}" />
+                                     AutomationProperties.HelpText="{Binding Description}"
+                                     ToolTip.ShowOnDisabled="True">
+                                <ToolTip.Tip>
+                                    <MultiBinding Converter="{StaticResource FirstNonBlank}">
+                                        <Binding Path="Description" />
+                                        <Binding Path="DisplayName" />
+                                    </MultiBinding>
+                                </ToolTip.Tip>
+                            </TextBox>
                             <Button Content="{x:Static loc:WrapperStrings.LabelBrowse}"
                                     AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#browse'}"
                                     AutomationProperties.Name="{x:Static loc:WrapperStrings.LabelBrowse}"
+                                    ToolTip.Tip="{x:Static loc:WrapperStrings.TipBrowse}"
                                     Command="{Binding BrowseCommand}" />
                         </StackPanel>
                     </DataTemplate>
@@ -299,7 +335,14 @@
                                       MinWidth="200"
                                       AutomationProperties.AutomationId="{Binding Path}"
                                       AutomationProperties.Name="{Binding DisplayName}"
-                                      AutomationProperties.HelpText="{Binding Description}">
+                                      AutomationProperties.HelpText="{Binding Description}"
+                                      ToolTip.ShowOnDisabled="True">
+                                <ToolTip.Tip>
+                                    <MultiBinding Converter="{StaticResource FirstNonBlank}">
+                                        <Binding Path="Description" />
+                                        <Binding Path="DisplayName" />
+                                    </MultiBinding>
+                                </ToolTip.Tip>
                                 <ComboBox.ItemTemplate>
                                     <DataTemplate x:DataType="vm:EnumOption">
                                         <TextBlock Text="{Binding Value}" ToolTip.Tip="{Binding Description}" />
@@ -318,7 +361,14 @@
                                                  MinWidth="200"
                                                  AutomationProperties.AutomationId="{Binding Path}"
                                                  AutomationProperties.Name="{Binding DisplayName}"
-                                                 AutomationProperties.HelpText="{Binding Description}">
+                                                 AutomationProperties.HelpText="{Binding Description}"
+                                                 ToolTip.ShowOnDisabled="True">
+                                    <ToolTip.Tip>
+                                        <MultiBinding Converter="{StaticResource FirstNonBlank}">
+                                            <Binding Path="Description" />
+                                            <Binding Path="DisplayName" />
+                                        </MultiBinding>
+                                    </ToolTip.Tip>
                                     <AutoCompleteBox.ItemTemplate>
                                         <DataTemplate x:DataType="vm:EnumOption">
                                             <TextBlock Text="{Binding Value}" ToolTip.Tip="{Binding Description}" />
@@ -351,7 +401,15 @@
                                        Width="200"
                                        AutomationProperties.AutomationId="{Binding Path}"
                                        AutomationProperties.Name="{Binding DisplayName}"
-                                       AutomationProperties.HelpText="{Binding Description}" />
+                                       AutomationProperties.HelpText="{Binding Description}"
+                                       ToolTip.ShowOnDisabled="True">
+                            <ToolTip.Tip>
+                                <MultiBinding Converter="{StaticResource FirstNonBlank}">
+                                    <Binding Path="Description" />
+                                    <Binding Path="DisplayName" />
+                                </MultiBinding>
+                            </ToolTip.Tip>
+                        </NumericUpDown>
                     </DataTemplate>
 
                     <!-- String array -->
@@ -367,6 +425,7 @@
                                             <Button Content="×"
                                                     AutomationProperties.Name="{x:Static loc:WrapperStrings.LabelRemove}"
                                                     AutomationProperties.HelpText="{Binding}"
+                                                    ToolTip.Tip="{x:Static loc:WrapperStrings.TipRemoveItem}"
                                                     Padding="6,2"
                                                     FontSize="12"
                                                     Click="OnRemoveItem">
@@ -388,11 +447,13 @@
                                 <TextBox Text="{Binding NewItemText}"
                                          AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#new-item'}"
                                          AutomationProperties.Name="{Binding AddItemWatermark}"
+                                         ToolTip.Tip="{x:Static loc:WrapperStrings.TipNewItem}"
                                          PlaceholderText="{Binding AddItemWatermark}"
                                          Width="300" />
                                 <Button Content="{x:Static loc:WrapperStrings.LabelAdd}"
                                         AutomationProperties.AutomationId="{Binding Path, StringFormat='{}{0}#add'}"
                                         AutomationProperties.Name="{x:Static loc:WrapperStrings.LabelAdd}"
+                                        ToolTip.Tip="{x:Static loc:WrapperStrings.TipAddItem}"
                                         Command="{Binding AddItemCommand}" />
                             </StackPanel>
                         </StackPanel>
