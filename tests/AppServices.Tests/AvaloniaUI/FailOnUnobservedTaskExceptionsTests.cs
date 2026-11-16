@@ -123,9 +123,28 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Every row of the shared table, handled on the UI thread by the package's handler, and by an app's
+    /// own handler under a smoke run's switches, the other two off.
+    /// </summary>
+    public static TheoryData<string, bool> EveryRowHandledByThePackageAndByTheApp
+    {
+        get
+        {
+            TheoryData<string, bool> data = [];
+            foreach (BenignExceptionTable.Row row in BenignExceptionTable.Rows)
+            {
+                data.Add(row.Name, true);
+                data.Add(row.Name, false);
+            }
+
+            return data;
+        }
+    }
+
     [Theory]
-    [MemberData(nameof(BenignExceptionTable.AllRows), MemberType = typeof(BenignExceptionTable))]
-    public async Task Avalonia_s_second_report_of_a_UI_thread_exception_is_not_counted(string row)
+    [MemberData(nameof(EveryRowHandledByThePackageAndByTheApp))]
+    public async Task Avalonia_s_second_report_of_a_UI_thread_exception_is_not_counted(string row, bool packageHandles)
     {
         Exception thrown = BenignExceptionTable.Get(row).Make();
         bool arrived = false;
@@ -133,10 +152,16 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
 
         await InAnAppMainRunOnTheUiThread(raised =>
         {
-            // The handler is what remembers the exception, so it is installed; its dialog is not the subject.
-            Configure(fail: true, handle: true);
+            // The package's handler remembers the exception, whoever handles it, so it is subscribed either
+            // way; under a smoke run's switches it handles nothing, and the app's own handler does. Neither
+            // handler's dialog is the subject.
+            Configure(fail: true, handle: packageHandles);
             UiThreadExceptions.OpenDialog = (_, _) => { };
             AvaloniaDiagnostics.InstallAvaloniaHooks();
+            if (!packageHandles)
+            {
+                Dispatcher.UIThread.UnhandledException += (_, e) => e.Handled = true;
+            }
 
             Dispatcher.UIThread.Post(() => throw thrown);
             Dispatcher.UIThread.RunJobs();
@@ -204,14 +229,20 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
     [Fact]
     public void A_code_the_app_set_is_kept()
     {
+        Exception thrown = new InvalidOperationException(Failed);
         Configure(fail: true);
+        bool arrived = false;
 
-        (int code, _) = InAnAppMainRun(_ =>
+        (int code, _) = InAnAppMainRun(raised =>
         {
-            AbandonAFaultedTask(new InvalidOperationException(Failed));
-            return CallTheExitHandler(3);
+            AbandonAFaultedTask(thrown);
+            int returned = CallTheExitHandler(3);
+            arrived = raised.Any(each => WrapsOnly(thrown, each));
+            return returned;
         });
 
+        // The control: the exception was counted, so the code is kept by choice, not for want of a count.
+        Assert.True(arrived, "The exit handler's collection did not find the abandoned task.");
         Assert.Equal(3, code);
         Assert.Empty(CountLines());
     }

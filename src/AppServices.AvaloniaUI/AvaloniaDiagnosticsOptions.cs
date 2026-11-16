@@ -197,10 +197,11 @@ public sealed class AvaloniaDiagnosticsOptions
     /// </para>
     /// <para>
     /// Avalonia raises every exception the UI thread lets escape a second time, later, as a task
-    /// exception nobody observed. While this or <see cref="ShowUnobservedTaskExceptions"/> is set, the
-    /// handler is subscribed and remembers each exception, whoever handles it, and those options neither
-    /// log, show nor write on stderr that second report. With this false the handler handles nothing,
-    /// and with both false nothing is installed.
+    /// exception nobody observed. While this, <see cref="ShowUnobservedTaskExceptions"/> or
+    /// <see cref="FailOnUnobservedTaskExceptions"/> is set, the handler is subscribed and remembers each
+    /// exception, whoever handles it, and those options neither log, show, count nor write on stderr that
+    /// second report. With this false the handler handles nothing, and with all three false nothing is
+    /// installed.
     /// </para>
     /// <para>
     /// ⚠ <b>An app with a UI-thread handler of its own</b>, subscribed after <c>InstallAvaloniaHooks</c>,
@@ -262,8 +263,10 @@ public sealed class AvaloniaDiagnosticsOptions
     /// The options <see cref="AvaloniaDiagnostics.EntryPointOptions"/> returns count, from the start of the
     /// run, every task exception nobody observed that their callback finds not benign, whatever
     /// <see cref="ShowUnobservedTaskExceptions"/> says; Avalonia's second report of an exception the UI
-    /// thread let escape is not counted. With this set, <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/>
-    /// subscribes to the application lifetime's <c>Exit</c>. There a full collection runs, two rounds of
+    /// thread let escape is not counted, whoever handled it, since this subscribes the UI-thread handler,
+    /// which remembers each one, even with the other two switches off. With this set,
+    /// <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/> subscribes to the application lifetime's
+    /// <c>Exit</c>. There a full collection runs, two rounds of
     /// <see cref="GC.Collect()"/> and <see cref="GC.WaitForPendingFinalizers"/>, so that a task that failed
     /// and that nothing references any longer is reported before the run ends. Then, when the count is
     /// above zero and the exit code is 0, the code becomes 1, and a line at Error gives the count. A code

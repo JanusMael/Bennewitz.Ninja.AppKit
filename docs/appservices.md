@@ -94,7 +94,7 @@ exception handled:
 The handler is installed once, however often `InstallAvaloniaHooks()` is called.
 `HandleUiThreadExceptions = false` leaves every exception to the app, and the handler then only
 remembers each one, so that its second report is still known; with `ShowUnobservedTaskExceptions =
-false` as well, nothing is installed.
+false` as well, and `FailOnUnobservedTaskExceptions` off, nothing is installed.
 
 ## Task exceptions nobody observed
 

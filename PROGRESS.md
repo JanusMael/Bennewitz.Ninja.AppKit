@@ -147,8 +147,9 @@ abandoned once its window opened, and found only by the handler's collection, ma
 with the exception on stderr; with it off, a reported one leaves 0. The handlers took 4.4 to 5.3 ms
 at exit in a run with nothing to report, 48.8 to 58.6 ms in one whose exception that collection
 found and reported, and 0.1 to 0.2 ms with the switch off (five runs each, Windows, Release,
-2026-11-16). Build with warnings as errors, 709 tests (694 passed, 15 skipped as before), and
-`check`, which conforms, pass on Windows. Each of 12 planted breaks turned the tests aimed at it red.
+2026-11-16). Build with warnings as errors, 725 tests (710 passed, 15 skipped as before), and
+`check`, which conforms, pass on Windows, in the local order and in CI's (see Drift). Each of 13
+planted breaks turned the tests aimed at it red.
 Package validation against `2026.4.1113` reports no breaking change in `.EntryPoint` or `.Avalonia`,
 and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading from 2026.4.1113".
 
@@ -232,6 +233,19 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
   proves the second round of collection: an object whose finalizer abandons a faulted task, found
   only by that round, and both one round and the request's three steps turn it red. The count is
   shown to run from before `ConfigureLogging` as well as before `InstallAvaloniaHooks()`.
+- **The switch subscribes the UI-thread handler too, handling nothing, so that decision 2 holds under
+  a smoke run's switches.**
+  - **The gap.** With `HandleUiThreadExceptions` and `ShowUnobservedTaskExceptions` both off, nothing
+    else remembers what the dispatcher reported. So the second report of an exception an app's own
+    handler dealt with was counted, and failed the run. An independent judge of the first commit found
+    it, on 2026-11-16.
+  - **Now.** `InstallAvaloniaHooks()` installs nothing only with all three switches off.
+  - **Guarded.** The second-report test runs every row with the package's handler and with an app's
+    own handler under a smoke run's switches; with the subscription reverted, the 8 rows whose
+    unobserved verdict is not benign fail.
+- **That nothing is hooked with the switch off is shown in process, not by the probe.** The handler
+  reads the switch itself, so the probe's run with it off would exit 0 either way. The Warning test
+  with the switch off shows it: a hook installed with the switch off turns it red.
 - **That the handler is subscribed once is guarded by its code alone.** No test can see a lifetime's
   subscribers without reading Avalonia's private field, and a second subscription would change only
   the pause: the second call finds the code already 1.
@@ -244,6 +258,22 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
     that no pool thread still holds it when the handler's collection comes.
 - **The probe takes its switches as arguments**, `fail`, `drop` and `collect`, and times the handler
   between two `Exit` handlers of its own, subscribed before `InstallAvaloniaHooks()` and after it.
+- **CI's order hung the first run** (2026-11-16, run `43912835872`), where the local order passed:
+  - **What blocked.** The second-report test blocked on `Session.Dispatch` right after an async
+    headless test.
+  - **Why.** Avalonia 12.1.3's headless session completes a dispatch's task on its own consumer
+    thread, without `RunContinuationsAsynchronously`, so that test ran on the session's thread and
+    waited for a dispatch only that thread could run.
+  - **How it was found.** In a worktree at the Windows runner's path, where xUnit orders the tests as
+    CI does, read with `dotnet-stack`.
+  - **The fix.**
+    - The two tests that need the UI thread await `AppMain.RunHostAsync` now.
+    - The class suppresses the native fatal dialog.
+    - Both run helpers fail when the work threw.
+  - **Recorded.** `tests/AGENTS.md` has both rules, and the finding went to the XamlQuality session for
+    `docs/avalonia-gotchas.md`.
+  - **Proved.** In the same order AppServices' tests then passed, none failing: 439 at that fix, and
+    455 with the change above.
 
 ## What the merge changed for consumers
 
