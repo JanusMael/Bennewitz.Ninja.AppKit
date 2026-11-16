@@ -46,9 +46,10 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 /// observed. Every exception the dispatcher reports is remembered, weakly, with what an aggregate
 /// flattens to, whoever handles it, so that <see cref="AvaloniaDiagnostics.EntryPointOptions"/> can tell
 /// that second report from a failure of its own (<see cref="WasSeen"/>). So the handler is subscribed
-/// whenever <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> or
-/// <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> is set, and handles nothing
-/// unless the first is (<c>plans/00003</c>, decision 4).
+/// whenever <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/>,
+/// <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> or
+/// <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/> is set, and handles nothing
+/// unless the first is (<c>plans/00003</c>, decision 4; <c>plans/00004</c>, decision 2).
 /// </para>
 /// <para>
 /// ⛔ <b>A task exception nobody observed arrives on the finalizer thread</b>

@@ -213,9 +213,10 @@ public static class AvaloniaDiagnostics
     ///   <item>Subscribes the handler for exceptions nothing on the UI thread caught
     ///         to <see cref="Dispatcher.UIThread"/>'s
     ///         <see cref="Dispatcher.UnhandledException"/>, and records that dispatcher (when
-    ///         <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/> or
-    ///         <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> is set,
-    ///         as both are by default). With the first set, each exception is logged, and
+    ///         <see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/>,
+    ///         <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> or
+    ///         <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/> is set,
+    ///         as the first two are by default). With the first set, each exception is logged, and
     ///         shown unless it is benign, and the app keeps running. Either way, each is
     ///         remembered, so that Avalonia's second report of it is known, and the dialog
     ///         for a task exception nobody observed opens on that dispatcher.</item>
@@ -259,9 +260,12 @@ public static class AvaloniaDiagnostics
             BindingValidationErrorLogger.Install();
         }
 
-        // ⛔ One subscription whenever either switch is on (plans/00003, decision 4): the second report of
-        // an exception an app's own handler dealt with is known only to a handler that saw it.
-        if (options.HandleUiThreadExceptions || options.ShowUnobservedTaskExceptions)
+        // ⛔ One subscription whenever any switch that needs it is on (plans/00003, decision 4): the second
+        // report of an exception an app's own handler dealt with is known only to a handler that saw it. A
+        // smoke run turns the other two off, and its count must still leave that second report out
+        // (plans/00004, decision 2), so FailOnUnobservedTaskExceptions subscribes it too, handling nothing.
+        if (options.HandleUiThreadExceptions || options.ShowUnobservedTaskExceptions
+            || options.FailOnUnobservedTaskExceptions)
         {
             UiThreadExceptions.Install(Dispatcher.UIThread, handle: options.HandleUiThreadExceptions);
         }
