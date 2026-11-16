@@ -36,6 +36,7 @@ whole, its tags renamed `scopededitors/v…`. DiffView stays in Bennewitz.Ninja.
 | `docs/` | Each family's README and the release runbook |
 | `plans/` | Numbered plans, continuing AppServices' sequence |
 | `scripts/` | File-based apps: the release resolution, the packaging guard, the conventions check, and each family's own tools |
+| `reference/` | Read-only checkouts of the upstream sources at the versions the build pins, one folder each and ignored by git, beside the tracked files that fetch and describe them: `fetch-reference.cs`, its manifest `sources.json`, three MSBuild shields and the README. A search prunes the checkouts unless the task is about one, and reaches one by passing its path |
 | `AppKit.slnx` | The one solution: every family's `src` and `tests` projects |
 | `AssemblyInfo.InternalsVisibleTo.cs` / `.External.cs`, `Directory.Build.targets` | Templates' solution-wide friend grants: every project grants its internals to every assembly the solution builds |
 
@@ -80,6 +81,7 @@ dotnet pack AppKit.slnx -c Release --nologo --output ./packages/Release
 dotnet run scripts/assert-packages.cs -- ./packages/Release
 dotnet run --file scripts/repo-conventions.cs -- check
 dotnet run --file scripts/repo-conventions.cs -- grants
+dotnet run --file reference/fetch-reference.cs
 ```
 
 - Tests run on Microsoft.Testing.Platform (`global.json`), so `dotnet test` takes `--solution` and
@@ -90,6 +92,10 @@ dotnet run --file scripts/repo-conventions.cs -- grants
 - Write `-p:` rather than `/p:`: Git Bash on Windows rewrites a leading-slash argument into a path.
 - `grants` rewrites `AssemblyInfo.InternalsVisibleTo.cs` from every project's assembly name. Run it
   after adding, removing or renaming a project; `check` fails until the list matches.
+- `reference/fetch-reference.cs` fetches the upstream sources `reference/sources.json` lists, each at
+  the commit its packages' nuspecs record for the pinned version. `-- --status` reports without
+  fetching, and `-- --update` fetches again a checkout a raised pin has left behind;
+  `reference/README.md` has the rest.
 - Each family's own commands are in its section below.
 
 ## Checklists every family shares
