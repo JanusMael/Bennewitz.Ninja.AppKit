@@ -116,6 +116,18 @@ raises the exception on its finalizer thread, and the dialog is posted to the UI
 waited for. Before `InstallAvaloniaHooks()` has run, and once the app has shut down, the exception is
 logged and not shown.
 
+A run that proves a build by its exit code, a smoke run, sets `FailOnUnobservedTaskExceptions`, which
+is off by default. The options count every task exception nobody observed that is not benign, from the
+start of the run and whatever `ShowUnobservedTaskExceptions` says; Avalonia's second report is not
+counted. When the app exits, the handler `InstallAvaloniaHooks()` subscribed to the lifetime's `Exit`
+forces a full collection, so that a task that failed and that nothing references any longer is
+reported then, and turns an exit code of 0 into 1 when the count is above zero, with a line at Error
+giving it. A code the app set itself is kept. A task still running at exit, or still referenced, is not
+caught, and the collection adds a pause at exit, as long as a full collection takes. A lifetime that
+raises no `Exit`, such as a single view's, gets a Warning in the log, and the exit code is left alone.
+The filter runs on the finalizer thread while the UI thread waits for that collection, so a filter
+that waited on the UI thread would hang the exit.
+
 `IsBenignException` is one filter for both paths: the handler reads it, and `EntryPointOptions()`
 passes it on, so a benign task exception nobody observed is kept off stderr and logged at Debug.
 Set it where logging is configured:
@@ -136,6 +148,20 @@ throws counts as not benign, and its throw is logged beside the exception. The f
 whichever thread raised the exception, the UI thread or the finalizer thread, so it must be quick
 and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
 
+## Upgrading from 2026.4.1113
+
+- **A smoke run can fail on a task exception nobody observed.** `FailOnUnobservedTaskExceptions`, off
+  by default, makes a run that would exit with 0 exit with 1 when one that is not benign was reported
+  during it, after a full collection at exit has looked for those not yet reported (see "Task
+  exceptions nobody observed"). Nothing changes for an app that leaves it off. A smoke run sets all
+  three switches from its flag:
+
+  ```csharp
+  HandleUiThreadExceptions = !smoke,
+  ShowUnobservedTaskExceptions = !smoke,
+  FailOnUnobservedTaskExceptions = smoke,
+  ```
+
 ## Upgrading from 2026.4.1112
 
 - **A task exception nobody observed is shown, by default.** One that is not benign is logged at
@@ -151,7 +177,8 @@ and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
   The first lets a UI-thread failure end the run. The second keeps the run from opening a dialog,
   which never blocks the UI thread but, like any window, holds open an app that ends when its last
   window closes. An unobserved exception leaves the exit code alone either way, and reaches stderr
-  unless it is benign.
+  unless it is benign; the release after `2026.4.1113` adds a third switch,
+  `FailOnUnobservedTaskExceptions`, so that a smoke run fails on one.
 
 - **An app that shows a dialog of its own for these exceptions**, from a callback that wraps
   `OnUnobservedTaskException`, drops it or sets `ShowUnobservedTaskExceptions = false`; otherwise one

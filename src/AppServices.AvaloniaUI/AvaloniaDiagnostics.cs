@@ -1,3 +1,5 @@
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Binding;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
@@ -35,7 +37,9 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 ///       attached-property pipeline, and the handler for exceptions nothing on the UI
 ///       thread caught (<see cref="AvaloniaDiagnosticsOptions.HandleUiThreadExceptions"/>),
 ///       which also serves the dialogs for task exceptions nobody observed
-///       (<see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>).
+///       (<see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>), and, for a
+///       smoke run, the handler that makes one of those fail the run's exit code
+///       (<see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>).
 ///     </description>
 ///   </item>
 /// </list>
@@ -56,6 +60,14 @@ public static class AvaloniaDiagnostics
     // shared logger would put them in the app log too - the separation this exists to keep.
     private static BucketedRollingFileSink? _eventFileSink;
     private static global::Serilog.Core.Logger? _eventLogger;
+
+    // Every task exception nobody observed that the callback EntryPointOptions() returns found not benign,
+    // from the start of the run (plans/00004, decision 2). Written on the finalizer thread, read at exit.
+    private static long _unobservedFailures;
+
+    // The lifetime whose Exit the handler FailOnUnobservedTaskExceptions installs is subscribed to, so that
+    // it is subscribed once, and ResetForTests can take it off.
+    private static IControlledApplicationLifetime? _exitHookedOn;
 
     /// <summary>
     /// Application name supplied via
@@ -110,6 +122,12 @@ public static class AvaloniaDiagnostics
     /// exception arrives: its default, <see langword="true"/>, before <see cref="ConfigureLogging"/> has run.
     /// </summary>
     internal static bool ShowsUnobservedTaskExceptions => _options?.ShowUnobservedTaskExceptions ?? true;
+
+    /// <summary>
+    /// The host's <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>, read at exit: its
+    /// default, <see langword="false"/>, before <see cref="ConfigureLogging"/> has run.
+    /// </summary>
+    internal static bool FailsOnUnobservedTaskExceptions => _options?.FailOnUnobservedTaskExceptions ?? false;
 
     /// <summary>
     /// Configures <see cref="Log.Logger"/> and (optionally) redirects
@@ -201,6 +219,13 @@ public static class AvaloniaDiagnostics
     ///         shown unless it is benign, and the app keeps running. Either way, each is
     ///         remembered, so that Avalonia's second report of it is known, and the dialog
     ///         for a task exception nobody observed opens on that dispatcher.</item>
+    ///   <item>Subscribes, when
+    ///         <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/> is set, the
+    ///         handler that forces a full collection when the app exits and makes an exit code of
+    ///         0 a 1 if a task exception nobody observed, not benign, was reported during the run,
+    ///         to <see cref="Application.ApplicationLifetime"/>'s
+    ///         <see cref="IControlledApplicationLifetime.Exit"/>; a lifetime that raises no
+    ///         <c>Exit</c> gets a Warning in the log instead.</item>
     /// </list>
     /// <para>
     /// <strong>Must be called from <c>App.OnFrameworkInitializationCompleted</c></strong>
@@ -240,6 +265,12 @@ public static class AvaloniaDiagnostics
         {
             UiThreadExceptions.Install(Dispatcher.UIThread, handle: options.HandleUiThreadExceptions);
         }
+
+        // Only when asked: the handler forces a full collection at exit, a pause no other app should pay.
+        if (options.FailOnUnobservedTaskExceptions)
+        {
+            HookExit(Application.Current?.ApplicationLifetime);
+        }
     }
 
     /// <summary>
@@ -271,8 +302,9 @@ public static class AvaloniaDiagnostics
 
     /// <summary>
     /// Returns this static bootstrap to its unconfigured state, so a test can call
-    /// <see cref="ConfigureLogging"/> again. Disposes the file sinks it created, and takes the
-    /// UI-thread handler off the dispatcher it was installed on, with its gate and counts reset.
+    /// <see cref="ConfigureLogging"/> again. Disposes the file sinks it created, takes the
+    /// UI-thread handler off the dispatcher it was installed on, with its gate and counts reset, takes
+    /// the exit handler off the lifetime it was subscribed to, and forgets the task exceptions counted.
     /// </summary>
     /// <remarks>
     /// ⚠ Test-only. It does not restore <see cref="Log.Logger"/> or Avalonia's logger sink, which
@@ -281,6 +313,12 @@ public static class AvaloniaDiagnostics
     internal static void ResetForTests()
     {
         UiThreadExceptions.ResetForTests();
+        if (Interlocked.Exchange(ref _exitHookedOn, null) is { } lifetime)
+        {
+            lifetime.Exit -= OnLifetimeExit;
+        }
+
+        Interlocked.Exchange(ref _unobservedFailures, 0);
         _eventLogger?.Dispose();
         _eventLogger = null;
         _eventFileSink?.Dispose();
@@ -345,7 +383,8 @@ public static class AvaloniaDiagnostics
     /// at Warning and not shown when <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>
     /// is off, unless it is Avalonia's second report of an exception the UI thread let escape, which is
     /// neither logged, shown nor written on stderr; and on every exit the pending repeat counts are
-    /// written, then the log is closed and flushed.
+    /// written, then the log is closed and flushed. Each task exception nobody observed that is not benign
+    /// is counted, for <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -387,6 +426,16 @@ public static class AvaloniaDiagnostics
     /// they pass on calls it benign, which keeps it off stderr, and their callback neither logs nor shows
     /// it, so the report on the UI thread is the only one. An empty aggregate thrown on the UI thread
     /// flattens to nothing, so the entry point reports its second report before any filter runs.
+    /// </para>
+    /// <para>
+    /// ⭐ <b>A smoke run fails on a task exception nobody observed</b> (<c>plans/00004</c>). The callback
+    /// counts every one it finds not benign, from the start of the run and whatever
+    /// <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/> says, and Avalonia's second
+    /// report is not counted. With <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>
+    /// set, the handler <see cref="InstallAvaloniaHooks"/> subscribes to the lifetime's <c>Exit</c> forces a
+    /// full collection and turns an exit code of 0 into 1 when the count is above zero. The code reaches
+    /// the entry point as the work's return, so a host that replaces this callback with <c>with</c> loses
+    /// the count with it.
     /// </para>
     /// <para>
     /// ⚠ The fatal event is logged before the dialog opens, since the dialog blocks until it is
@@ -444,6 +493,10 @@ public static class AvaloniaDiagnostics
             return;
         }
 
+        // Counted before it is logged or shown, whatever the switches say: the exit handler reads the count
+        // (plans/00004, decision 2).
+        Interlocked.Increment(ref _unobservedFailures);
+
         if (ShowsUnobservedTaskExceptions)
         {
             UiThreadExceptions.ReportUnobserved(exception, filterFailure);
@@ -464,4 +517,80 @@ public static class AvaloniaDiagnostics
         UiThreadExceptions.WasSeen(exception)
         || (exception is AggregateException { InnerExceptions.Count: > 0 } aggregate
             && aggregate.InnerExceptions.All(UiThreadExceptions.WasSeen));
+
+    // Subscribes the exit handler once, however often InstallAvaloniaHooks runs (plans/00004, decisions 3
+    // and 6). A lifetime that raises no Exit, such as a single view's, has nothing to hook, and the log says
+    // why the switch did nothing.
+    private static void HookExit(IApplicationLifetime? lifetime)
+    {
+        if (lifetime is not IControlledApplicationLifetime controlled)
+        {
+            Log.Warning(
+                "FailOnUnobservedTaskExceptions is set, but the app's lifetime, {Lifetime:l}, raises no Exit, so a task exception nobody observed leaves the exit code alone",
+                lifetime?.GetType().Name ?? "none");
+            return;
+        }
+
+        if (Interlocked.CompareExchange(ref _exitHookedOn, controlled, null) is null)
+        {
+            controlled.Exit += OnLifetimeExit;
+        }
+    }
+
+    /// <summary>
+    /// The handler <see cref="InstallAvaloniaHooks"/> subscribes to the lifetime's <c>Exit</c> while
+    /// <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/> is set (<c>plans/00004</c>,
+    /// decisions 3 to 5): it forces a full collection, so that a task that failed and that nothing references
+    /// any longer is reported now, and then, when a task exception nobody observed that is not benign was
+    /// reported during the run and the exit code is 0, makes the code 1.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Avalonia raises <c>Exit</c> on the UI thread, after it has closed the windows and before it ends the
+    /// main loop, and takes the args' <see cref="ControlledApplicationLifetimeExitEventArgs.ApplicationExitCode"/>
+    /// back as the code its lifetime returns; the work returns it to the entry point.
+    /// </para>
+    /// <para>
+    /// ⛔ Nothing the package runs on the finalizer thread waits on the UI thread: the callback posts its
+    /// dialog and never waits for it. So waiting for the finalizers here cannot deadlock, unless the host's
+    /// filter waits on the UI thread, which <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>
+    /// warns against.
+    /// </para>
+    /// </remarks>
+    internal static void OnLifetimeExit(object? sender, ControlledApplicationLifetimeExitEventArgs e)
+    {
+        if (!FailsOnUnobservedTaskExceptions)
+        {
+            return;
+        }
+
+        // ⛔ Two rounds, not one. The first collection finds each faulted task nothing references, and the
+        // wait runs the finalizers that raise their exceptions, through the entry point's hook to the callback
+        // that counts them. A finalizer the second collection queues, for what the first round's finalizers
+        // let go, would otherwise raise its exception after the check.
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+
+        long reported = Interlocked.Read(ref _unobservedFailures);
+
+        // A code the app set says more than 1, and is kept (decision 4).
+        if (reported == 0 || e.ApplicationExitCode != 0)
+        {
+            return;
+        }
+
+        e.ApplicationExitCode = 1;
+        try
+        {
+            Log.Error(
+                "Task exceptions nobody observed were reported during the run, {UnobservedCount} of them, so FailOnUnobservedTaskExceptions makes its exit code 1",
+                reported);
+        }
+        catch (Exception)
+        {
+            // ⛔ Raised inside Avalonia's shutdown: a logger's throw must not take the exit code with it.
+        }
+    }
 }

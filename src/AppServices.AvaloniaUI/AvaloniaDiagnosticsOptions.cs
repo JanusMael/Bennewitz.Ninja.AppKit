@@ -211,8 +211,9 @@ public sealed class AvaloniaDiagnosticsOptions
     /// </para>
     /// <para>
     /// Set it to <see langword="false"/>, too, wherever an exception on the UI thread must still end the
-    /// process: a smoke run that proves a build by its exit code, for one, which sets
-    /// <see cref="ShowUnobservedTaskExceptions"/> to <see langword="false"/> as well.
+    /// process: a smoke run that proves a build by its exit code, for one, which also sets
+    /// <see cref="ShowUnobservedTaskExceptions"/> to <see langword="false"/> and
+    /// <see cref="FailOnUnobservedTaskExceptions"/> to <see langword="true"/>.
     /// </para>
     /// </remarks>
     public bool HandleUiThreadExceptions { get; init; } = true;
@@ -242,13 +243,57 @@ public sealed class AvaloniaDiagnosticsOptions
     /// </para>
     /// <para>
     /// It is separate from <see cref="HandleUiThreadExceptions"/>, which decides whether an exception on
-    /// the UI thread ends the process: this decides only whether an unobserved one is shown, and an
-    /// unobserved one never ends it. Set it to <see langword="false"/> where no dialog may open, as in a
-    /// smoke run that proves a build by its exit code, and in an app that shows a dialog of its own for
-    /// these exceptions, which would otherwise show two.
+    /// the UI thread ends the process, and from <see cref="FailOnUnobservedTaskExceptions"/>, which decides
+    /// whether an unobserved one changes the exit code: this decides only whether an unobserved one is
+    /// shown, and an unobserved one never ends the process. Set it to <see langword="false"/> where no
+    /// dialog may open, as in a smoke run that proves a build by its exit code, and in an app that shows a
+    /// dialog of its own for these exceptions, which would otherwise show two.
     /// </para>
     /// </remarks>
     public bool ShowUnobservedTaskExceptions { get; init; } = true;
+
+    /// <summary>
+    /// Makes a run that would exit with 0 exit with 1 when a task exception nobody observed, not benign, was
+    /// reported during it: for a smoke run, which proves a build by its exit code. Defaults to
+    /// <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The options <see cref="AvaloniaDiagnostics.EntryPointOptions"/> returns count, from the start of the
+    /// run, every task exception nobody observed that their callback finds not benign, whatever
+    /// <see cref="ShowUnobservedTaskExceptions"/> says; Avalonia's second report of an exception the UI
+    /// thread let escape is not counted. With this set, <see cref="AvaloniaDiagnostics.InstallAvaloniaHooks"/>
+    /// subscribes to the application lifetime's <c>Exit</c>. There a full collection runs, two rounds of
+    /// <see cref="GC.Collect()"/> and <see cref="GC.WaitForPendingFinalizers"/>, so that a task that failed
+    /// and that nothing references any longer is reported before the run ends. Then, when the count is
+    /// above zero and the exit code is 0, the code becomes 1, and a line at Error gives the count. A code
+    /// the app set itself is kept: only 0 becomes 1. Each exception counted is on stderr already, as the
+    /// entry point wrote it when it arrived.
+    /// </para>
+    /// <para>
+    /// A lifetime that raises no <c>Exit</c>, one that is not an
+    /// <see cref="global::Avalonia.Controls.ApplicationLifetimes.IControlledApplicationLifetime"/> such as a
+    /// single view's, gets a Warning in the log at install, and the exit code is left alone.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>What it cannot catch.</b> A task still running at exit, or still referenced, is not collected, so
+    /// its exception is not caught; nor is one reported after the check, while the process ends. A run that
+    /// an exception ends exits with 1 already. The collection adds a pause at exit, as long as a full
+    /// collection of the app's heap takes. With <see cref="ShowUnobservedTaskExceptions"/> on as well, a
+    /// failure that collection finds is logged at Error and not shown, since the dispatcher is shutting
+    /// down.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>The filter must never wait on the UI thread.</b> <see cref="IsBenignException"/> runs on the
+    /// finalizer thread while the UI thread waits for that collection to end, so a filter that waited on the
+    /// UI thread would hang the exit.
+    /// </para>
+    /// <para>
+    /// A smoke run sets it beside the other two: <c>HandleUiThreadExceptions = !smoke</c>,
+    /// <c>ShowUnobservedTaskExceptions = !smoke</c> and <c>FailOnUnobservedTaskExceptions = smoke</c>.
+    /// </para>
+    /// </remarks>
+    public bool FailOnUnobservedTaskExceptions { get; init; }
 
     /// <summary>
     /// Marks the exceptions the host knows to be harmless, such as the Linux D-Bus portal ones, so that
