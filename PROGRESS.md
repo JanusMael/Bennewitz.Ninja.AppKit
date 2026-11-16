@@ -54,8 +54,8 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
 
-**`plans/00005`, a tooltip on every input control, is built for ScopedEditors** (approved 2026-11-16;
-its steps 2 and 4). XamlQuality rises to `2026.4.1111`, test-only, and ScopedEditors runs its
+**`plans/00005`, a tooltip on every input control, is built** (approved 2026-11-16;
+its steps 2 to 4). XamlQuality rises to `2026.4.1111`, test-only, and ScopedEditors runs its
 `BNXQ1011` in `tests/ScopedEditors.Tests/Accessibility/AxamlTooltipCoverageTests.cs`: 12 input controls
 inspected, nothing skipped, nothing found, where ten had no tooltip. Each of
 `PropertyEditorWrapper.axaml`'s six value inputs shows the property's `Description`, or its
@@ -64,21 +64,28 @@ Avalonia package, and sets `ToolTip.ShowOnDisabled`, so a locked row shows it to
 `Controls/PropertyEditorWrapperTooltipTests` reads it off a rendered row of each editor, editable and
 locked, with a description, without one and with a blank one. Browse, a string array's ×, its new-item
 box and Add take four new `WrapperStrings` keys: `TipBrowse`, `TipRemoveItem`, `TipNewItem` and
-`TipAddItem`. Each guard was seen red with its defect planted, and green once it was removed:
+`TipAddItem`. AppServices has no markup for the rule to read: there, `FatalErrorDialog` and
+`NonFatalNoticeDialog` give Close, Copy to Clipboard and the details box a tooltip each, and
+`DialogAccessibilityTests` requires one of every control its walker requires a name of. Each guard was
+seen red with its defect planted, and green once it was removed:
 
 - a value input's tooltip removed fails `BNXQ1011` and the rendered row;
 - a fixed control's removed fails `BNXQ1011` alone;
 - the first again, with a `CheckBox` style's tooltip setter planted, fails `BNXQ1011` on `Skipped`;
 - a tip bound to `Description` alone, `ShowOnDisabled` dropped, or a blank description taken, each
   fails the rendered rows alone;
-- a new key read past the resolver fails `EveryKeyIsOverridable`.
+- a new key read past the resolver fails `EveryKeyIsOverridable`;
+- a dialog's tooltip removed, Close's in one and the details box's in the other, or Copy's made blank,
+  fails that dialog's tooltip test alone.
 
-Build with warnings as errors, 656 tests (641 passed, 15 skipped as before), the trimmed publish (3
-expected warnings, none new) and `check`, which conforms, pass on Windows. Package validation of the
-three ScopedEditors packages against `2026.4.1110` reports no breaking change, and reports a planted
-one (`CP0002`). `docs/scopededitors.md` gains "Upgrading from 2026.4.1110". Nothing is released: steps
-5 and 6, each family's release on the maintainer's word and telling Templates the AppServices version,
-remain.
+Build with warnings as errors, 658 tests (643 passed, 15 skipped as before), the trimmed publish (3
+expected warnings, none new) and `check`, which conforms, pass on Windows. Package validation reports
+no breaking change in the three ScopedEditors packages against `2026.4.1110`, nor in AppServices'
+`.Avalonia` against `2026.4.1113`, and reports a break planted in ScopedEditors' `.Avalonia` as
+`CP0002`. `docs/scopededitors.md` gains "Upgrading from 2026.4.1110". **`AvaloniaDialogService`'s
+dialogs are left out** (decision 6): their eleven buttons and their `TextBox` have no tooltip, and no
+test can build them, for their names either (see Next, by family). Nothing is released: steps 5 and 6,
+each family's release on the maintainer's word and telling Templates the AppServices version, remain.
 
 **`plans/00002`, the UI-thread exception hook, shipped in AppServices `2026.4.1112`** (approved
 2026-11-11; its steps 2 to 6, see Published). `InstallAvaloniaHooks()` installs a handler on the UI thread's
@@ -320,7 +327,12 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
   - the four fixed controls do not set `ShowOnDisabled`, which decision 3 asks of the value inputs
     alone, so on a locked row, where they are disabled, their tips do not show;
   - the rendered rows take a blank description as well as a missing one, and assert that a locked
-    row's input is disabled, so `ShowOnDisabled` is read where it matters.
+    row's input is disabled, so `ShowOnDisabled` is read where it matters;
+  - in the two dialogs, Copy's and the details box's tooltips are each control's help text, kept as
+    one string, and Close's, which has no help text, reads "Close this window";
+  - the dialogs' tooltip check is a test of its own for each dialog, beside the naming test, so a
+    missing tooltip and a missing name fail apart; it asserts the walker's count first, and takes a
+    tooltip that is not a string as one.
 - **`tests/AGENTS.md`'s ScopedEditors section** also said its project references all of `src/`; it
   names the family's three projects now.
 
@@ -370,6 +382,10 @@ The three ids ship together at every version.
    `[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]` is considered.
 2. `LiveLogWindowSink` and its windows stay in OpenForge2k until they can ship together; nothing here
    is scheduled for them.
+3. **`AvaloniaDialogService`'s dialogs have no tooltips, and no test checks their names either.**
+   Each is built only once the app has a desktop main window, so no test reaches it. `plans/00005`
+   left them out (decision 6); reaching them means building their windows where a test can, a plan
+   of its own if the maintainer wants it.
 
 **ScopedEditors**
 1. **Per-assembly headless isolation is unverified**, as above. It is the candidate fix for the

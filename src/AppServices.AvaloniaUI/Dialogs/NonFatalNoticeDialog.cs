@@ -73,8 +73,13 @@ public sealed class NonFatalNoticeDialog : Window
             TextWrapping = TextWrapping.NoWrap,
             MinHeight = 220,
         };
+        // A control's tooltip tells the person pointing at it what its help text tells a screen
+        // reader, so where it has help text the two are one string. BNXQ1011 cannot see a control
+        // built in code; DialogAccessibilityTests requires the tooltips instead.
+        const string DetailsHelp = "Read-only notice text; Copy to Clipboard copies all of it";
         AutomationProperties.SetName(bodyBox, "Notice details");
-        AutomationProperties.SetHelpText(bodyBox, "Read-only notice text; Copy to Clipboard copies all of it");
+        AutomationProperties.SetHelpText(bodyBox, DetailsHelp);
+        ToolTip.SetTip(bodyBox, DetailsHelp);
 
         ScrollViewer scroll = new()
         {
@@ -91,8 +96,10 @@ public sealed class NonFatalNoticeDialog : Window
         };
         // The visible label carries a clipboard emoji; the accessible name must not, or a
         // screen reader reads the glyph name aloud.
+        const string CopyHelp = "Copy the full notice text to the clipboard";
         AutomationProperties.SetName(copyBtn, "Copy to Clipboard");
-        AutomationProperties.SetHelpText(copyBtn, "Copy the full notice text to the clipboard");
+        AutomationProperties.SetHelpText(copyBtn, CopyHelp);
+        ToolTip.SetTip(copyBtn, CopyHelp);
         copyBtn.Click += OnCopyClick;
 
         Button closeBtn = new()
@@ -101,6 +108,7 @@ public sealed class NonFatalNoticeDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
         };
         AutomationProperties.SetName(closeBtn, "Close");
+        ToolTip.SetTip(closeBtn, "Close this window");
         closeBtn.Click += (_, _) => Close();
 
         DockPanel btnRow = new() { Margin = new Thickness(16, 0, 16, 16) };

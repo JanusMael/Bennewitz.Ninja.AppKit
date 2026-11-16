@@ -10,7 +10,8 @@ namespace AppServices.Tests.Dialogs;
 
 /// <summary>
 /// Every interactive control in the dialogs this library builds in C# carries a non-empty,
-/// clean-text <c>AutomationProperties.Name</c>, so a screen reader has something to announce.
+/// clean-text <c>AutomationProperties.Name</c>, so a screen reader has something to announce, and a
+/// tooltip that is not blank, so the person pointing at it is told what it does.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,6 +29,12 @@ namespace AppServices.Tests.Dialogs;
 /// <para>
 /// Each test also pins the NUMBER of interactive controls found. A new control must bump it, and a
 /// count lower than expected means the walker can no longer reach something.
+/// </para>
+/// <para>
+/// ⭐ <b>The tooltip tests are XamlQuality's <c>BNXQ1011</c> for controls built in code</b>, which
+/// that rule cannot see (<c>plans/00005</c>, decision 5). They require a tooltip of every control
+/// <see cref="IsInteractive"/> requires a name of: one list of what counts, this walker's, and no copy
+/// of the rule's list of input types to drift from it.
 /// </para>
 /// </remarks>
 public sealed class DialogAccessibilityTests
@@ -56,6 +63,30 @@ public sealed class DialogAccessibilityTests
 
             // The details box, Copy to Clipboard, and Close.
             AssertEveryInteractiveControlIsNamed(dialog, expectedControls: 3);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public Task FatalErrorDialog_EveryInteractiveControlHasATooltip()
+    {
+        return Session.Dispatch(() =>
+        {
+            FatalErrorDialog dialog = new("Title", "Message", new InvalidOperationException("boom"));
+
+            // The details box, Copy to Clipboard, and Close.
+            AssertEveryInteractiveControlHasATooltip(dialog, expectedControls: 3);
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public Task NonFatalNoticeDialog_EveryInteractiveControlHasATooltip()
+    {
+        return Session.Dispatch(() =>
+        {
+            NonFatalNoticeDialog dialog = new("Title", "Message", "line 1\nline 2");
+
+            // The details box, Copy to Clipboard, and Close.
+            AssertEveryInteractiveControlHasATooltip(dialog, expectedControls: 3);
         }, CancellationToken.None);
     }
 
@@ -97,6 +128,48 @@ public sealed class DialogAccessibilityTests
             + $"{expectedControls}. If you added or removed a control, update the expected count. If the "
             + "count dropped without a removal, the walker no longer reaches a control (a flyout or "
             + "template root, for example) and needs a new root.");
+    }
+
+    /// <summary>
+    /// Every control the walker finds carries a tooltip that is not blank: not unset, and not a string
+    /// of white space. Content other than a string counts as a tooltip.
+    /// </summary>
+    /// <remarks>
+    /// The count is asserted first, so a walker that found nothing cannot pass as a dialog whose every
+    /// control has a tooltip.
+    /// </remarks>
+    private static void AssertEveryInteractiveControlHasATooltip(Window window, int expectedControls)
+    {
+        List<Control> interactive = CollectInteractiveControls(window);
+        string owner = $"{window.GetType().Name} \"{window.Title}\"";
+
+        Assert.True(interactive.Count == expectedControls,
+            $"{owner}: the walker found {interactive.Count} interactive controls but this test expects "
+            + $"{expectedControls}, so it cannot say each one has a tooltip. If you added or removed a "
+            + "control, update the expected count here and in the naming test.");
+
+        List<string> failures = [];
+
+        foreach (Control control in interactive)
+        {
+            object? tip = ToolTip.GetTip(control);
+            string label = $"{control.GetType().Name} \"{Describe(control)}\"";
+
+            if (tip is null)
+            {
+                failures.Add($"  • {label}: ToolTip.Tip is not set.");
+            }
+            else if (tip is string text && string.IsNullOrWhiteSpace(text))
+            {
+                failures.Add($"  • {label}: ToolTip.Tip is blank.");
+            }
+        }
+
+        Assert.True(failures.Count == 0,
+            $"Tooltip coverage regression in {owner}: every interactive control needs a tooltip that says "
+            + "what it does to the person pointing at it.\n\n" + string.Join('\n', failures)
+            + "\n\nFix: call ToolTip.SetTip(control, \"...\") where the control is built; where it has help "
+            + "text, the tooltip says the same.");
     }
 
     /// <summary>
