@@ -79,7 +79,9 @@ seen red with its defect planted, and green once it was removed:
   fails that dialog's tooltip test alone.
 
 Build with warnings as errors, 658 tests (643 passed, 15 skipped as before), the trimmed publish (3
-expected warnings, none new) and `check`, which conforms, pass on Windows. Package validation reports
+expected warnings, none new) and `check`, which conforms, pass on Windows. Checked again
+independently, on top of `plans/00004`: 734 tests (719 passed, 15 skipped), and four canaries of the
+checker's own, each red, in the markup, the converter and a dialog. Package validation reports
 no breaking change in the three ScopedEditors packages against `2026.4.1110`, nor in AppServices'
 `.Avalonia` against `2026.4.1113`, and reports a break planted in ScopedEditors' `.Avalonia` as
 `CP0002`. `docs/scopededitors.md` gains "Upgrading from 2026.4.1110". **`AvaloniaDialogService`'s
@@ -197,9 +199,11 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
    templates pin `2026.4.1113`, and `bbavalonia` sets `ShowUnobservedTaskExceptions = !App.Smoke`
    beside its `HandleUiThreadExceptions = !App.Smoke`. It merged on 2026-11-13, and Templates
    `2026.4.1113`, released that day, ships it.
-3. **AppServices' next release carries `plans/00004`**, on the maintainer's word (its step 5). Then
-   Templates is told the version, and the line `bbavalonia` needs beside its other two,
-   `FailOnUnobservedTaskExceptions = App.Smoke` (its step 6); the change to the template is Templates'.
+3. **AppServices' next release carries `plans/00004` and `plans/00005`, and ScopedEditors' carries
+   `plans/00005`**, each on the maintainer's word (each plan's step 5). Then Templates is told the
+   AppServices version, and the line `bbavalonia` needs beside its other two,
+   `FailOnUnobservedTaskExceptions = App.Smoke` (each plan's step 6); the change to the template is
+   Templates'.
 4. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1113`.
