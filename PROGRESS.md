@@ -29,8 +29,8 @@ development stays in Bennewitz.Ninja.DiffView, which is not archived.
   its own words; this one keeps its wording, which says the same.
 - **No other pin moved.**
   - AutoVersioning `2026.4.1031` and xunit.v3 `4.0.3`.
-  - In the tests, AssemblyQuality `2026.4.1031` and XamlQuality `2026.4.1109`; XamlQuality
-    `2026.4.1111` is out, and taking it is a change of its own.
+  - In the tests, AssemblyQuality `2026.4.1031` and XamlQuality `2026.4.1109`. XamlQuality
+    `2026.4.1111` came after the sync, as a change of its own: `plans/00005`, below.
   - Avalonia stays `12.1.3`, the floor every consumer inherits.
 - **Verified on Windows, CI's jobs step by step:**
   - every project restored CodeQuality `2026.4.1113`;
@@ -53,6 +53,32 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 `BNXQ1003` to `BNXQ1006` and `BNXQ1008`, were measured the same day and inspect nothing here: no
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
+
+**`plans/00005`, a tooltip on every input control, is built for ScopedEditors** (approved 2026-11-16;
+its steps 2 and 4). XamlQuality rises to `2026.4.1111`, test-only, and ScopedEditors runs its
+`BNXQ1011` in `tests/ScopedEditors.Tests/Accessibility/AxamlTooltipCoverageTests.cs`: 12 input controls
+inspected, nothing skipped, nothing found, where ten had no tooltip. Each of
+`PropertyEditorWrapper.axaml`'s six value inputs shows the property's `Description`, or its
+`DisplayName` when that is missing or blank, through `FirstNonBlankConverter`, new and public in the
+Avalonia package, and sets `ToolTip.ShowOnDisabled`, so a locked row shows it too.
+`Controls/PropertyEditorWrapperTooltipTests` reads it off a rendered row of each editor, editable and
+locked, with a description, without one and with a blank one. Browse, a string array's ×, its new-item
+box and Add take four new `WrapperStrings` keys: `TipBrowse`, `TipRemoveItem`, `TipNewItem` and
+`TipAddItem`. Each guard was seen red with its defect planted, and green once it was removed:
+
+- a value input's tooltip removed fails `BNXQ1011` and the rendered row;
+- a fixed control's removed fails `BNXQ1011` alone;
+- the first again, with a `CheckBox` style's tooltip setter planted, fails `BNXQ1011` on `Skipped`;
+- a tip bound to `Description` alone, `ShowOnDisabled` dropped, or a blank description taken, each
+  fails the rendered rows alone;
+- a new key read past the resolver fails `EveryKeyIsOverridable`.
+
+Build with warnings as errors, 656 tests (641 passed, 15 skipped as before), the trimmed publish (3
+expected warnings, none new) and `check`, which conforms, pass on Windows. Package validation of the
+three ScopedEditors packages against `2026.4.1110` reports no breaking change, and reports a planted
+one (`CP0002`). `docs/scopededitors.md` gains "Upgrading from 2026.4.1110". Nothing is released: steps
+5 and 6, each family's release on the maintainer's word and telling Templates the AppServices version,
+remain.
 
 **`plans/00002`, the UI-thread exception hook, shipped in AppServices `2026.4.1112`** (approved
 2026-11-11; its steps 2 to 6, see Published). `InstallAvaloniaHooks()` installs a handler on the UI thread's
@@ -274,6 +300,29 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
     `docs/avalonia-gotchas.md`.
   - **Proved.** In the same order AppServices' tests then passed, none failing: 439 at that fix, and
     455 with the change above.
+
+## Drift from `plans/00005`
+
+- **The `BNXQ1011` count is pinned exactly, at 12.** Decision 2 pins it "as the BNXQ1002 test pins its
+  twelve", but that test asserts at least ten, with twelve in its comment. Pinned exactly, a new input
+  control raises it, as the decision asks.
+- **`Skipped` is asserted before the count.** A control the rule skips is not counted as inspected:
+  with a tooltip removed and a style's setter planted, `Inspected` fell to 11, and the count's message
+  called it a control the scan stopped seeing. Asserted first, the skipped control is named.
+- **What the plan leaves open, settled here:**
+  - the converter is `FirstNonBlankConverter`, public beside the package's other converters: a
+    `MultiBinding` lists `Description` and then `DisplayName`, and a description that is empty or white
+    space counts as none;
+  - `BNXQ1011` runs as Templates runs it, without the four element names the naming and id tests add;
+    none occurs in this markup;
+  - the four keys read "Pick the path instead of typing it", "Remove this item from the list", "Type an
+    item to add to the list" and "Add the typed item to the list";
+  - the four fixed controls do not set `ShowOnDisabled`, which decision 3 asks of the value inputs
+    alone, so on a locked row, where they are disabled, their tips do not show;
+  - the rendered rows take a blank description as well as a missing one, and assert that a locked
+    row's input is disabled, so `ShowOnDisabled` is read where it matters.
+- **`tests/AGENTS.md`'s ScopedEditors section** also said its project references all of `src/`; it
+  names the family's three projects now.
 
 ## What the merge changed for consumers
 

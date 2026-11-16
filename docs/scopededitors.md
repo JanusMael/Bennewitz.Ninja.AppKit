@@ -83,6 +83,17 @@ finds it by a string it can predict. The value input takes the path itself, such
 | A string array's new-item box, and its add button | `<path>#new-item`, `<path>#add` |
 | A string array item's remove button | `<path>#remove:<item>` |
 
+## Upgrading from 2026.4.1110
+
+- **Every input on a property row shows a tooltip.** The value input shows the property's
+  description, or its name when the description is missing or blank, and shows it on a locked row
+  too, where the input is disabled. The browse button, a string array's remove buttons, its new-item
+  box and its add button each show a fixed one.
+- **Four new `WrapperStrings` keys** hold those fixed tooltips, and a host overrides them as it does
+  the others: `TipBrowse`, `TipRemoveItem`, `TipNewItem` and `TipAddItem`. A host that assigns
+  `WrapperStrings.Resolver` answers these four as well, or the tooltips show whatever its resolver
+  returns for a key it does not know.
+
 ## Upgrading from 2026.3.923
 
 The package keeps its id. Inside it, `2026.3.924` renames the assembly and its namespaces from

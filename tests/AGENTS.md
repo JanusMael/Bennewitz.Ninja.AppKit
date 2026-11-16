@@ -58,14 +58,14 @@ the package list or the workflow is wrong, not the test.
 
 ## ScopedEditors
 
-`ScopedEditors.Tests`, the repository's only test project. `tests/Directory.Build.props` makes it an
-xUnit v3 test executable that is never packed. It references all of `src/`, `Avalonia.Headless`,
-`Bennewitz.Ninja.AssemblyQuality` and `Bennewitz.Ninja.XamlQuality`.
+`ScopedEditors.Tests`, the family's test project. `tests/Directory.Build.props` makes it an
+xUnit v3 test executable that is never packed. It references the family's three projects under
+`src/`, `Avalonia.Headless`, `Bennewitz.Ninja.AssemblyQuality` and `Bennewitz.Ninja.XamlQuality`.
 
 | Folder | What it covers |
 |---|---|
 | `Architecture/` | `LayeringTests`, `AssemblyQualityTests` (BNAQ1001–BNAQ1005 over every shipped assembly), `PackageMetadataTests`, and the markup guards `ThemeResourceIntegrityTests`, `DangerSurfaceMarkupTests`, `SeverityGlyphFontSizeMarkupTests` |
-| `Accessibility/` | XamlQuality's `BNXQ1002` (`AxamlAccessibilityCoverageTests`), `BNXQ1001` (`ExpanderAutomationNameTests`) and `BNXQ1007` (`AxamlAutomationIdCoverageTests`) over the package's markup. The ids' values are read off a rendered row in `Controls/PropertyEditorWrapperAutomationIdTests` |
+| `Accessibility/` | XamlQuality's `BNXQ1002` (`AxamlAccessibilityCoverageTests`), `BNXQ1001` (`ExpanderAutomationNameTests`), `BNXQ1007` (`AxamlAutomationIdCoverageTests`), `BNXQ1009` and `BNXQ1010` (`GeneratedRowRuleTests`) and `BNXQ1011` (`AxamlTooltipCoverageTests`) over the package's markup. The ids' values are read off a rendered row in `Controls/PropertyEditorWrapperAutomationIdTests`, and the value inputs' tooltips off rendered rows in `Controls/PropertyEditorWrapperTooltipTests` |
 | `Packaging/` | `PackagingTests`: the package lists and the release workflow |
 | `Assets/` | `BundledFontTests`: text laid out in every bundled face by its documented `avares://` URI |
 | `Themes/`, `Controls/`, `Converters/`, `Behaviors/`, `Helpers/`, `Localization/`, `ViewModels/` | The suite ported with the code, organised by what it tests |
