@@ -44,6 +44,35 @@ development stays in Bennewitz.Ninja.DiffView, which is not archived.
 
 Neither family's packages changed, so the sync released nothing.
 
+**`reference/` holds read-only checkouts of the upstream sources at the pinned versions** from
+2026-11-16, by the maintainer's choice: every repository that reads upstream library sources keeps
+them pinned there, so an agent greps the exact version the build uses instead of fetching single files
+through `gh api`. `reference/fetch-reference.cs` merges DiffView's and XamlQuality's scripts of that
+name, and fetches each source at the commit its packages' nuspecs record for the pinned version,
+ClaudeForge's idea. `reference/sources.json` lists Avalonia 12.1.3 (`src` and `tests`),
+Avalonia.Controls.DataGrid 12.1.2 and Semi.Avalonia 12.1.0 (`src`). The script, its manifest, the
+README, `AGENTS.md` and three MSBuild shields are tracked; `/reference/*/` in `.gitignore` ignores the
+checkouts, and the script fetches nothing until git ignores each one. It builds under the shields with
+the settings its `#:property` lines state, so it builds alike in any repository that keeps it.
+Verified on Windows:
+
+- a fresh fetch of all three in 43 s, each HEAD the commit its nuspecs record, every text file LF,
+  and each checkout's own `git status` clean;
+- `off-pin` for an edited pin record and for a moved HEAD, each fetched again by `--update`;
+- exit 2 for each usage error, a `dir` outside `reference/`, a tag without `{version}`, a package
+  nothing pins, packages that disagree on version or on commit, a `url` the nuspecs contradict, and
+  `.gitignore` without the line;
+- the same pins with the global packages folder empty, read from nuget.org;
+- a commit pin, a tag, a `local` sibling, and a sibling that lacks the pin, which falls back to the
+  url;
+- in a throwaway repository without central package management, Semi.Avalonia 12.1.0.1 from a csproj,
+  fetched at the commit its nuspec records, and refused once a second csproj pins 12.1.0;
+- a warning planted in the script fails its build under the shields, and this repository's analyzers
+  never reach it;
+- the solution's build with warnings as errors, and `check`, which conforms.
+
+Nothing ships, and neither family's packages changed.
+
 **ScopedEditors runs `BNXQ1009` and `BNXQ1010`** from 2026-11-09, by the owner's choice, in
 `tests/ScopedEditors.Tests/Accessibility/GeneratedRowRuleTests.cs`: the rows a list generates are
 named by what they show and draw a background of their own. Each reads the strict enum's `ComboBox`,
