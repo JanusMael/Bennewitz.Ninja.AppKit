@@ -227,7 +227,10 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
 2. **Templates' change is its own** (`plans/00004` and `plans/00005` step 6, told on 2026-11-16): the
    app templates take `2026.4.1116`, and `bbavalonia` sets `FailOnUnobservedTaskExceptions = App.Smoke`
    beside its `HandleUiThreadExceptions` and `ShowUnobservedTaskExceptions` lines, on the maintainer's
-   word.
+   word. JanusMael/Bennewitz.Ninja.Templates#103 makes it, unmerged on 2026-11-16, its release on his
+   word. Templates measured a generated app run with `--smoke`: a task exception nobody observed,
+   planted with no collection of its own, exits 1; a planted cancellation exits 0; and so does the
+   first with the line set to false.
 3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
    eight ids, each pushed at `2026.4.1116`.
@@ -409,7 +412,17 @@ The three ids ship together at every version.
 
 **AppServices**
 1. **Headless isolation per assembly** is unverified and waits for evidence before
-   `[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]` is considered.
+   `[assembly: AvaloniaTestIsolation(AvaloniaTestIsolationLevel.PerAssembly)]` is considered. Some
+   arrived on 2026-11-16, from ClaudeForge's session through Templates, measured on Avalonia 12.1.6:
+   - **Under per-test isolation, a test can fail at set-up.** Every dispatch sets the session's
+     application up again. A background thread that reads `Dispatcher.UIThread` in that window, from a
+     leftover continuation or a file watcher, becomes the UI thread, and the set-up throws "a different
+     thread owns it". The failing test is a victim.
+   - **Per-assembly isolation with one warm-up dispatch** stopped it under a stress test.
+   - **It is no drop-in.** It failed three of ClaudeForge's tests outright where the assembly also holds
+     tests that are not headless, since one application then exists for the whole process, and queued
+     dispatcher work leaked between tests. Both of this repository's test assemblies hold such tests.
+   - The finder's verdict waits on its CI. These tests already keep no warm-up (`tests/AGENTS.md`).
 2. `LiveLogWindowSink` and its windows stay in OpenForge2k until they can ship together; nothing here
    is scheduled for them.
 3. **`AvaloniaDialogService`'s dialogs have no tooltips, and no test checks their names either.**
@@ -420,8 +433,9 @@ The three ids ship together at every version.
 **ScopedEditors**
 1. **Per-assembly headless isolation is unverified**, as above. It is the candidate fix for the
    cross-thread failure seen on OpenForge2k's CI, and OpenForge2k has not reproduced that failure since
-   its xUnit move (measured 2026-09-25) and parked its own attempt because it broke a seam, so the
-   evidence has not arrived.
+   its xUnit move (measured 2026-09-25) and parked its own attempt because it broke a seam. The
+   evidence of 2026-11-16 is under AppServices' item: per-assembly isolation is no drop-in for an
+   assembly that also holds tests that are not headless, as this one does.
 
 ## The merge
 
