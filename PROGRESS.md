@@ -54,8 +54,9 @@ skipped. Canaried: the row's `TextBlock` wrapped in a `Border` fails `BNXQ1009` 
 control themes or templates, no key bindings, no fixed or zero-size grid slots. Tests only; no
 package changes.
 
-**`plans/00005`, a tooltip on every input control, is built** (approved 2026-11-16;
-its steps 2 to 4). XamlQuality rises to `2026.4.1111`, test-only, and ScopedEditors runs its
+**`plans/00005`, a tooltip on every input control, shipped in ScopedEditors and AppServices
+`2026.4.1116`** (approved 2026-11-16; its steps 2 to 6, see Published). XamlQuality rises to
+`2026.4.1111`, test-only, and ScopedEditors runs its
 `BNXQ1011` in `tests/ScopedEditors.Tests/Accessibility/AxamlTooltipCoverageTests.cs`: 12 input controls
 inspected, nothing skipped, nothing found, where ten had no tooltip. Each of
 `PropertyEditorWrapper.axaml`'s six value inputs shows the property's `Description`, or its
@@ -86,8 +87,8 @@ no breaking change in the three ScopedEditors packages against `2026.4.1110`, no
 `.Avalonia` against `2026.4.1113`, and reports a break planted in ScopedEditors' `.Avalonia` as
 `CP0002`. `docs/scopededitors.md` gains "Upgrading from 2026.4.1110". **`AvaloniaDialogService`'s
 dialogs are left out** (decision 6): their eleven buttons and their `TextBox` have no tooltip, and no
-test can build them, for their names either (see Next, by family). Nothing is released: steps 5 and 6,
-each family's release on the maintainer's word and telling Templates the AppServices version, remain.
+test can build them, for their names either (see Next, by family). Both families released it at
+`2026.4.1116` on the maintainer's word of 2026-11-16, and Templates was told the version that day.
 
 **`plans/00002`, the UI-thread exception hook, shipped in AppServices `2026.4.1112`** (approved
 2026-11-11; its steps 2 to 6, see Published). `InstallAvaloniaHooks()` installs a handler on the UI thread's
@@ -166,8 +167,8 @@ shuts down the headless dispatcher, which every later test shares. Package valid
 `2026.4.1112`, packed as the next day's build, reports no breaking change in `.EntryPoint` or
 `.Avalonia`. `docs/appservices.md` gains "Upgrading from 2026.4.1112".
 
-**`plans/00004`, a smoke run that fails on a task exception nobody observed, is built** (approved
-2026-11-16; its steps 1 to 4), for the next AppServices release. The maintainer chose it on
+**`plans/00004`, a smoke run that fails on a task exception nobody observed, shipped in AppServices
+`2026.4.1116`** (approved 2026-11-16; its steps 1 to 6, see Published). The maintainer chose it on
 2026-11-13, through `choices` in the Templates session: a smoke run proves a build by its exit code,
 and a background failure no collection found before the run ended never reached it.
 `AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions`, off by default, has `InstallAvaloniaHooks()`
@@ -194,19 +195,13 @@ and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading fro
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-2. **Templates' change is its own** (`plans/00003` step 5, told on 2026-11-13), and
-   JanusMael/Bennewitz.Ninja.Templates#97 makes it, the maintainer's choice that day: the four app
-   templates pin `2026.4.1113`, and `bbavalonia` sets `ShowUnobservedTaskExceptions = !App.Smoke`
-   beside its `HandleUiThreadExceptions = !App.Smoke`. It merged on 2026-11-13, and Templates
-   `2026.4.1113`, released that day, ships it.
-3. **AppServices' next release carries `plans/00004` and `plans/00005`, and ScopedEditors' carries
-   `plans/00005`**, each on the maintainer's word (each plan's step 5). Then Templates is told the
-   AppServices version, and the line `bbavalonia` needs beside its other two,
-   `FailOnUnobservedTaskExceptions = App.Smoke` (each plan's step 6); the change to the template is
-   Templates'.
-4. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
+2. **Templates' change is its own** (`plans/00004` and `plans/00005` step 6, told on 2026-11-16): the
+   app templates take `2026.4.1116`, and `bbavalonia` sets `FailOnUnobservedTaskExceptions = App.Smoke`
+   beside its `HandleUiThreadExceptions` and `ShowUnobservedTaskExceptions` lines, on the maintainer's
+   word.
+3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
    maintainer's word when the family next changes. The policy names this repository and covers all
-   eight ids: ScopedEditors' three pushed at `2026.4.1110`, AppServices' five at `2026.4.1113`.
+   eight ids, each pushed at `2026.4.1116`.
 
 ## Drift from `plans/00002`
 
@@ -358,6 +353,7 @@ All five ids ship together at every version.
 
 | Version | Tag | Verified |
 |---|---|---|
+| `2026.4.1116` | `appservices/v2026.4.1116` | `plans/00004` and `plans/00005`; release run `43931579532`. All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `31e9c7a`, and a project with nuget.org as its only source restored them |
 | `2026.4.1113` | `appservices/v2026.4.1113` | `plans/00003`; release run `43448071372`. All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `d14b1c5`, and a project with nuget.org as its only source restored them |
 | `2026.4.1112` | `appservices/v2026.4.1112` | `plans/00002`; release run `43253366608`, after GitHub failed to start the 2026-11-11 preflights (`startup_failure`, an internal error). All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `44438c7`, and a project with nuget.org as its only source restored them |
 | `2026.4.1110` | `appservices/v2026.4.1110` | First from AppKit; release run `42842847404`. All five ids listed by the nuget.org flat-container with a nuspec naming AppKit at `a1f42db`, and a project with nuget.org as its only source restored them |
@@ -373,6 +369,7 @@ The three ids ship together at every version.
 
 | Version | Tag | Verified |
 |---|---|---|
+| `2026.4.1116` | `scopededitors/v2026.4.1116` | `plans/00005`; release run `43931579797`. All three ids listed by the nuget.org flat-container with a nuspec naming AppKit at `31e9c7a`, and a project with nuget.org as its only source restored them |
 | `2026.4.1110` | `scopededitors/v2026.4.1110` | First from AppKit; release run `42842847901`. All three ids listed by the nuget.org flat-container with a nuspec naming AppKit at `a1f42db`, and a project with nuget.org as its only source restored them |
 | `2026.4.1103` | `scopededitors/v2026.4.1103` | All three ids listed by the nuget.org flat-container, and a project with nuget.org as its only source restored them |
 | `2026.4.1031` | `scopededitors/v2026.4.1031` | Listed; release run `41231920267` |
