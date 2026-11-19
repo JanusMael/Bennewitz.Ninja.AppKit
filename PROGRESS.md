@@ -73,6 +73,30 @@ Verified on Windows:
 
 Nothing ships, and neither family's packages changed.
 
+**Templates is the reference kit's canonical home** from 2026-11-17, by the maintainer's word
+(JanusMael/Bennewitz.Ninja.Templates#108). There the checkouts live under `reference/src/<name>`,
+ignored by the one line `/reference/src`, and on Windows the script refuses to fetch until long paths
+are enabled. JanusMael/Bennewitz.Ninja.Templates#109, merged on 2026-11-19, makes
+`repo-conventions check --repo` require that line of a repository that keeps the kit. This repository
+runs its own copy of `repo-conventions.cs`, so its CI and its release stay green until it takes the
+layout. By the maintainer's choice of 2026-11-17 it takes it in a pull request of its own once Templates
+releases #109, in one change:
+- the script, its shields and `repo-conventions.cs` from Templates, since its own `check` fails without
+  the last;
+- `/reference/src` in `.gitignore` in place of `/reference/*/`, and each `dir` in `sources.json` under
+  `reference/src/`, the checkouts moved or fetched again;
+- the paths in `reference/README.md`, `reference/AGENTS.md`, the root `AGENTS.md` and here.
+
+Three repositories took the script from here before that:
+- DiffView (JanusMael/Bennewitz.Ninja.DiffView#59), whose CI ran it on Linux, macOS and Windows, where
+  this repository had measured it on Windows alone;
+- Inspections (JanusMael/Bennewitz.Ninja.Inspections#145), where `--update` migrated its old one-line
+  records;
+- ClaudeForge (JanusMael/ClaudeForge#166), with Semi.Avalonia 12.1.0.1.
+
+A checkout reached through a symbolic link was never accepted here, whatever the ignore line: git
+refuses a pathspec beyond a link, and the script exits 2. Templates' layout fixes it, with a test.
+
 **ScopedEditors runs `BNXQ1009` and `BNXQ1010`** from 2026-11-09, by the owner's choice, in
 `tests/ScopedEditors.Tests/Accessibility/GeneratedRowRuleTests.cs`: the rows a list generates are
 named by what they show and draw a background of their own. Each reads the strict enum's `ComboBox`,
@@ -116,7 +140,7 @@ no breaking change in the three ScopedEditors packages against `2026.4.1110`, no
 `.Avalonia` against `2026.4.1113`, and reports a break planted in ScopedEditors' `.Avalonia` as
 `CP0002`. `docs/scopededitors.md` gains "Upgrading from 2026.4.1110". **`AvaloniaDialogService`'s
 dialogs are left out** (decision 6): their eleven buttons and their `TextBox` have no tooltip, and no
-test can build them, for their names either (see Next, by family). Both families released it at
+test could build them then, for their names either; `plans/00007` takes them in. Both families released it at
 `2026.4.1116` on the maintainer's word of 2026-11-16, and Templates was told the version that day.
 
 **`plans/00002`, the UI-thread exception hook, shipped in AppServices `2026.4.1112`** (approved
@@ -217,23 +241,40 @@ found and reported, and 0.1 to 0.2 ms with the switch off (five runs each, Windo
 planted breaks turned the tests aimed at it red.
 Package validation against `2026.4.1113` reports no breaking change in `.EntryPoint` or `.Avalonia`,
 and reports a planted one (`CP0002`). `docs/appservices.md` gains "Upgrading from 2026.4.1113".
+Templates took it in JanusMael/Bennewitz.Ninja.Templates#103 and released it in its `2026.4.1116`:
+`bbavalonia` sets `FailOnUnobservedTaskExceptions = App.Smoke` beside its other two switches. On a
+generated app run with `--smoke`, a task exception nobody observed exits 1, a cancellation exits 0, and
+so does the first with the line set to false.
+
+**`plans/00007` and `plans/00008` are approved** (2026-11-17), to be built as one body of work and
+released together, every breaking change in one release, by the maintainer's word: "if we are gonna
+break things lets do them all at once".
+- `plans/00007` makes `AvaloniaDialogService`'s six dialogs window classes a test builds. It then gives
+  every window the package builds names, tooltips, automation ids, and colours from `AppServices.*`
+  keys for Light and Dark, and renames the code pane's keys to `AppServices.CodeBlock*`.
+- `plans/00008` lets a host replace every string those windows show, through `DialogStrings.Resolver`.
+  `IDialogService.ShowConfirmAsync`'s labels default to null, meaning the host's words, and
+  `FatalErrorDialog.DefaultMessage` goes.
+- `plans/00006`, the theme switch, waits for both, and is revised to build on them.
 
 **Next, in order:**
-1. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
+1. **`plans/00007` steps 2 to 6 and `plans/00008` steps 2 and 3**, one body of work: the six window
+   classes and the owner seam; names, tooltips, ids and the 📋 and ↗ buttons; the dictionary, its keys
+   and its merge; the sweeps; `DialogStrings`; the docs.
+2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
+   ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
+   XamlQuality gets the Avalonia findings.
+3. **`plans/00006`** is revised to build on both, then put to the maintainer.
+4. **AppKit takes Templates' `reference/src` layout** in a pull request of its own once Templates
+   releases #109 (above).
+5. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
    2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-2. **Templates' change is its own** (`plans/00004` and `plans/00005` step 6, told on 2026-11-16): the
-   app templates take `2026.4.1116`, and `bbavalonia` sets `FailOnUnobservedTaskExceptions = App.Smoke`
-   beside its `HandleUiThreadExceptions` and `ShowUnobservedTaskExceptions` lines, on the maintainer's
-   word. JanusMael/Bennewitz.Ninja.Templates#103 makes it, unmerged on 2026-11-16, its release on his
-   word. Templates measured a generated app run with `--smoke`: a task exception nobody observed,
-   planted with no collection of its own, exits 1; a planted cancellation exits 0; and so does the
-   first with the line set to false.
-3. **Each family's next release** is a family release, `appservices/v…` or `scopededitors/v…`, on the
-   maintainer's word when the family next changes. The policy names this repository and covers all
-   eight ids, each pushed at `2026.4.1116`.
+6. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
+   when the family next changes. The policy names this repository and covers all eight ids, each pushed
+   at `2026.4.1116`.
 
 ## Drift from `plans/00002`
 
@@ -425,10 +466,6 @@ The three ids ship together at every version.
    - The finder's verdict waits on its CI. These tests already keep no warm-up (`tests/AGENTS.md`).
 2. `LiveLogWindowSink` and its windows stay in OpenForge2k until they can ship together; nothing here
    is scheduled for them.
-3. **`AvaloniaDialogService`'s dialogs have no tooltips, and no test checks their names either.**
-   Each is built only once the app has a desktop main window, so no test reaches it. `plans/00005`
-   left them out (decision 6); reaching them means building their windows where a test can, a plan
-   of its own if the maintainer wants it.
 
 **ScopedEditors**
 1. **Per-assembly headless isolation is unverified**, as above. It is the candidate fix for the
