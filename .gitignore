@@ -15,5 +15,5 @@ test-results/
 *.suo
 *.swp
 
-# The checkouts reference/fetch-reference.cs fetches; the files beside them are tracked
-/reference/*/
+# The checkouts reference/fetch-reference.cs fetches, all in reference/src; the files in reference/ are tracked
+/reference/src

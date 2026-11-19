@@ -1,7 +1,7 @@
 # Reference sources
 
-This folder holds read-only checkouts of the upstream sources this repository builds against, each at
-the version the build pins:
+This folder holds read-only checkouts of the upstream sources this repository builds against, in
+`src/`, each at the version the build pins:
 
 | Source | Pinned by | Checked out |
 |---|---|---|
@@ -14,8 +14,16 @@ tests that show how upstream drives a feature. A search reads the exact version,
 instead of single files fetched through `gh api`. Nothing automated reads them: no test, build or CI
 job.
 
-Each checkout is a folder of its own, and git ignores every folder here, through `/reference/*/` in
-`.gitignore`. The files beside them are tracked:
+Each checkout is a folder of its own in `src/`, and git ignores `src/` whole, through one line in
+`.gitignore`:
+
+```gitignore
+/reference/src
+```
+
+The line covers a fetched checkout, one not fetched yet, and one linked in from elsewhere, which is a
+symlink, and to git a file that a folder pattern such as `/reference/*/` does not match. It also covers
+anything else put in `src/`. The files here, beside `src/`, are tracked:
 
 | File | What it is |
 |---|---|
@@ -54,7 +62,17 @@ a line when a fetch starts, and one for each source as it finishes, with its sta
 | `<name> ...` | Takes only the sources named, in any case |
 
 It exits 0 when every source asked for is at its pin; 1 when one is missing, off its pin, or failed to
-fetch; and 2 on a usage error, or a problem with the manifest, a pin or `.gitignore`.
+fetch; and 2 on a usage error, a problem with the manifest, a pin or `.gitignore`, or long paths.
+
+**On Windows it runs only when long paths are enabled.** Git reads a path past 260 characters through
+`core.longpaths`, which the script sets on every checkout, but the other tools that read a checkout read
+one only when Windows' `LongPathsEnabled` is 1, and an upstream's test files in a deep work tree pass
+260. The script never changes the setting. Without it, it stops with exit 2 and prints the command an
+administrator runs:
+
+```powershell
+New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 1 -PropertyType DWord -Force
+```
 
 ## Where a pin comes from
 
@@ -84,7 +102,7 @@ source no package pins names its `ref`: a tag, a branch, or a commit's full hash
 | Field | Meaning |
 |---|---|
 | `name` | The source's name on the command line and in the report |
-| `dir` | Where it is checked out, relative to the repository root: a folder under `reference/` |
+| `dir` | Where it is checked out, relative to the repository root: a folder under `reference/src/` |
 | `packages` | The packages whose pinned version, and the commit their nuspecs record, make the pin |
 | `url` | The repository to fetch from. Beside `packages` it is optional, and must be theirs |
 | `tag` | Beside `packages`, a tag holding `{version}`, fetched only when the nuspecs record no commit |
@@ -103,7 +121,8 @@ would inherit this repository's: its packages, its analyzers, warnings as errors
 management, which fails every `PackageReference` that has a `Version` with NU1008, as it did in
 DiffView's CI. Avalonia.Controls.DataGrid ships no `Directory.Packages.props`, for one. The shields here
 end the walk: the first two hold nothing but a comment, and the third turns central package management
-off and pins nothing.
+off and pins nothing. They sit in `reference/`, not in `src/`, so the walk up from every checkout and
+from the script meets them.
 
 The script builds under them too, so it builds alike in every repository that keeps it, with the
 settings its `#:property` lines state, warnings as errors among them. It writes any shield that is
@@ -112,8 +131,8 @@ missing.
 ## Rules
 
 - **A checkout is read-only.** A change an upstream needs is a pull request to that upstream, never an
-  edit here. `git -C reference/<name> status` shows whether anything in a checkout was changed.
-- **A search reaches a checkout by its path**, as in `rg -n StyledElement reference/Avalonia/src`.
+  edit here. `git -C reference/src/<name> status` shows whether anything in a checkout was changed.
+- **A search reaches a checkout by its path**, as in `rg -n StyledElement reference/src/Avalonia/src`.
   Ripgrep, and the tools built on it, skip what `.gitignore` excludes, so a search of the repository
   leaves the checkouts out, as it should unless the task is about one.
 - **A raised package leaves its checkout `off-pin`** until

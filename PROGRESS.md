@@ -51,8 +51,9 @@ through `gh api`. `reference/fetch-reference.cs` merges DiffView's and XamlQuali
 name, and fetches each source at the commit its packages' nuspecs record for the pinned version,
 ClaudeForge's idea. `reference/sources.json` lists Avalonia 12.1.3 (`src` and `tests`),
 Avalonia.Controls.DataGrid 12.1.2 and Semi.Avalonia 12.1.0 (`src`). The script, its manifest, the
-README, `AGENTS.md` and three MSBuild shields are tracked; `/reference/*/` in `.gitignore` ignores the
-checkouts, and the script fetches nothing until git ignores each one. It builds under the shields with
+README, `AGENTS.md` and three MSBuild shields are tracked; `.gitignore` ignores the checkouts, through
+`/reference/*/` then and `/reference/src` since 2026-11-19 (below), and the script fetches nothing until
+git ignores each one. It builds under the shields with
 the settings its `#:property` lines state, so it builds alike in any repository that keeps it.
 Verified on Windows:
 
@@ -78,25 +79,32 @@ Nothing ships, and neither family's packages changed.
 ignored by the one line `/reference/src`, and on Windows the script refuses to fetch until long paths
 are enabled. JanusMael/Bennewitz.Ninja.Templates#109, merged on 2026-11-19, makes
 `repo-conventions check --repo` require that line of a repository that keeps the kit, and Templates
-released it in its `2026.4.1119` the same day. This repository runs its own copy of `repo-conventions.cs`,
-so its CI and its release stay green until it takes the layout, though Templates' `check --repo` reports
-it on `reference` and `drift` until then. By the maintainer's choice of 2026-11-17 it takes it in a pull
-request of its own, now that Templates has released #109, in one change:
-- the script, its shields and `repo-conventions.cs` from Templates, since its own `check` fails without
-  the last;
-- `/reference/src` in `.gitignore` in place of `/reference/*/`, and each `dir` in `sources.json` under
-  `reference/src/`, the checkouts moved or fetched again;
-- the paths in `reference/README.md`, `reference/AGENTS.md`, the root `AGENTS.md` and here.
+released it in its `2026.4.1119` the same day.
 
-Three repositories took the script from here before that:
+**This repository took that layout on 2026-11-19**, by the maintainer's choice of 2026-11-17, in a pull
+request of its own and one change. Before it, Templates' `check --repo` reported three findings here:
+`drift` on `scripts/repo-conventions.cs` and on `reference/fetch-reference.cs`, and `reference` for the
+missing line.
+- `reference/fetch-reference.cs`, its three shields and `scripts/repo-conventions.cs` are Templates'
+  `v2026.4.1119` copies, byte for byte. This repository's own `check` fails without the last.
+- `.gitignore` holds `/reference/src` in place of `/reference/*/`, each `dir` in `sources.json` is under
+  `reference/src/`, and the three checkouts moved there. The script reports each `present` at its pin.
+- `reference/README.md` and `reference/AGENTS.md` take Templates' account of the layout, the long paths
+  and the shields, beside this repository's own sources, and the root `AGENTS.md` names the folder.
+- **Verified on Windows.** `check` conforms. It fails on `reference` with the ignore line removed, and
+  takes `/reference/*/` in a checkout, where git is asked and ignores the folder: only an API read, as
+  `check --repo` makes, needs the line itself. `LongPathsEnabled` was already 1 here.
+
+Three repositories took the script from here before Templates became its home:
 - DiffView (JanusMael/Bennewitz.Ninja.DiffView#59), whose CI ran it on Linux, macOS and Windows, where
   this repository had measured it on Windows alone;
 - Inspections (JanusMael/Bennewitz.Ninja.Inspections#145), where `--update` migrated its old one-line
   records;
 - ClaudeForge (JanusMael/ClaudeForge#166), with Semi.Avalonia 12.1.0.1.
 
-A checkout reached through a symbolic link was never accepted here, whatever the ignore line: git
-refuses a pathspec beyond a link, and the script exits 2. Templates' layout fixes it, with a test.
+A checkout reached through a symbolic link was never accepted under `/reference/*/`, whatever its form:
+git refuses a pathspec beyond a link, and the script exited 2. The `reference/src` layout, which
+Templates tests, accepts one.
 
 **ScopedEditors runs `BNXQ1009` and `BNXQ1010`** from 2026-11-09, by the owner's choice, in
 `tests/ScopedEditors.Tests/Accessibility/GeneratedRowRuleTests.cs`: the rows a list generates are
@@ -449,23 +457,21 @@ break things lets do them all at once".
   and `check`, which conforms.
 
 **Next, in order:**
-1. **AppKit takes Templates' `reference/src` layout**, in a pull request of its own: Templates released it
-   in `2026.4.1119` (above).
-2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
+1. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
    it, and add `src/AGENTS.md`'s rule for windows. The Inspections session plans the reader, its number and
    its order the maintainer's to set there, and tells this repository its version and API on release.
-3. **`plans/00007` step 6 and `plans/00008` step 3**, the docs: the root `AGENTS.md`'s invariants on the
+2. **`plans/00007` step 6 and `plans/00008` step 3**, the docs: the root `AGENTS.md`'s invariants on the
    windows' colours and strings, and what `docs/appservices.md` still lacks.
-4. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
+3. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
    ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
    XamlQuality gets the Avalonia findings.
-5. **`plans/00006`** is revised to build on both, then put to the maintainer.
-6. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
+4. **`plans/00006`** is revised to build on both, then put to the maintainer.
+5. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
    2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-7. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
+6. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
    when the family next changes. The policy names this repository and covers all eight ids, each pushed
    at `2026.4.1116`.
 
