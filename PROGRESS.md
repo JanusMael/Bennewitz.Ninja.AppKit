@@ -257,10 +257,35 @@ break things lets do them all at once".
   `FatalErrorDialog.DefaultMessage` goes.
 - `plans/00006`, the theme switch, waits for both, and is revised to build on them.
 
+**`plans/00007` step 2: the six dialogs are window classes a test builds.**
+- **The classes.** `AlertDialog`, `MessageAlertDialog`, `ConfirmDialog`, `MessageConfirmDialog`,
+  `InputDialog` and `UnsavedChangesDialog` are internal and sealed, in `Dialogs/`. Each builds what its
+  method built and exposes its answer as `Result`. The helpers that render a `DialogMessage` and a
+  category's header moved with them, to `DialogMessageContent` and `DialogChrome`. A script that compares
+  the old file's lines with the new files' accounts for every line the move changed: initializers become
+  statements, locals become properties, calls take their class's name.
+- **The seam.** Each method of `AvaloniaDialogService` asks `FindOwner` for the window to show over. With
+  none it returns its answer for no window; otherwise it shows its dialog over that window with
+  `ShowDialog` and returns `Result`. `FindOwner` is the main window of the running application's desktop
+  lifetime, unless a test replaces it.
+- **The tests.** `DialogWindowTests` drives each dialog alone: each button, Enter and Escape where they
+  are wired, and a close without a button. `AvaloniaDialogServiceTests` drives each method end to end
+  over a shown window. With no owner, each method, the pickers included, answers at once and opens no
+  window.
+- **Seen red.** 36 of 38 planted breaks turned the tests aimed at them red, one at a time, each run
+  against the two classes. The two that survived are under Drift: the input box's own Enter branch,
+  which its OK button's default repeats, and the seam's default reading the running application.
+- **Unchanged surface.** Package validation against `2026.4.1116` reports no breaking change in
+  `.Avalonia`, and reports a public member planted internal as `CP0002`. The Avalonia package's public
+  surface, listed by reflection before and after, is the same 65 lines, but for the build stamp
+  AutoVersioning writes into every build.
+- **Verified on Windows.** Build with warnings as errors, 806 tests (791 passed, 15 skipped as before),
+  and `check`, which conforms.
+
 **Next, in order:**
-1. **`plans/00007` steps 2 to 6 and `plans/00008` steps 2 and 3**, one body of work: the six window
-   classes and the owner seam; names, tooltips, ids and the 📋 and ↗ buttons; the dictionary, its keys
-   and its merge; the sweeps; `DialogStrings`; the docs.
+1. **`plans/00007` steps 3 to 6 and `plans/00008` steps 2 and 3**, one body of work on top of step 2:
+   names, tooltips, ids and the 📋 and ↗ buttons; the dictionary, its keys and its merge; the sweeps;
+   `DialogStrings`; the docs.
 2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
    ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
    XamlQuality gets the Avalonia findings.
@@ -407,6 +432,42 @@ break things lets do them all at once".
     tooltip that is not a string as one.
 - **`tests/AGENTS.md`'s ScopedEditors section** also said its project references all of `src/`; it
   names the family's three projects now.
+
+## Drift from `plans/00007`
+
+- **A button has a template on the headless platform with no theme loaded.** The plan's "What exists"
+  says a test's button has none. Avalonia 12.1.3 gives every `ContentControl`, a window and a button
+  among them, a default template holding a `PART_ContentPresenter` (`ContentControl.cs`, 47 to 63).
+  So a shown window puts its content in the visual tree, and a button's `IsDefault` and `IsCancel`
+  hear Enter and Escape on it with no theme. A text box has no template and still takes focus and typed
+  text (measured 2026-11-19). Step 2's tests run on `HeadlessTestApp` as it is, and `Semi.Avalonia`
+  joins the test project with step 3, which measures under it.
+- **Measured first, as step 2 asks.** On the headless platform, a dialog shown with `ShowDialog` over a
+  shown window is listed among that window's `OwnedWindows` and reports `IsDialog` while it is open, and
+  the task `ShowDialog` returns completes as it closes. So the owner seam does not take the show step,
+  and every method is driven end to end. Enter on such a dialog presses its default button, never the
+  owner's, though the owner's had focus.
+- **"No window built" is tested as no window opened.** A class handler on `Window.WindowOpenedEvent`
+  sees every window shown. Nothing a test can read sees a window constructed and never shown, short of
+  replacing the windowing platform.
+- **The input box answers Enter twice.** With focus in the box, Enter runs the box's own handler, which
+  takes the trimmed text and closes the window, and then the OK button's default, which does the same.
+  So a break planted in the box's Enter branch survives, and one in OK's handler fails the Enter test
+  too. Escape runs the box's branch and then the cancel button, which closes with no answer: only a
+  break that gives Escape an answer is seen. Step 2 moves code without changing it, so both branches
+  stay.
+- **The seam's default is guarded by its code alone where it reads the running application.**
+  `DesktopMainWindow`, which takes the application, is tested with one that was never set up. The
+  headless application's lifetime cannot be set once it is set up, and `AvaloniaLocator`, which would
+  swap the application, is Avalonia's private API. So a planted default that finds nothing survives.
+- **What the plan leaves open, settled here:**
+  - the seam is `FindOwner`, a `Func<Window?>` on each service, named as `UiThreadExceptions.OpenDialog`
+    is; the pickers and the Save Changes factory ask it too, since they read the same main window
+    before;
+  - `icon ?? DialogAppIcon` stays in the service, and each class takes the icon it shows;
+  - each class exposes the controls a test drives as internal properties, and its answer as `Result`;
+  - the two helper classes are internal and static, their bodies unchanged;
+  - the tests press a button through its automation peer's invoke, as UI Automation presses it.
 
 ## What the merge changed for consumers
 
