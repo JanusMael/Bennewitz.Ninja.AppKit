@@ -46,7 +46,7 @@ internal sealed class MessageConfirmDialog : Window
             IsDefault = category != DialogCategory.Destructive,
             MinWidth = 70,
         };
-        DialogChrome.ApplyDestructiveStyle(ConfirmButton, category);
+        DialogChrome.ApplyDestructiveStyle(this, ConfirmButton, category);
         AutomationProperties.SetAutomationId(ConfirmButton, DialogAutomationIds.Confirm);
         ToolTip.SetTip(ConfirmButton, DialogTips.Confirm);
 

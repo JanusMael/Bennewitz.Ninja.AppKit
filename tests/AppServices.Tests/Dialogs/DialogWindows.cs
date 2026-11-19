@@ -28,6 +28,12 @@ internal static class DialogWindows
     /// <summary>The second link in <see cref="Message"/>.</summary>
     internal const string SecondLink = "https://example.com/questions";
 
+    /// <summary>The text of the first link in <see cref="Message"/>.</summary>
+    internal const string FirstLinkText = "the guide";
+
+    /// <summary>The text of the second link in <see cref="Message"/>.</summary>
+    internal const string SecondLinkText = "the questions";
+
     /// <summary>The windows, each with what builds it and the ids its interactive controls carry.</summary>
     internal static IReadOnlyList<Entry> All { get; } =
     [
@@ -79,8 +85,8 @@ internal static class DialogWindows
         return DialogMessage.Builder()
                             .Text("Saved ").Path(FirstPath)
                             .Text(" and ").Path(SecondPath)
-                            .Text("; read ").Hyperlink("the guide", FirstLink)
-                            .Text(" or ").Hyperlink("the questions", SecondLink)
+                            .Text("; read ").Hyperlink(FirstLinkText, FirstLink)
+                            .Text(" or ").Hyperlink(SecondLinkText, SecondLink)
                             .Text(".\nThis line holds no button.")
                             .Code("{ \"answer\": 42 }")
                             .Text("\n\nNothing else changed.")

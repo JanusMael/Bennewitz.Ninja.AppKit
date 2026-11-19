@@ -335,9 +335,65 @@ break things lets do them all at once".
 - **Verified on Windows.** Build with warnings as errors, 873 tests (858 passed, 15 skipped as before),
   and `check`, which conforms.
 
+**`plans/00007` step 4: the dictionary, its keys, the destructive states and the merge.**
+- **The keys.** `DialogColors`, internal, is a resource dictionary whose Light, Dark and Default theme
+  dictionaries declare the ten `AppServices.*` keys with the plan's values, the Default holding the Light
+  ones. Every colour a window shows is read through `DialogColors.Brush`, a dynamic resource, so an open
+  window follows a change of theme. The unreachable `#888888` went, and step 3's transparent fill is
+  `DialogColors.NoFill`, so nothing outside the dictionary's type makes a colour or a brush.
+- **The breaking change.** The code pane reads `AppServices.CodeBlockBackgroundBrush` and
+  `AppServices.CodeBlockBorderBrush`, and no longer `AppCodeBlock*`. The commit is marked `!`, and
+  `docs/appservices.md` gains "Dialog colours", the keys and how a host overrides one, and "Upgrading
+  from 2026.4.1116", which also names the colours in Dark and step 3's buttons.
+- **The destructive states.** A destructive button takes its fill and label from its keys. Two styles
+  `DialogChrome` adds to its window paint the button's `PART_ContentPresenter`, fill and label, pointed at
+  and pressed, the pointed-at style first, so a press by the mouse, which is pointed at too, takes the
+  pressed fill.
+- **The merge.** `DialogColors.Brush`'s first call in an application inserts a new instance at index 0 of
+  the application's merged dictionaries, unless the merged dictionaries hold one already. A window that
+  reads no key merges nothing: `ConfirmDialog`, `InputDialog`, `FatalErrorDialog`, `NonFatalNoticeDialog`,
+  and an `AlertDialog` that is not an error.
+- **The tests.** `DialogColorTests`, 53:
+  - each key declared for Light, Dark and Default, with the plan's value, and nothing else declared;
+  - each measured colour against its stand-in window, and the destructive label on each of its fills in
+    both themes;
+  - each window that reads a key, shown, takes each colour from the package's dictionary in Light, Dark
+    and Light again, and the Light colours under a theme variant that inherits neither; with a host's
+    colours, which differ between the themes for every key, it follows each change, a destructive
+    button's pointed at and pressed included;
+  - under Semi, in Light and in Dark, a destructive button filled from its keys at rest, pointed at,
+    pressed by the mouse and pressed by Space, its label white throughout, and under a style that paints
+    a button's label as Fluent's does, its label still white;
+  - a host's keys win, declared among the application's own resources, or in a dictionary it merges
+    before the first dialog or once one is open;
+  - building each window that reads a key twice merges one dictionary, at index 0; a second application
+    gets an instance of its own; a window that reads no key merges nothing; and every window in
+    `DialogWindows` has its row in the tests' table of colours.
+- **Seen red.** Each of 25 planted breaks turned the tests aimed at it red, one at a time, each run
+  against the class:
+  - in the dictionary: a value changed, a key missing from Dark, the Default holding Dark's values or
+    missing, and a Dark link and a destructive label below their contrast;
+  - in the merge: one instance shared between applications, the merge remembered by a flag, the
+    dictionary merged last, a new one for every key read, and none merged at all;
+  - in the windows: the header glyphs' keys swapped, the alert's glyph given the warning colour, a link's
+    literal colour back, the code pane reading the old key, the 📋 given the link colour, a path's colour
+    dropped, and the fatal dialog reading a key;
+  - in the destructive states: either style removed, the two in the wrong order, the label left to the
+    theme, and a fill read once and never followed, at rest or in a state;
+  - a window left out of the tests' table of colours.
+
+  As designed, two were each caught by one test alone: the label left to the theme by the style that
+  paints a button's label as Fluent's does, and a state's fill read once by the host's colours. The test
+  of a theme variant that inherits neither Light nor Dark came after that run: the Default dictionary
+  given Dark's values, and removed, each planted again, turned it red in every window.
+- **Unchanged surface.** The Avalonia package's public surface, listed by reflection, is the same as step
+  3's but for the build stamp: the dictionary, its keys and its helper are internal.
+- **Verified on Windows.** Build with warnings as errors, 926 tests (911 passed, 15 skipped as before),
+  and `check`, which conforms.
+
 **Next, in order:**
-1. **`plans/00007` steps 4 to 6 and `plans/00008` steps 2 and 3**, one body of work on top of step 3:
-   the dictionary, its keys and its merge; the sweeps; `DialogStrings`; the docs.
+1. **`plans/00007` steps 5 and 6 and `plans/00008` steps 2 and 3**, one body of work on top of step 4:
+   the sweeps and `src/AGENTS.md`'s rule for windows; `DialogStrings`; the docs.
 2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
    ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
    XamlQuality gets the Avalonia findings.
@@ -553,8 +609,31 @@ break things lets do them all at once".
     message lacks them;
   - the walker still walks each window unshown, and the table of windows is `DialogWindows`, which
     `plans/00008`'s marker walk reads.
-- **`Brushes.Transparent` is read outside the dictionary's type**, in a glyph's fill and in the styles,
-  which decision 8's sweep forbids from step 5: step 4's dictionary takes it in.
+- **The transparent fill comes from the dictionary's type**, as `DialogColors.NoFill`, since step 4.
+  Step 3 read `Brushes.Transparent` in a glyph's fill and in the styles, which decision 8's sweep forbids
+  outside that type.
+- **A destructive button's label is painted pointed at and pressed, beside its fill.** Decision 6 names
+  the presenter's fill. Fluent's button paints its presenter's label as well in both states (its
+  `Button.xaml`, 48 and 58), dark on the destructive red. `AppServices.Tests` references no Fluent, so a
+  test adds a style that paints a button's label as Fluent's does; with the label's setter removed, that
+  test alone turned red, since Semi leaves the label alone.
+- **That a destructive button's colours follow a change of theme is shown with a host's colours.** The
+  package gives its four keys one value in both themes, so a fill read once, never followed, passes every
+  test of the package's own values. A host's colours differ between the themes for every key, and a fill
+  read once turned that test red.
+- **`docs/appservices.md` changed with step 4, ahead of step 6.** The root `AGENTS.md` gives a breaking
+  change its line in the family's README in the commit that makes it, so "Dialog colours" and "Upgrading
+  from 2026.4.1116" came with the keys' rename; step 6 adds what is left.
+- **More is tested than the plan names:** a press by Space as well as the mouse; each window under a theme
+  variant that inherits neither Light nor Dark, which decision 6 gives the Default dictionary for; and
+  every window that reads no key merging nothing, the internal ones among them.
+- **What the plan leaves open for step 4, settled here:**
+  - the dictionary is `DialogColors`, internal and sealed, a `ResourceDictionary` holding the keys as
+    constants, the helper `Brush` and `NoFill`; its brushes are immutable;
+  - the helper merges on its first call in an application, so the first window that reads a key merges,
+    while it is built; with no application it merges nothing;
+  - a destructive button carries the class `dialog-destructive`, which its window's two styles select;
+  - the stand-in windows and the thresholds are the tests' constants, and the contrast is WCAG 2's.
 
 ## What the merge changed for consumers
 
