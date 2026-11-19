@@ -282,10 +282,62 @@ break things lets do them all at once".
 - **Verified on Windows.** Build with warnings as errors, 806 tests (791 passed, 15 skipped as before),
   and `check`, which conforms.
 
+**`plans/00007` step 3: names, tooltips and ids, and the 📋 and ↗ buttons.**
+- **Every interactive control in the eight windows** has a name its automation peer reports, a tooltip
+  and an automation id unique in its window: the six dialogs, and `FatalErrorDialog` and
+  `NonFatalNoticeDialog`, which gain ids. An id is `Dialog` and the control's role, from
+  `DialogAutomationIds`, and a role a message repeats is numbered from its second, `DialogCopyPath2`. The
+  input box is named by its prompt. The new tooltips are `DialogTips`, in `plans/00008`'s defaults.
+- **The 📋 after a path and the ↗ after a link are buttons** in their text block's line. Each has a
+  transparent fill, no border, no padding, no minimum size and the text's weight. The styles the message
+  renderer adds to its window keep a theme from filling one pointed at or pressed. Tab reaches each,
+  Enter and Space press it, and UI Automation invokes it. A ↗ hands its link to
+  `DialogMessageContent.OpenLink`, which a test replaces.
+- **The tests.** `DialogAccessibilityTests` walks every window in `DialogWindows`, the tests' table of
+  windows, reading each name from the control's peer: a name with no symbol in one the package gives, a
+  tooltip, and an id unique in its window, each window's ids pinned. A window class the package declares
+  that the table lacks fails. `DialogGlyphButtonTests` runs in each window that shows a message. There a
+  click through the headless mouse, Enter, Space and UI Automation's invoke each make a 📋 copy its path
+  and a ↗ hand its link to the opener. Tab reaches each, two clicks select no text, and a 📋 says
+  "Copied!" and keeps its name. Enter on a focused 📋 copies and leaves a confirmation open. Under Semi,
+  which `AppServices.Tests` now references and a test adds to its own application, each glyph button is
+  as big as its glyph, no taller than a line of its text and drawn at the text's weight. It stays
+  unfilled pointed at and pressed, by the mouse or by Space.
+- **Measured first, as the step asks**, on the headless platform under Semi and with no theme:
+  - a button's and a text box's peers report their automation name;
+  - a selectable text block's peer reports its text, U+FFFC where each inline control sits, and ignores
+    an automation name;
+  - an `InlineUIContainer`'s child is in its text block's logical tree, shown or not;
+  - Tab reaches a button in a text block's line with nothing set;
+  - a click on a glyph button selects no text, nor does a press dragged off it.
+- **Seen red.** Each of 30 planted breaks turned the tests aimed at it red, one at a time, each run
+  against the two classes:
+  - a name, a tooltip or an id removed: a glyph's name, the input's, a message's tooltip, an alert's OK,
+    Don't Save's id and the fatal dialog's Close;
+  - a symbol in a name: 📋 before a copy button's words, ↗ after an open button's, and 📋 kept in the
+    notice's Copy to Clipboard;
+  - an id repeated, by hand or by a role left unnumbered, and the code pane's text given the text's id;
+  - a glyph made a text block again, its press let through to its text block, no tab stop, a null fill,
+    and the theme's minimum height, padding, border or weight left on it;
+  - the styles that clear the fills removed, both, the pressed one alone and the pointed-at one alone;
+    the fills cleared to null; the unsaved-changes prompt left without them;
+  - a copy that copies nothing, an open that hands the opener nothing, a 📋 that never says "Copied!"
+    and one renamed by it;
+  - a window class left out of the table.
+
+  Two survived the first run, and each led to a check:
+  - the theme's padding, which Semi gives a button on its left and right alone, so that no height shows
+    it, now fails a test that a glyph button is as big as its glyph;
+  - the pressed style removed alone, since a press by the mouse is pointed at as well, now fails a press
+    by Space.
+- **Unchanged surface.** The Avalonia package's public surface, listed by reflection, is the same 65
+  lines as step 2's but for the build stamp: the ids, the tooltips and the opener are internal.
+- **Verified on Windows.** Build with warnings as errors, 873 tests (858 passed, 15 skipped as before),
+  and `check`, which conforms.
+
 **Next, in order:**
-1. **`plans/00007` steps 3 to 6 and `plans/00008` steps 2 and 3**, one body of work on top of step 2:
-   names, tooltips, ids and the 📋 and ↗ buttons; the dictionary, its keys and its merge; the sweeps;
-   `DialogStrings`; the docs.
+1. **`plans/00007` steps 4 to 6 and `plans/00008` steps 2 and 3**, one body of work on top of step 3:
+   the dictionary, its keys and its merge; the sweeps; `DialogStrings`; the docs.
 2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
    ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
    XamlQuality gets the Avalonia findings.
@@ -468,6 +520,41 @@ break things lets do them all at once".
   - each class exposes the controls a test drives as internal properties, and its answer as `Result`;
   - the two helper classes are internal and static, their bodies unchanged;
   - the tests press a button through its automation peer's invoke, as UI Automation presses it.
+- **The 📋 and ↗ have a transparent fill, where decision 5 says no background.** On the headless
+  platform the mouse finds only what paints a fill. Text takes no pointer and neither does a null fill,
+  so neither today's text glyph nor a button with no fill takes a click there; on a screen a null fill
+  takes the pointer only where the glyph is drawn. A transparent fill takes it over the whole button and
+  paints nothing (measured 2026-11-19).
+- **The window's styles clear a theme's fills to transparent, not to null.** Cleared to null, a glyph
+  pointed at no longer takes the pointer, so the press that follows never reaches it: planted, that
+  turned every click red.
+- **Tab reaches a glyph with nothing set.** A text block's tab navigation is `Continue` by default and
+  its inline controls are its visual children, so Tab goes from the block, a tab stop of its own as
+  before, to each glyph in its line, under Semi and with no theme (measured). The step's "where its text
+  block's tab navigation is otherwise set" did not arise.
+- **"No taller than its line" is read against a line of the same text block that holds no glyph.** A
+  line grows to hold what is in it, so a glyph is never taller than its own. Under Semi on the headless
+  platform a glyph is 14 high and a line of text 15.3; a line that holds glyphs is 18.1, the same as one
+  that holds today's text glyphs (measured).
+- **"The click selects no text" is tested with two clicks.** One click never selects text, and on the
+  headless platform a drag across text selects nothing either, since text takes no pointer. With a
+  glyph's press let through to its text block, planted, two clicks select the glyph's own U+FFFC.
+- **The glyph is drawn at the text's weight**, which the plan does not name: Semi draws a button's label
+  at 600, and the text glyph took the text's. A test holds it.
+- **What the plan leaves open for step 3, settled here:**
+  - the ids are `DialogAutomationIds`' constants, numbered by one `Sequence` for each message;
+  - the new tooltips are `DialogTips`' constants until `plans/00008` step 2 routes them through
+    `DialogStrings`;
+  - the input box is named through `AutomationProperties.Name`;
+  - the opener is a static `DialogMessageContent.OpenLink` with `ResetForTests`, as
+    `UiThreadExceptions.OpenDialog` is, and its default, the platform shell, is guarded by its code
+    alone, since a test that ran it would open a browser;
+  - the message renderer adds the fill styles to the window it renders into, so no window that shows a
+    message lacks them;
+  - the walker still walks each window unshown, and the table of windows is `DialogWindows`, which
+    `plans/00008`'s marker walk reads.
+- **`Brushes.Transparent` is read outside the dictionary's type**, in a glyph's fill and in the styles,
+  which decision 8's sweep forbids from step 5: step 4's dictionary takes it in.
 
 ## What the merge changed for consumers
 

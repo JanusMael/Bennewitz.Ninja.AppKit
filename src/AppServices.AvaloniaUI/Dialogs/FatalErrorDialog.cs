@@ -97,6 +97,7 @@ public sealed class FatalErrorDialog : Window
         const string DetailsHelp = "Read-only exception text; Copy to Clipboard copies all of it";
         AutomationProperties.SetName(exBox, "Error details");
         AutomationProperties.SetHelpText(exBox, DetailsHelp);
+        AutomationProperties.SetAutomationId(exBox, DialogAutomationIds.Details);
         ToolTip.SetTip(exBox, DetailsHelp);
 
         ScrollViewer scroll = new()
@@ -117,6 +118,7 @@ public sealed class FatalErrorDialog : Window
         const string CopyHelp = "Copy the full error details to the clipboard";
         AutomationProperties.SetName(copyBtn, "Copy to Clipboard");
         AutomationProperties.SetHelpText(copyBtn, CopyHelp);
+        AutomationProperties.SetAutomationId(copyBtn, DialogAutomationIds.Copy);
         ToolTip.SetTip(copyBtn, CopyHelp);
         copyBtn.Click += OnCopyClick;
 
@@ -126,6 +128,7 @@ public sealed class FatalErrorDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
         };
         AutomationProperties.SetName(closeBtn, "Close");
+        AutomationProperties.SetAutomationId(closeBtn, DialogAutomationIds.Close);
         ToolTip.SetTip(closeBtn, "Close this window");
         closeBtn.Click += (_, _) => Close();
 

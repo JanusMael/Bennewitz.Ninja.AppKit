@@ -26,6 +26,12 @@
     <PackageReference Include="Avalonia.Headless" />
   </ItemGroup>
 
+  <!-- Semi, ClaudeForge's theme, for the tests that measure a dialog under a theme (plans/00007):
+       a test adds it to its own application's styles, and HeadlessTestApp loads none. -->
+  <ItemGroup>
+    <PackageReference Include="Semi.Avalonia" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Bennewitz.Ninja.AssemblyQuality" />
   </ItemGroup>

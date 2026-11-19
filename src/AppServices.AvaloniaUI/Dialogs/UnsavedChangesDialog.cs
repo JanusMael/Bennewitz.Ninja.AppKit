@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Bennewitz.Ninja.AppServices.Abstractions;
@@ -27,12 +28,18 @@ internal sealed class UnsavedChangesDialog : Window
         // Save is the safe default (Enter triggers it): users who reflexively
         // hit Enter after clicking close should save, not lose work.
         SaveButton = new Button { Content = "Save", IsDefault = true, MinWidth = 90 };
+        AutomationProperties.SetAutomationId(SaveButton, DialogAutomationIds.Save);
+        ToolTip.SetTip(SaveButton, DialogTips.Save);
         // Don't Save is destructive — explicitly NOT default so Enter doesn't
         // accidentally discard work.  No special key binding.
         DontSaveButton = new Button { Content = "Don't Save", MinWidth = 90 };
         DialogChrome.ApplyDestructiveStyle(DontSaveButton, DialogCategory.Destructive);
+        AutomationProperties.SetAutomationId(DontSaveButton, DialogAutomationIds.DontSave);
+        ToolTip.SetTip(DontSaveButton, DialogTips.DontSave);
         // Cancel keeps the window open.  IsCancel = true wires Escape.
         CancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 90 };
+        AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
+        ToolTip.SetTip(CancelButton, DialogTips.KeepOpen);
 
         StackPanel buttonRow = new()
         {

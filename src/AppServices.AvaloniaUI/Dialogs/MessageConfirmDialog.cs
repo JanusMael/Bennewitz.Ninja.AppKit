@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
@@ -46,8 +47,12 @@ internal sealed class MessageConfirmDialog : Window
             MinWidth = 70,
         };
         DialogChrome.ApplyDestructiveStyle(ConfirmButton, category);
+        AutomationProperties.SetAutomationId(ConfirmButton, DialogAutomationIds.Confirm);
+        ToolTip.SetTip(ConfirmButton, DialogTips.Confirm);
 
         CancelButton = new Button { Content = cancelLabel, IsCancel = true, MinWidth = 70 };
+        AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
+        ToolTip.SetTip(CancelButton, DialogTips.Cancel);
 
         StackPanel buttonRow = new()
         {

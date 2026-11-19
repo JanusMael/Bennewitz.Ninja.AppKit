@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
@@ -31,6 +32,8 @@ internal sealed class MessageAlertDialog : Window
             MinWidth = 70,
             Margin = new Thickness(0, 12, 0, 0),
         };
+        AutomationProperties.SetAutomationId(OkButton, DialogAutomationIds.Ok);
+        ToolTip.SetTip(OkButton, DialogTips.Ok);
 
         Title = DialogChrome.TitleWithGlyph(title, category);
         Width = 520;

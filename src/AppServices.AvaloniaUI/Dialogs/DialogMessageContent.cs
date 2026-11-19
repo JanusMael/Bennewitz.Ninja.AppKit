@@ -1,12 +1,16 @@
 using System.Diagnostics;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
 using Serilog;
 
@@ -17,22 +21,54 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 /// with its 📋, a link with its ↗, and code in a framed pane.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Moved out of <see cref="AvaloniaDialogService"/> with the dialogs that show a message
-/// (<c>plans/00007</c>, decision 1); what it builds is unchanged.
+/// (<c>plans/00007</c>, decision 1).
+/// </para>
+/// <para>
+/// Each block of text is a <see cref="SelectableTextBlock"/>, named by its text, as its automation peer
+/// names it, with a tooltip that says it can be selected and copied (decision 4). The 📋 after a path and
+/// the ↗ after a link are buttons in the block's line (decision 5): Tab reaches each, Enter and Space press
+/// it, and UI Automation invokes it. Each keeps the look of the text glyph it replaced: it has no border,
+/// no padding and no minimum size, its fill is transparent, and the window's styles keep the theme from
+/// filling its <c>PART_ContentPresenter</c> when it is pointed at or pressed. Keyboard focus still draws
+/// the theme's ring.
+/// </para>
+/// <para>
+/// ⚠ The fill is transparent, never null: a null fill takes no pointer, and on the headless platform
+/// neither does text, so a glyph with no fill could not be clicked there, and a fill cleared to null on
+/// pointer-over would let go of the pointer the moment it arrived (measured on 2026-11-19).
+/// </para>
 /// </remarks>
 internal static class DialogMessageContent
 {
+    /// <summary>The class of the 📋 and ↗ buttons, which the window's styles keep unfilled.</summary>
+    internal const string GlyphButtonClass = "dialog-glyph";
+
+    /// <summary>
+    /// Hands the link of a pressed ↗ to the user's browser: the platform shell, unless a test replaces it,
+    /// and <see cref="ResetForTests"/> puts it back.
+    /// </summary>
+    internal static Action<string> OpenLink { get; set; } = OpenWithShell;
+
+    /// <summary>Puts <see cref="OpenLink"/> back. Test-only.</summary>
+    internal static void ResetForTests()
+    {
+        OpenLink = OpenWithShell;
+    }
+
     /// <summary>
     /// Render a <see cref="DialogMessage"/>'s segments into a
     /// <see cref="SelectableTextBlock"/>'s inline collection.  Path segments
-    /// are rendered monospace + accent and followed by an inline 📋 glyph
-    /// that copies the path to the clipboard on click; hyperlink segments
-    /// render accent + underline and are followed by a ↗ glyph that opens
-    /// the URL in the user's default browser.
+    /// are rendered monospace + accent and followed by a 📋 button that
+    /// copies the path to the clipboard; hyperlink segments render accent +
+    /// underline and are followed by a ↗ button that opens the URL in the
+    /// user's default browser.
     /// </summary>
     internal static SelectableTextBlock BuildSegmentedTextBlock(DialogMessage message, Window dialogWindow)
     {
-        return BuildSegmentedTextBlockFor(message.Segments, dialogWindow);
+        KeepGlyphButtonsUnfilled(dialogWindow);
+        return BuildSegmentedTextBlockFor(message.Segments, dialogWindow, new DialogAutomationIds.Sequence(), isCode: false);
     }
 
     /// <summary>
@@ -43,12 +79,14 @@ internal static class DialogMessageContent
     /// <see cref="DialogMessage"/>.
     /// </summary>
     private static SelectableTextBlock BuildSegmentedTextBlockFor(
-        IEnumerable<DialogSegment> segments, Window dialogWindow)
+        IEnumerable<DialogSegment> segments, Window dialogWindow, DialogAutomationIds.Sequence ids, bool isCode)
     {
         SelectableTextBlock tb = new()
         {
             TextWrapping = TextWrapping.Wrap,
         };
+        AutomationProperties.SetAutomationId(tb, ids.Next(isCode ? DialogAutomationIds.Code : DialogAutomationIds.Text));
+        ToolTip.SetTip(tb, isCode ? DialogTips.SelectCode : DialogTips.SelectText);
 
         foreach (DialogSegment seg in segments)
         {
@@ -63,11 +101,11 @@ internal static class DialogMessageContent
                     break;
 
                 case DialogSegmentKind.Path:
-                    AppendPathRun(tb, seg.Value, dialogWindow);
+                    AppendPathRun(tb, seg.Value, dialogWindow, ids);
                     break;
 
                 case DialogSegmentKind.Hyperlink:
-                    AppendHyperlinkRun(tb, seg.Value, seg.Url ?? string.Empty);
+                    AppendHyperlinkRun(tb, seg.Value, seg.Url ?? string.Empty, ids);
                     break;
 
                 case DialogSegmentKind.Code:
@@ -107,11 +145,14 @@ internal static class DialogMessageContent
     /// </summary>
     internal static Control BuildSegmentedDialogContent(DialogMessage message, Window dialogWindow)
     {
+        KeepGlyphButtonsUnfilled(dialogWindow);
+        DialogAutomationIds.Sequence ids = new();
+
         // Fast-path: no Code segments → identical to the legacy inline renderer.
         // Keeps every other dialog visually unchanged.
         if (!message.Segments.Any(s => s.Kind == DialogSegmentKind.Code))
         {
-            return BuildSegmentedTextBlockFor(message.Segments, dialogWindow);
+            return BuildSegmentedTextBlockFor(message.Segments, dialogWindow, ids, isCode: false);
         }
 
         List<(bool IsCode, List<DialogSegment> Segments)> groups = GroupSegmentsByKind(message.Segments);
@@ -121,13 +162,13 @@ internal static class DialogMessageContent
             (bool isCode, List<DialogSegment> segs) = groups[i];
             if (isCode)
             {
-                stack.Children.Add(BuildCodePane(segs, dialogWindow));
+                stack.Children.Add(BuildCodePane(segs, dialogWindow, ids));
             }
             else
             {
                 bool precededByCode = i > 0 && groups[i - 1].IsCode;
                 List<DialogSegment> effectiveSegs = precededByCode ? TrimLeadingWhitespaceAfterCode(segs) : segs;
-                stack.Children.Add(BuildSegmentedTextBlockFor(effectiveSegs, dialogWindow));
+                stack.Children.Add(BuildSegmentedTextBlockFor(effectiveSegs, dialogWindow, ids, isCode: false));
             }
         }
 
@@ -197,11 +238,11 @@ internal static class DialogMessageContent
     /// <see cref="DynamicResourceExtension"/> so the pane re-themes when the
     /// user toggles light / dark.
     /// </summary>
-    private static Border BuildCodePane(List<DialogSegment> segs, Window dialogWindow)
+    private static Border BuildCodePane(List<DialogSegment> segs, Window dialogWindow, DialogAutomationIds.Sequence ids)
     {
         Border pane = new()
         {
-            Child = BuildSegmentedTextBlockFor(segs, dialogWindow),
+            Child = BuildSegmentedTextBlockFor(segs, dialogWindow, ids, isCode: true),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(10, 8),
@@ -212,12 +253,13 @@ internal static class DialogMessageContent
     }
 
     /// <summary>
-    /// Append a path segment: monospace + accent text run, then an inline
-    /// clipboard glyph that copies the path on click.  The glyph carries a
-    /// tooltip showing the full path so very long paths remain inspectable
-    /// without selecting and copying the run.
+    /// Append a path segment: monospace + accent text run, then a 📋 button
+    /// that copies the path.  Its tooltip shows the full path, so very long
+    /// paths remain inspectable without selecting and copying the run, and
+    /// becomes "Copied!" once it has copied; its name stays "Copy" and the
+    /// path, which says what a press does.
     /// </summary>
-    private static void AppendPathRun(SelectableTextBlock tb, string path, Window dialogWindow)
+    private static void AppendPathRun(SelectableTextBlock tb, string path, Window dialogWindow, DialogAutomationIds.Sequence ids)
     {
         Run pathRun = new(path)
         {
@@ -227,22 +269,13 @@ internal static class DialogMessageContent
         };
         tb.Inlines!.Add(pathRun);
 
-        TextBlock copyGlyph = new()
-        {
-            Text = "📋",
-            FontSize = 12,
-            Margin = new Thickness(2, 0, 0, 0),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Foreground = new SolidColorBrush(Color.Parse("#888888")),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        ToolTip.SetTip(copyGlyph, $"Copy {path}");
-
-        copyGlyph.PointerPressed += OnCopyGlyphPressed;
+        Button copyButton = GlyphButton(
+            "📋", 12, new SolidColorBrush(Color.Parse("#888888")), DialogTips.CopyPath(path), ids.Next(DialogAutomationIds.CopyPath));
+        copyButton.Click += OnCopyClick;
 
         // Async void, as an event handler has to be, so the whole body is guarded: a throw escaping
         // it would reach the dispatcher and end the process over a failed copy.
-        async void OnCopyGlyphPressed(object? sender, PointerPressedEventArgs e)
+        async void OnCopyClick(object? sender, RoutedEventArgs e)
         {
             try
             {
@@ -250,7 +283,7 @@ internal static class DialogMessageContent
                 if (top?.Clipboard is { } clip)
                 {
                     await clip.SetTextAsync(path);
-                    ToolTip.SetTip(copyGlyph, "Copied!");
+                    ToolTip.SetTip(copyButton, DialogTips.Copied);
                 }
             }
             catch (Exception ex)
@@ -263,22 +296,22 @@ internal static class DialogMessageContent
         // text's vertical centre. Default `Baseline` aligns the glyph's
         // bottom to the text baseline, which leaves the emoji floating
         // above the path text — visually mis-aligned. (Smoke-reported)
-        // Setting VerticalAlignment on the inner TextBlock
+        // Setting VerticalAlignment on the inner control
         // alone has no effect across the inline boundary.
         tb.Inlines.Add(new InlineUIContainer
         {
-            Child = copyGlyph,
+            Child = copyButton,
             BaselineAlignment = BaselineAlignment.Center,
         });
     }
 
     /// <summary>
     /// Append a hyperlink segment: accent + underlined label, then a small
-    /// ↗ glyph that opens the URL in the user's default browser via the
-    /// platform shell.  The visible label is the segment's <see cref="DialogSegment.Value"/>;
-    /// the URL is from <see cref="DialogSegment.Url"/>.
+    /// ↗ button that hands the URL to <see cref="OpenLink"/>.  The visible
+    /// label is the segment's <see cref="DialogSegment.Value"/>; the URL is
+    /// from <see cref="DialogSegment.Url"/>.
     /// </summary>
-    private static void AppendHyperlinkRun(SelectableTextBlock tb, string label, string url)
+    private static void AppendHyperlinkRun(SelectableTextBlock tb, string label, string url, DialogAutomationIds.Sequence ids)
     {
         Run linkRun = new(label)
         {
@@ -287,38 +320,98 @@ internal static class DialogMessageContent
         };
         tb.Inlines!.Add(linkRun);
 
-        TextBlock openGlyph = new()
-        {
-            Text = "↗",
-            FontSize = 11,
-            Margin = new Thickness(2, 0, 0, 0),
-            Cursor = new Cursor(StandardCursorType.Hand),
-            Foreground = new SolidColorBrush(Color.Parse("#1F6FEB")),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        ToolTip.SetTip(openGlyph, $"Open {url}");
-
-        openGlyph.PointerPressed += (_, _) =>
+        Button openButton = GlyphButton(
+            "↗", 11, new SolidColorBrush(Color.Parse("#1F6FEB")), DialogTips.OpenLink(url), ids.Next(DialogAutomationIds.OpenLink));
+        openButton.Click += (_, _) =>
         {
             if (string.IsNullOrEmpty(url))
             {
                 return;
             }
 
-            try
-            {
-                Process.Start(new ProcessStartInfo(url)
-                {
-                    UseShellExecute = true,
-                });
-            }
-            catch
-            {
-                // Shell-open failed — leave silent. The URL is still selectable
-                // in the SelectableTextBlock so the user can copy it manually.
-            }
+            OpenLink(url);
         };
 
-        tb.Inlines.Add(new InlineUIContainer { Child = openGlyph });
+        tb.Inlines.Add(new InlineUIContainer { Child = openButton });
+    }
+
+    /// <summary>
+    /// A 📋 or ↗ button, sized and coloured as the text glyph it replaced, named, and with a tooltip that
+    /// says what a press does.
+    /// </summary>
+    private static Button GlyphButton(string glyph, double fontSize, IBrush foreground, string name, string automationId)
+    {
+        Button button = new()
+        {
+            Content = glyph,
+            FontSize = fontSize,
+            // A theme's button may draw its label heavier; the glyph it replaced took the text's weight.
+            FontWeight = FontWeight.Normal,
+            Margin = new Thickness(2, 0, 0, 0),
+            Padding = new Thickness(0),
+            BorderThickness = new Thickness(0),
+            MinWidth = 0,
+            MinHeight = 0,
+            Background = Brushes.Transparent,
+            Cursor = new Cursor(StandardCursorType.Hand),
+            Foreground = foreground,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        button.Classes.Add(GlyphButtonClass);
+
+        // The visible label is the glyph; the name says what a press does, as the tooltip does, so a
+        // screen reader never reads the glyph's own name.
+        AutomationProperties.SetName(button, name);
+        AutomationProperties.SetAutomationId(button, automationId);
+        ToolTip.SetTip(button, name);
+        return button;
+    }
+
+    /// <summary>
+    /// Adds to <paramref name="dialogWindow"/> the styles that keep its 📋 and ↗ buttons unfilled when they
+    /// are pointed at or pressed, where a theme fills the button's <c>PART_ContentPresenter</c>.
+    /// </summary>
+    /// <remarks>
+    /// The window's styles are applied after the application's, so these win over the theme's own setters
+    /// for the same states; a theme whose button names its presenter otherwise keeps its fills.
+    /// </remarks>
+    private static void KeepGlyphButtonsUnfilled(Window dialogWindow)
+    {
+        dialogWindow.Styles.Add(UnfilledWhen(":pointerover"));
+        dialogWindow.Styles.Add(UnfilledWhen(":pressed"));
+    }
+
+    private static Style UnfilledWhen(string pseudoClass)
+    {
+        Style style = new(selector => selector
+            .OfType<Button>()
+            .Class(GlyphButtonClass)
+            .Class(pseudoClass)
+            .Template()
+            .OfType<ContentPresenter>()
+            .Name("PART_ContentPresenter"));
+        style.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.Transparent));
+        style.Setters.Add(new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent));
+        return style;
+    }
+
+    /// <summary>
+    /// Opens <paramref name="url"/> with the platform shell. A failure is left silent: the link's text can
+    /// still be selected and copied.
+    /// </summary>
+    private static void OpenWithShell(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(url)
+            {
+                UseShellExecute = true,
+            });
+        }
+        catch
+        {
+            // Shell-open failed — leave silent. The URL is still selectable
+            // in the SelectableTextBlock so the user can copy it manually.
+        }
     }
 }

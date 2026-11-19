@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -25,7 +26,11 @@ internal sealed class ConfirmDialog : Window
     internal ConfirmDialog(string title, string message, string confirmLabel, string cancelLabel, WindowIcon? icon)
     {
         ConfirmButton = new Button { Content = confirmLabel, IsDefault = false, MinWidth = 70 };
+        AutomationProperties.SetAutomationId(ConfirmButton, DialogAutomationIds.Confirm);
+        ToolTip.SetTip(ConfirmButton, DialogTips.Confirm);
         CancelButton = new Button { Content = cancelLabel, IsCancel = true, MinWidth = 70 };
+        AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
+        ToolTip.SetTip(CancelButton, DialogTips.Cancel);
 
         StackPanel buttonRow = new()
         {
