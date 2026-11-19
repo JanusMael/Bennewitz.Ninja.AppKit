@@ -1,6 +1,7 @@
 using System.Runtime.CompilerServices;
 using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 using Serilog;
 using Serilog.Events;
 
@@ -213,13 +214,14 @@ internal static class UiThreadExceptions
 
     /// <summary>
     /// Opens a <see cref="FatalErrorDialog"/> for <paramref name="exception"/>, titled as
-    /// <see cref="AvaloniaDiagnostics.ShowFatalErrorDialog"/> titles it, and calls
-    /// <paramref name="closed"/> once it closes. Unlike <see cref="FatalErrorDialog.ShowSafe"/>, it
-    /// throws when the dialog cannot be shown, which is how the handler knows to reopen its gate.
+    /// <see cref="AvaloniaDiagnostics.ShowFatalErrorDialog"/> titles it, with
+    /// <see cref="DialogStrings.TextFatalError"/>, and calls <paramref name="closed"/> once it closes. Unlike
+    /// <see cref="FatalErrorDialog.ShowSafe"/>, it throws when the dialog cannot be shown, which is how the
+    /// handler knows to reopen its gate.
     /// </summary>
     internal static void OpenFatalErrorDialog(Exception exception, Action closed)
     {
-        FatalErrorDialog dialog = new(AvaloniaDiagnostics.FatalErrorDialogTitle, FatalErrorDialog.DefaultMessage, exception);
+        FatalErrorDialog dialog = new(AvaloniaDiagnostics.FatalErrorDialogTitle, DialogStrings.TextFatalError, exception);
         dialog.Closed += (_, _) => closed();
         dialog.Show();
     }

@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Binding;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 using Bennewitz.Ninja.AppServices.Dialogs;
 using Bennewitz.Ninja.AppServices.EntryPoint;
 using Bennewitz.Ninja.AppServices.Logging;
@@ -105,11 +106,12 @@ public static class AvaloniaDiagnostics
     public static string? CurrentEventLogFilePath => _eventFileSink?.CurrentFilePath;
 
     /// <summary>
-    /// The title every <see cref="FatalErrorDialog"/> this package opens takes: <c>"Application Error —
-    /// {AppName}"</c>, or a neutral <c>"Application Error"</c> before <see cref="ConfigureLogging"/> has run.
+    /// The title every <see cref="FatalErrorDialog"/> this package opens takes:
+    /// <see cref="DialogStrings.TitleFatalError"/> with <see cref="AppName"/>, or
+    /// <see cref="DialogStrings.TitleFatalErrorNoApp"/> before <see cref="ConfigureLogging"/> has run.
     /// </summary>
     internal static string FatalErrorDialogTitle =>
-        string.IsNullOrWhiteSpace(AppName) ? "Application Error" : $"Application Error — {AppName}";
+        string.IsNullOrWhiteSpace(AppName) ? DialogStrings.TitleFatalErrorNoApp : DialogStrings.TitleFatalErrorFor(AppName);
 
     /// <summary>
     /// The host's <see cref="AvaloniaDiagnosticsOptions.IsBenignException"/>, read when an exception
@@ -337,17 +339,17 @@ public static class AvaloniaDiagnostics
     /// the window title. Convenience wrapper for host crash handlers;
     /// identical to calling <see cref="FatalErrorDialog.ShowSafe"/> with a
     /// caller-built title. Safe to call at any time — if
-    /// <see cref="ConfigureLogging"/> has not run the title falls back to a
-    /// neutral <c>"Application Error"</c>.
+    /// <see cref="ConfigureLogging"/> has not run the title falls back to
+    /// <see cref="DialogStrings.TitleFatalErrorNoApp"/>.
     /// </summary>
     /// <param name="message">User-facing header shown above the exception
     /// details. <c>null</c> uses
-    /// <see cref="FatalErrorDialog.DefaultMessage"/>.</param>
+    /// <see cref="DialogStrings.TextFatalError"/>.</param>
     /// <param name="exception">The exception whose
     /// <see cref="Exception.ToString"/> output is displayed.</param>
     public static void ShowFatalErrorDialog(string? message, Exception exception)
     {
-        FatalErrorDialog.ShowSafe(FatalErrorDialogTitle, message ?? FatalErrorDialog.DefaultMessage, exception);
+        FatalErrorDialog.ShowSafe(FatalErrorDialogTitle, message ?? DialogStrings.TextFatalError, exception);
     }
 
     /// <summary>
@@ -374,9 +376,10 @@ public static class AvaloniaDiagnostics
     /// <param name="message">Text to display in the dialog body.</param>
     public static void ShowNativeFatalError(string message)
     {
+        // Read on whichever thread failed, which is why DialogStrings.Resolver must never wait on the UI thread.
         string title = string.IsNullOrWhiteSpace(AppName)
-            ? "Application Error"
-            : $"{AppName} — Critical Error";
+            ? DialogStrings.TitleFatalErrorNoApp
+            : DialogStrings.TitleNativeFatalErrorFor(AppName);
         NativeErrorDialog.ShowFatalError(title, message);
     }
 

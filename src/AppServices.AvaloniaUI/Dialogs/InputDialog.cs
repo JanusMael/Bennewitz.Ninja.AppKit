@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 
@@ -35,14 +36,14 @@ internal sealed class InputDialog : Window
         // The box is named by the prompt above it, which is what the user is asked to type.
         AutomationProperties.SetName(InputBox, prompt);
         AutomationProperties.SetAutomationId(InputBox, DialogAutomationIds.Input);
-        ToolTip.SetTip(InputBox, DialogTips.Input);
+        ToolTip.SetTip(InputBox, DialogStrings.TipInput);
 
-        OkButton = new Button { Content = "OK", IsDefault = true, MinWidth = 70 };
+        OkButton = new Button { Content = DialogStrings.LabelOk, IsDefault = true, MinWidth = 70 };
         AutomationProperties.SetAutomationId(OkButton, DialogAutomationIds.Ok);
-        ToolTip.SetTip(OkButton, DialogTips.Accept);
-        CancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 70 };
+        ToolTip.SetTip(OkButton, DialogStrings.TipAccept);
+        CancelButton = new Button { Content = DialogStrings.LabelCancel, IsCancel = true, MinWidth = 70 };
         AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
-        ToolTip.SetTip(CancelButton, DialogTips.Cancel);
+        ToolTip.SetTip(CancelButton, DialogStrings.TipCancel);
 
         StackPanel buttonRow = new()
         {

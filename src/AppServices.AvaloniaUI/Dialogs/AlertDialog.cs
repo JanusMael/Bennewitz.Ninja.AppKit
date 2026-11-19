@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 
@@ -27,13 +28,13 @@ internal sealed class AlertDialog : Window
     {
         OkButton = new Button
         {
-            Content = "OK",
+            Content = DialogStrings.LabelOk,
             HorizontalAlignment = HorizontalAlignment.Center,
             MinWidth = 70,
             Margin = new Thickness(0, 12, 0, 0),
         };
         AutomationProperties.SetAutomationId(OkButton, DialogAutomationIds.Ok);
-        ToolTip.SetTip(OkButton, DialogTips.Ok);
+        ToolTip.SetTip(OkButton, DialogStrings.TipOk);
 
         // Use a SelectableTextBlock so the user can copy the text (e.g. error details).
         // Wrap it in a ScrollViewer so a very long message (e.g. many schema-validation
@@ -46,7 +47,7 @@ internal sealed class AlertDialog : Window
             TextWrapping = TextWrapping.Wrap,
         };
         AutomationProperties.SetAutomationId(textBlock, DialogAutomationIds.Text);
-        ToolTip.SetTip(textBlock, DialogTips.SelectText);
+        ToolTip.SetTip(textBlock, DialogStrings.TipSelectText);
 
         ScrollViewer scrollViewer = new()
         {

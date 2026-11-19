@@ -77,10 +77,11 @@ Nothing ships, and neither family's packages changed.
 (JanusMael/Bennewitz.Ninja.Templates#108). There the checkouts live under `reference/src/<name>`,
 ignored by the one line `/reference/src`, and on Windows the script refuses to fetch until long paths
 are enabled. JanusMael/Bennewitz.Ninja.Templates#109, merged on 2026-11-19, makes
-`repo-conventions check --repo` require that line of a repository that keeps the kit. This repository
-runs its own copy of `repo-conventions.cs`, so its CI and its release stay green until it takes the
-layout. By the maintainer's choice of 2026-11-17 it takes it in a pull request of its own once Templates
-releases #109, in one change:
+`repo-conventions check --repo` require that line of a repository that keeps the kit, and Templates
+released it in its `2026.4.1119` the same day. This repository runs its own copy of `repo-conventions.cs`,
+so its CI and its release stay green until it takes the layout, though Templates' `check --repo` reports
+it on `reference` and `drift` until then. By the maintainer's choice of 2026-11-17 it takes it in a pull
+request of its own, now that Templates has released #109, in one change:
 - the script, its shields and `repo-conventions.cs` from Templates, since its own `check` fails without
   the last;
 - `/reference/src` in `.gitignore` in place of `/reference/*/`, and each `dir` in `sources.json` under
@@ -187,7 +188,11 @@ posted job's cancellation, reported as a failure twice; a post to a dispatcher t
 dropped without a word; and `Dispatcher.UIThread`, read on another thread before any dispatcher
 exists, binding the UI thread there. A correction went with them: the second report was seen in a
 run hosting a headless session, not in an application on a real platform. All of it is in
-JanusMael/Bennewitz.Ninja.Inspections#139, merged on 2026-11-13.
+JanusMael/Bennewitz.Ninja.Inspections#139, merged on 2026-11-13. `plans/00004`'s headless-dispatch hang
+went the same way: Inspections reproduced it on Windows 11 and WSL 2 and put it in
+`docs/avalonia-gotchas.md` (JanusMael/Bennewitz.Ninja.Inspections#148, 2026-11-19), and CodeQuality's
+`BNCQ3002`, merged in JanusMael/Bennewitz.Ninja.Inspections#149 and not yet released, reports such a wait:
+over this repository it reports the wait at `89307bf`, before the fix, and nothing at `3a25858`.
 
 **ScopedEditors runs `BNAQ1005`** from 2026-11-12, by the maintainer's choice, so both families'
 tests run `BNAQ1001` to `BNAQ1005`; until then nothing checked what ScopedEditors' compiled assemblies
@@ -391,21 +396,76 @@ break things lets do them all at once".
 - **Verified on Windows.** Build with warnings as errors, 926 tests (911 passed, 15 skipped as before),
   and `check`, which conforms.
 
+**`plans/00008` step 2: `DialogStrings`, ahead of `plans/00007` step 5.**
+- **The strings.** `DialogStrings`, public and static in the Avalonia package's `Localization/`, holds
+  `plans/00008`'s 34 keys, each a property named for its key, read through `Resolver` when its window is
+  built. Every string the eight windows show that no caller passes is one of them, and so are the
+  pickers' titles when a caller passes none, the fatal dialogs' titles and message, and a confirmation's
+  labels when its caller passes none. Step 3's `DialogTips` went into it. A string that carries a value
+  takes it as `{0}`, put in with the current culture.
+- **The two breaking changes**, marked `!`. `IDialogService.ShowConfirmAsync`'s labels default to null,
+  which the service shows as `LabelConfirm` and `LabelCancel`, and `FatalErrorDialog.DefaultMessage` is
+  gone, `TextFatalError` in its place. `docs/appservices.md` gains "Dialog strings" and three lines under
+  "Upgrading from 2026.4.1116".
+- **A host's strings that fail.** A resolver that throws, or gives null or blank text, or a text whose
+  `{0}` cannot be filled, gives that string its default, and the first failure of each key is logged at
+  Warning, through a write that swallows a logger's throw. A key given back gives its default, unlogged.
+- **The tests.** `DialogStringsTests`, 29:
+  - the walk: each window in `DialogWindows`, built under a resolver that marks every key and with each
+    📋 pressed, shows no word but the host's and its caller's, and shows the keys `KeysShown` pins for it;
+    every window has its row, and every key is shown in a window or held by a test of its own;
+  - outside a window: each picker's title, the fatal dialogs' titles before and after the application is
+    named, their message, and a confirmation's labels through the service and through the contract, with
+    labels and without;
+  - the failures: each of decision 4's, one Warning for each key, none for a key given back, and the fatal
+    dialog built when the logger throws as well;
+  - every key with a property and `plans/00008`'s default, each property asking for its own name; no
+    default naming a product; and a change of the host's words reaching the next window, while an open
+    one keeps its own, a 📋's "Copied!" included.
+
+  `DialogWindows` names each string its rows pass, and lists them as `Given`.
+- **Seen red.** Each of 33 planted breaks turned the tests aimed at it red, one at a time, each run
+  against the class:
+  - in a window: the alert's OK, the notice's close tooltip, the fatal dialog's details help, a 📋's
+    "Copied!" and the input dialog's Cancel left English, and a code pane's tooltip read from the text's
+    key;
+  - outside one: the folder picker's title left English, and the save picker's title given ignored; the
+    fatal dialog's title, the native one's before and after the application is named, the handler's
+    message and `ShowFatalErrorDialog`'s left English, and a message given ignored; the contract's and the
+    service's confirm label defaulting to "Confirm", the cancel label for none left English, and a label
+    given ignored;
+  - the failures: a resolver's throw let through, null taken for blank, blank text shown, every failure
+    logged, a key given back logged or shown, a placeholder's `FormatException` let through, a logger's
+    throw let through, and `ResetForTesting` forgetting no failure;
+  - the keys: a default changed, a property reading another key, a default naming a product, a string read
+    once and kept, the 📋's name filled from the link's key, and "Copied!" read when the 📋 is pressed
+    rather than when its window is built.
+- **The surface.** Package validation against `2026.4.1116` reports `CP0002` for the removed
+  `FatalErrorDialog.DefaultMessage` in `.Avalonia`, and nothing in `.Abstractions`, since it cannot see a
+  parameter's default or its nullability; the commit is marked `!` for both. The Avalonia package's public
+  surface, listed by reflection, gains `DialogStrings` and loses `DefaultMessage`, and the service's two
+  `ShowConfirmAsync` take null labels by default; the rest is step 4's but for the build stamp.
+- **Verified on Windows.** Build with warnings as errors, 955 tests (940 passed, 15 skipped as before),
+  and `check`, which conforms.
+
 **Next, in order:**
-1. **`plans/00007` steps 5 and 6 and `plans/00008` steps 2 and 3**, one body of work on top of step 4:
-   the sweeps and `src/AGENTS.md`'s rule for windows; `DialogStrings`; the docs.
-2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
+1. **AppKit takes Templates' `reference/src` layout**, in a pull request of its own: Templates released it
+   in `2026.4.1119` (above).
+2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
+   it, and add `src/AGENTS.md`'s rule for windows. The Inspections session plans the reader, its number and
+   its order the maintainer's to set there, and tells this repository its version and API on release.
+3. **`plans/00007` step 6 and `plans/00008` step 3**, the docs: the root `AGENTS.md`'s invariants on the
+   windows' colours and strings, and what `docs/appservices.md` still lacks.
+4. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
    ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
    XamlQuality gets the Avalonia findings.
-3. **`plans/00006`** is revised to build on both, then put to the maintainer.
-4. **AppKit takes Templates' `reference/src` layout** in a pull request of its own once Templates
-   releases #109 (above).
-5. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
+5. **`plans/00006`** is revised to build on both, then put to the maintainer.
+6. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
    2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-6. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
+7. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
    when the family next changes. The policy names this repository and covers all eight ids, each pushed
    at `2026.4.1116`.
 
@@ -634,6 +694,46 @@ break things lets do them all at once".
     while it is built; with no application it merges nothing;
   - a destructive button carries the class `dialog-destructive`, which its window's two styles select;
   - the stand-in windows and the thresholds are the tests' constants, and the contrast is WCAG 2's.
+- **Step 5 waits for an IL reader in AssemblyQuality**, by the maintainer's choice of 2026-11-19. Decision 8
+  reads the sweeps from the package's IL, and AssemblyQuality had no IL reader. His words, of
+  AssemblyQuality: "we should make that have an IL reader if it does not already have one", and "I would
+  like to include the most feature rich, rather than the lightest in that case". He chose
+  ICSharpCode.Decompiler, over Mono.Cecil and dnlib, and the Inspections session, which keeps
+  AssemblyQuality, to plan it there for his approval, with step 5's four cases as its first consumer:
+  windows, colours, lookups and keys. Step 5 raises the pin and builds the sweeps on it once it is released,
+  and `plans/00008` step 2 came first.
+
+## Drift from `plans/00008`
+
+- **Step 2 came before `plans/00007` step 5**, which the plan puts it on top of, by the maintainer's choice
+  of 2026-11-19: step 5 waits for an IL reader in AssemblyQuality (Drift from `plans/00007`).
+- **Measured first, as step 2 asks: a test cannot read a picker's options from the headless platform.**
+  - **What the platform gives.** On Avalonia 12.1.3's headless platform a window's storage provider is
+    `NoopStorageProvider`. It cannot pick a folder, and it answers every picker at once with nothing,
+    whatever its options (measured 2026-11-19).
+  - **Why a test cannot replace it.** `TopLevel` takes a provider from `AvaloniaLocator`, which is
+    Avalonia's private API, or from the platform, and `IStorageProvider` is `[NotClientImplementable]`.
+  - **So.** `AvaloniaDialogService` builds each picker's options in an internal step, which its test reads.
+    That the method opens its picker with them is guarded by its code alone.
+- **`docs/appservices.md` changed with step 2, ahead of step 3**, as it did with `plans/00007` step 4: the
+  root `AGENTS.md` gives a breaking change its line in the family's README in the commit that makes it.
+- **More is tested than the plan names:**
+  - each window's keys are pinned, so a string read from the wrong key fails as a string left English does;
+  - every key is shown in a window of the table or held by a test of its own;
+  - a confirmation's labels are read through the contract as well as the service, since a call compiles
+    the contract's defaults into itself;
+  - decision 2 is tested: a change of the host's words reaches the next window, and an open one keeps its
+    own, a 📋's "Copied!" included.
+- **What the plan leaves open, settled here:**
+  - `DialogStrings` is in the namespace `Bennewitz.Ninja.AppServices.AvaloniaUI.Localization`;
+  - a string that carries a value is filled by an internal method beside its property, such as
+    `TipCopyPathFor`;
+  - the Warning reads "DialogStrings.Resolver {Failure} for {DialogStringKey}, so its default is shown",
+    its failure "threw", "gave null", "gave blank text" or "gave text whose placeholder cannot be filled";
+  - a window reads each string once, so a help text and the tooltip that repeats it are one string, and a
+    📋's "Copied!" is read when its window is built;
+  - step 3's `DialogTips` went into `DialogStrings`, and `DialogWindows` names each string its rows pass,
+    listed as `Given`.
 
 ## What the merge changed for consumers
 

@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 
@@ -27,13 +28,13 @@ internal sealed class MessageAlertDialog : Window
     {
         OkButton = new Button
         {
-            Content = "OK",
+            Content = DialogStrings.LabelOk,
             HorizontalAlignment = HorizontalAlignment.Center,
             MinWidth = 70,
             Margin = new Thickness(0, 12, 0, 0),
         };
         AutomationProperties.SetAutomationId(OkButton, DialogAutomationIds.Ok);
-        ToolTip.SetTip(OkButton, DialogTips.Ok);
+        ToolTip.SetTip(OkButton, DialogStrings.TipOk);
 
         Title = DialogChrome.TitleWithGlyph(title, category);
         Width = 520;

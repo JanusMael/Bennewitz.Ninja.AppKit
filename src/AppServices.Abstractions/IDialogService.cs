@@ -59,8 +59,11 @@ public interface IDialogService
 
     /// <summary>
     /// Show a yes/no confirmation dialog.
-    /// <paramref name="confirmLabel"/> is the label on the affirmative button (default "Confirm").
-    /// <paramref name="cancelLabel"/> is the label on the cancel button (default "Cancel").
+    /// <paramref name="confirmLabel"/> is the label on the affirmative button, and
+    /// <paramref name="cancelLabel"/> the label on the cancel button, each shown as given.
+    /// <see langword="null"/>, the default, shows the host's word for it: <c>AvaloniaDialogService</c> shows
+    /// <c>DialogStrings.LabelConfirm</c> and <c>DialogStrings.LabelCancel</c>, "Confirm" and "Cancel" unless
+    /// the host replaces them.
     /// </summary>
     /// <returns>
     /// Three-valued result:
@@ -81,8 +84,8 @@ public interface IDialogService
     /// <c>Task&lt;bool?&gt;</c> to surface the X-close case.
     /// </returns>
     Task<bool?> ShowConfirmAsync(string title, string message,
-                                 string confirmLabel = "Confirm",
-                                 string cancelLabel = "Cancel");
+                                 string? confirmLabel = null,
+                                 string? cancelLabel = null);
 
     /// <summary>
     /// Rich-message + category overload of
@@ -94,7 +97,8 @@ public interface IDialogService
     /// </summary>
     /// <remarks>
     /// Same three-valued return as the four-string overload: <c>true</c>
-    /// confirm, <c>false</c> cancel button, <c>null</c> X-close (abort).
+    /// confirm, <c>false</c> cancel button, <c>null</c> X-close (abort), and
+    /// the same labels: <see langword="null"/>, the default, shows the host's word.
     /// Default implementation flattens the segments to plain text and
     /// delegates to the four-string overload so test doubles stay
     /// compiling.  Real renderers override this.
@@ -103,8 +107,8 @@ public interface IDialogService
         string title,
         DialogMessage message,
         DialogCategory category = DialogCategory.Confirmation,
-        string confirmLabel = "Confirm",
-        string cancelLabel = "Cancel")
+        string? confirmLabel = null,
+        string? cancelLabel = null)
     {
         return ShowConfirmAsync(title, FlattenSegments(message), confirmLabel, cancelLabel);
     }

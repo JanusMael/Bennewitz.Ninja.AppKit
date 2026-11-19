@@ -12,6 +12,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 using Serilog;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
@@ -92,7 +93,7 @@ internal static class DialogMessageContent
             TextWrapping = TextWrapping.Wrap,
         };
         AutomationProperties.SetAutomationId(tb, ids.Next(isCode ? DialogAutomationIds.Code : DialogAutomationIds.Text));
-        ToolTip.SetTip(tb, isCode ? DialogTips.SelectCode : DialogTips.SelectText);
+        ToolTip.SetTip(tb, isCode ? DialogStrings.TipSelectCode : DialogStrings.TipSelectText);
 
         foreach (DialogSegment seg in segments)
         {
@@ -277,7 +278,9 @@ internal static class DialogMessageContent
         tb.Inlines!.Add(pathRun);
 
         Button copyButton = GlyphButton(
-            "📋", 12, DialogColors.SubtleBrush, DialogTips.CopyPath(path), ids.Next(DialogAutomationIds.CopyPath));
+            "📋", 12, DialogColors.SubtleBrush, DialogStrings.TipCopyPathFor(path), ids.Next(DialogAutomationIds.CopyPath));
+        // Read with the window, as every string it shows is: an open window keeps the words it was built with.
+        string copied = DialogStrings.TipCopied;
         copyButton.Click += OnCopyClick;
 
         // Async void, as an event handler has to be, so the whole body is guarded: a throw escaping
@@ -290,7 +293,7 @@ internal static class DialogMessageContent
                 if (top?.Clipboard is { } clip)
                 {
                     await clip.SetTextAsync(path);
-                    ToolTip.SetTip(copyButton, DialogTips.Copied);
+                    ToolTip.SetTip(copyButton, copied);
                 }
             }
             catch (Exception ex)
@@ -328,7 +331,7 @@ internal static class DialogMessageContent
         tb.Inlines!.Add(linkRun);
 
         Button openButton = GlyphButton(
-            "↗", 11, DialogColors.LinkBrush, DialogTips.OpenLink(url), ids.Next(DialogAutomationIds.OpenLink));
+            "↗", 11, DialogColors.LinkBrush, DialogStrings.TipOpenLinkFor(url), ids.Next(DialogAutomationIds.OpenLink));
         openButton.Click += (_, _) =>
         {
             if (string.IsNullOrEmpty(url))
