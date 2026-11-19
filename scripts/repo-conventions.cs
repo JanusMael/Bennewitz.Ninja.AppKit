@@ -2,7 +2,7 @@
 // Checks, and applies, the conventions every Bennewitz.Ninja repository carries: its GitHub
 // settings, the rulesets that gate `main` and the release tags, the documentation at its root and
 // in every top-level directory, markdown checked out as LF, a release resolved through
-// release-target.cs, and the family's quality packages pinned. The convention itself is prescribed in the template
+// release-target.cs, the family's quality packages pinned, and the reference/ kit's checkouts ignored. The convention itself is prescribed in the template
 // repository's docs/repository-conventions.md; this script is how it is enforced.
 //
 // ⭐ WHY A SCRIPT AND NOT THE TEMPLATE. GitHub keeps a repository's settings outside git, so neither
@@ -164,6 +164,7 @@ int Check()
         CheckProjects(props: true);
         Drift.Check(tree, remoteTree, findings);
         LineEndings.Check(tree, findings);
+        ReferenceKit.Check(tree, remoteTree, localRoot, findings);
         return Report();
     }
 
@@ -221,6 +222,7 @@ int Check()
     CheckProjects(props: true);
     Drift.Check(tree, remoteTree, findings);
     LineEndings.Check(tree, findings);
+    ReferenceKit.Check(tree, remoteTree, localRoot, findings);
     return Report();
 }
 
@@ -2249,17 +2251,25 @@ static class Drift
 {
     private const string Canonical = "templates/bbpkg/scripts/repo-conventions.cs";
     private const string Copy = "scripts/repo-conventions.cs";
+    private const string Kit = "reference/fetch-reference.cs";
 
     /// <summary>
     /// Every repository carries its own copy of this script, and the template's is the one they
     /// follow. The comparison ignores line endings, which a Windows checkout may have converted.
     /// </summary>
+    /// <remarks>
+    /// The reference/ kit's script is compared too, but only from the template repository against
+    /// another one (plans/00013 decision 4): inside each repository there is nothing to compare it
+    /// with, and a hash of it here would make each change to it a conventions release.
+    /// </remarks>
     public static void Check(Tree tree, bool remoteTree, List<Finding> findings)
     {
+        // Run from the template repository against another one: compare with the local copies.
+        bool fromTemplates = remoteTree && File.Exists(Canonical);
+
         string? canonical = tree.Read(Canonical);
-        if (canonical is null && remoteTree && File.Exists(Canonical))
+        if (canonical is null && fromTemplates)
         {
-            // Run from the template repository against another one: compare with the local template.
             canonical = File.ReadAllText(Canonical);
         }
         if (canonical is null)
@@ -2275,6 +2285,11 @@ static class Drift
         else if (Normalize(copy) != Normalize(canonical))
         {
             findings.Add(Finding.Fail("drift", $"{Copy} differs from the template's {Canonical}. Copy the template's over it."));
+        }
+
+        if (fromTemplates && File.Exists(Kit) && tree.Read(Kit) is { } kit && Normalize(kit) != Normalize(File.ReadAllText(Kit)))
+        {
+            findings.Add(Finding.Fail("drift", $"{Kit} differs from Bennewitz.Ninja.Templates' {Kit}. Copy that one over it, with the shields beside it."));
         }
     }
 
@@ -2413,6 +2428,71 @@ static class LineEndings
         }
 
         return regex.ToString();
+    }
+}
+
+/// <summary>
+/// A repository that keeps the family's <c>reference/</c> kit, the read-only upstream checkouts
+/// <c>reference/fetch-reference.cs</c> fetches, has git ignore <c>reference/src</c>, where every checkout
+/// is, and commits nothing under it. Any repository, with the kit or without, fails a file named
+/// <c>fetch-reference.*</c> anywhere else: an earlier script of that name still in use.
+/// </summary>
+/// <remarks>
+/// <para>
+/// ⭐ <b>In a checkout git is asked</b>, <c>git check-ignore reference/src</c>, as the script asks it
+/// before it runs, so any <c>.gitignore</c> line git honours passes. The one line the kit prescribes,
+/// <c>/reference/src</c>, also covers a checkout linked in as a symlink, which a folder pattern misses.
+/// </para>
+/// <para>
+/// ⚠ <b>Through the API git cannot be asked</b>, so <c>check --repo</c> passes only the line itself,
+/// <c>/reference/src</c> or <c>reference/src</c>, which git reads alike, and says so when it fails.
+/// </para>
+/// </remarks>
+static class ReferenceKit
+{
+    private const string Script = "reference/fetch-reference.cs";
+    private const string Checkouts = "reference/src";
+    private const string Line = "/reference/src";
+
+    public static void Check(Tree tree, bool remoteTree, string root, List<Finding> findings)
+    {
+        // plans/00013 decision 7, for every repository, kit or not: the family reads upstream sources
+        // one way, so a fetch script of the same name anywhere else is an earlier one still in use.
+        foreach (string stray in tree.Files.Where(p => p != Script && p[(p.LastIndexOf('/') + 1)..].StartsWith("fetch-reference.", StringComparison.OrdinalIgnoreCase)))
+        {
+            findings.Add(Finding.Fail("reference", $"{stray} is a fetch script outside the kit. Upstream sources are read one way, through {Script}, copied with reference/ from Bennewitz.Ninja.Templates: move what it fetches into reference/sources.json, and delete it."));
+        }
+
+        if (!tree.Files.Contains(Script))
+        {
+            return;
+        }
+
+        string[] seen = [.. tree.Files.Where(p => p == Checkouts || p.StartsWith(Checkouts + "/", StringComparison.Ordinal)).Take(3)];
+        if (seen.Length > 0)
+        {
+            findings.Add(Finding.Fail("reference", $"git sees {string.Join(", ", seen)}: a checkout under {Checkouts}/ is read-only upstream source and is never committed. Remove it from git, and keep `{Line}` in .gitignore."));
+        }
+
+        if (remoteTree)
+        {
+            string[] lines = [.. (tree.Read(".gitignore") ?? "").Split('\n').Select(l => l.Trim())];
+            if (!lines.Any(l => l is Line or Checkouts))
+            {
+                findings.Add(Finding.Fail("reference", $"{Script} is tracked, and .gitignore has no line `{Line}`, which ignores every checkout. Read through the API, git was not asked: run `check` in a checkout to have it ask, or add the line, as the kit's README gives it."));
+            }
+            return;
+        }
+
+        (int exit, string output) = Shell.Run("git", root, null, "check-ignore", "-q", Checkouts);
+        if (exit == 1)
+        {
+            findings.Add(Finding.Fail("reference", $"{Script} is tracked, and git does not ignore {Checkouts}, where every checkout is: add `{Line}` to .gitignore. The script refuses to run without it."));
+        }
+        else if (exit != 0)
+        {
+            findings.Add(Finding.Fail("reference", $"git check-ignore failed with exit {exit}, so whether {Checkouts} is ignored is unknown: {output.Trim()}"));
+        }
     }
 }
 
