@@ -36,7 +36,7 @@ whole, its tags renamed `scopededitors/v…`. DiffView stays in Bennewitz.Ninja.
 | `docs/` | Each family's README and the release runbook |
 | `plans/` | Numbered plans, continuing AppServices' sequence |
 | `scripts/` | File-based apps: the release resolution, the packaging guard, the conventions check, and each family's own tools |
-| `reference/` | Read-only checkouts of the upstream sources at the versions the build pins, one folder each and ignored by git, beside the tracked files that fetch and describe them: `fetch-reference.cs`, its manifest `sources.json`, three MSBuild shields and the README. A search prunes the checkouts unless the task is about one, and reaches one by passing its path |
+| `reference/` | Read-only checkouts of the upstream sources at the versions the build pins, one folder each in `reference/src/`, which git ignores whole, beside the tracked files that fetch and describe them: `fetch-reference.cs`, its manifest `sources.json`, three MSBuild shields and the README. A search prunes the checkouts unless the task is about one, and reaches one by passing its path |
 | `AppKit.slnx` | The one solution: every family's `src` and `tests` projects |
 | `AssemblyInfo.InternalsVisibleTo.cs` / `.External.cs`, `Directory.Build.targets` | Templates' solution-wide friend grants: every project grants its internals to every assembly the solution builds |
 

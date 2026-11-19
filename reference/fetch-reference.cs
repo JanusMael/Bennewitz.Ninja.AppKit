@@ -4,7 +4,7 @@
 #:property ImplicitUsings=enable
 
 // Read-only checkouts of the upstream sources a repository builds against: fetches what
-// reference/sources.json lists into folders under reference/, each at its pin, so a search reads the
+// reference/sources.json lists into folders under reference/src/, each at its pin, so a search reads the
 // very version the build uses, whole, instead of single files fetched through `gh api`. It merges
 // DiffView's and XamlQuality's scripts of the same name, and holds nothing of any one repository: what a
 // repository fetches is its manifest's.
@@ -26,7 +26,7 @@
 // names its "ref": a tag, a branch, or a commit's full hash.
 //
 // ⭐ "local" IS A FASTER SOURCE, NEVER ANOTHER PIN. It names a sibling checkout, relative to the
-// repository root, to clone from when it exists. The checkout under reference/ is still made at the
+// repository root, to clone from when it exists. The checkout under reference/src/ is still made at the
 // pin, and when the sibling cannot supply it the url does, which the report line says.
 //
 // ⛔ LF, SHALLOW, SPARSE, BOUNDED. Every git call takes core.autocrlf=false, core.eol=lf and
@@ -35,14 +35,21 @@
 // its pin and sparse to the folders its entry lists. git never prompts, so a repository that wants
 // credentials fails instead of waiting, and a git call still running after 15 minutes is killed.
 //
-// ⛔ ONLY FOLDERS UNDER reference/, AND ONLY ONES GIT IGNORES. Every "dir" is a folder under reference/,
-// and nothing is fetched until git confirms it ignores each of them: without /reference/*/ in
-// .gitignore the script stops. The files beside the checkouts are tracked: this script, sources.json,
-// the README and three shields, Directory.Build.props, Directory.Build.targets and
-// Directory.Packages.props, which MSBuild walking up from a checkout that ships none of its own finds
-// before the repository's. Inheriting its central package management made every versioned
-// PackageReference NU1008 in DiffView's CI. The script writes any shield that is missing, to be
-// committed.
+// ⛔ ONLY FOLDERS UNDER reference/src/, AND ONLY WHILE GIT IGNORES IT. Every "dir" is a folder under
+// reference/src/, and nothing runs until git confirms it ignores reference/src itself: without
+// /reference/src in .gitignore the script stops. One line covers every checkout, whether a folder, a
+// symlink to one fetched elsewhere, or one not fetched yet, and it needs no line for each tracked file.
+// A folder pattern such as /reference/*/ matches no symlink, which git takes for a file. The files in
+// reference/ are tracked: this script, sources.json, the README and three shields,
+// Directory.Build.props, Directory.Build.targets and Directory.Packages.props, which MSBuild walking up
+// from a checkout that ships none of its own finds before the repository's. Inheriting its central
+// package management made every versioned PackageReference NU1008 in DiffView's CI. The script writes
+// any shield that is missing, to be committed.
+//
+// ⛔ ON WINDOWS, ONLY WITH LONG PATHS ENABLED. git takes paths past 260 characters through
+// core.longpaths, but the other tools that read a checkout take them only when Windows'
+// LongPathsEnabled is 1, and an upstream's test files in a deep work tree pass that. The script never
+// changes the setting, which needs an administrator: without it, it stops and prints the command.
 //
 // Each checkout records in .fetched-ref, written last, the commit it was made at, and the tag or branch
 // when that was its pin. One off its pin, or whose HEAD has moved from that commit, is replaced whole
@@ -56,11 +63,13 @@
 //   dotnet run --file reference/fetch-reference.cs -- <name> ...   only the sources named, in any case
 //
 // Exit codes: 0 every source asked for is at its pin; 1 one is missing, off its pin, or failed to fetch;
-// 2 a usage error, or a manifest, pin or ignore problem.
+// 2 a usage error, or a manifest, pin, ignore or long-path problem.
 
+using Microsoft.Win32;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Text.Json;
 using System.Xml;
@@ -100,6 +109,11 @@ if (update && statusOnly)
     return Cli.Usage("--update fetches and --status does not: pass one of them.");
 }
 
+if (OperatingSystem.IsWindows() && !LongPaths.Enabled())
+{
+    return Cli.Fail(LongPaths.Problem);
+}
+
 string root;
 Source[] sources;
 try
@@ -118,13 +132,13 @@ if (unknown.Length > 0)
     return Cli.Usage($"the manifest lists no source called {string.Join(", ", unknown)}.");
 }
 
-// No checkout is fetched until git ignores every folder the manifest names. Each is asked about through
-// its pin record, a path inside it: git judges a path's leading folders as folders, so /reference/*/
-// matches one that does not exist yet, which it would not match by its own name.
+// Nothing runs until git ignores reference/src, where every checkout is. It is asked by that name and
+// no deeper: git refuses a path beyond a symbolic link, so a path inside a checkout, or inside
+// reference/src when that is itself a symlink, cannot be asked about at all.
 string[] unignored;
 try
 {
-    unignored = Repository.NotIgnored(root, [.. sources.Select(source => (source.Folder, $"{source.Folder}/{Checkout.PinFile}"))]);
+    unignored = Repository.NotIgnored(root, [(Manifest.Checkouts, Manifest.Checkouts)]);
 }
 catch (Exception error) when (error is InvalidOperationException or TimeoutException)
 {
@@ -133,7 +147,7 @@ catch (Exception error) when (error is InvalidOperationException or TimeoutExcep
 
 if (unignored.Length > 0)
 {
-    return Cli.Fail($"git does not ignore {string.Join(", ", unignored)}: add /reference/*/ to .gitignore, so no checkout can be committed.");
+    return Cli.Fail($"git does not ignore {Manifest.Checkouts}: add /{Manifest.Checkouts} to .gitignore, so no checkout can be committed.");
 }
 
 Source[] chosen = [.. sources.Where(source => only.Count == 0 || only.Contains(source.Name, StringComparer.OrdinalIgnoreCase))];
@@ -208,7 +222,7 @@ void Report(string name, string state, string detail)
     }
 }
 
-/// <summary>What a checkout under reference/ holds, against its pin.</summary>
+/// <summary>What a checkout under reference/src/ holds, against its pin.</summary>
 enum State
 {
     /// <summary>Fetched at its pin, and its HEAD still there.</summary>
@@ -231,7 +245,7 @@ static class Cli
 
     public const string Help = """
         fetch-reference: fetches the read-only upstream checkouts reference/sources.json lists into
-        folders under reference/, each at its pin, from anywhere inside the repository.
+        folders under reference/src/, each at its pin, from anywhere inside the repository.
 
           dotnet run --file reference/fetch-reference.cs                 fetch each source that is missing
           dotnet run --file reference/fetch-reference.cs -- --update     also fetch again each source off its pin
@@ -240,7 +254,8 @@ static class Cli
           dotnet run --file reference/fetch-reference.cs -- <name> ...   only the sources named, in any case
 
         Exit codes: 0 every source asked for is at its pin; 1 one is missing, off its pin, or failed to
-        fetch; 2 a usage error, or a manifest, pin or ignore problem. reference/README.md says the rest.
+        fetch; 2 a usage error, or a manifest, pin, ignore or long-path problem. reference/README.md
+        says the rest.
         """;
 
     public static int Usage(string problem)
@@ -329,6 +344,9 @@ static class Manifest
 {
     public const string Location = "reference/sources.json";
 
+    /// <summary>The folder every checkout is under, which git ignores whole.</summary>
+    public const string Checkouts = "reference/src";
+
     private static readonly string[] Properties = ["name", "dir", "url", "packages", "tag", "ref", "local", "sparse"];
 
     public static Source[] Read(string root)
@@ -369,9 +387,9 @@ static class Manifest
             }
 
             string folder = (Text(entry, "dir", name) ?? throw new InvalidDataException($"{name} has no dir.")).Replace('\\', '/');
-            if (!folder.StartsWith("reference/", StringComparison.Ordinal) || folder.Split('/').Any(part => part is "" or "." or ".."))
+            if (!folder.StartsWith(Checkouts + "/", StringComparison.Ordinal) || folder.Split('/').Any(part => part is "" or "." or ".."))
             {
-                throw new InvalidDataException($"{name}'s dir, {folder}, is not a folder under reference/, the one folder this script writes.");
+                throw new InvalidDataException($"{name}'s dir, {folder}, is not a folder under {Checkouts}/, the one folder this script fetches into.");
             }
 
             string[] sparse = [.. Texts(entry, "sparse", name).Select(part => part.Replace('\\', '/').Trim('/'))];
@@ -816,6 +834,14 @@ static class Checkout
         string[] lines = [.. File.ReadAllLines(record).Select(line => line.Trim()).Where(line => line.Length > 0)];
         string made = lines.FirstOrDefault() ?? "";
         string fetched = lines.Length > 1 ? lines[1] : made;
+
+        // A record an earlier script wrote holds the tag or branch alone, never the commit it was made at,
+        // so it cannot be held to a pin; said so, or the line shows one version on both sides.
+        if (made.Length > 0 && !Pin.IsCommitHash(made))
+        {
+            return (State.OffPin, $"{source.Folder} holds {made}, recorded with no commit by an earlier script, and the pin is {pin.Label}");
+        }
+
         if (fetched != pin.Ref)
         {
             return (State.OffPin, $"{source.Folder} holds {Pin.Shorten(fetched)}, and the pin is {pin.Label}");
@@ -981,7 +1007,7 @@ static class Shields
             <Project>
               <!-- A shield, committed, and written again by fetch-reference.cs beside it when it is missing.
 
-                   The folders beside it are read-only upstream checkouts. MSBuild imports the first
+                   The folders in src/ beside it are read-only upstream checkouts. MSBuild imports the first
                    Directory.Build.props it finds walking up from a project, so a checkout that ships none of
                    its own, and the script, would import the repository's, with its packages, its analyzers
                    and warnings as errors. They find this empty one first, and import nothing: the script
@@ -992,7 +1018,7 @@ static class Shields
             <Project>
               <!-- A shield, committed, and written again by fetch-reference.cs beside it when it is missing.
 
-                   The folders beside it are read-only upstream checkouts. MSBuild imports the first
+                   The folders in src/ beside it are read-only upstream checkouts. MSBuild imports the first
                    Directory.Build.targets it finds walking up from a project, so a checkout that ships none
                    of its own, and the script, would import the repository's, and the items and targets it
                    adds. They find this empty one first, and import nothing. -->
@@ -1002,7 +1028,7 @@ static class Shields
             <Project>
               <!-- A shield, committed, and written again by fetch-reference.cs beside it when it is missing.
 
-                   The folders beside it are read-only upstream checkouts. NuGet imports the first
+                   The folders in src/ beside it are read-only upstream checkouts. NuGet imports the first
                    Directory.Packages.props it finds walking up from a project, so a checkout that ships none
                    of its own would inherit the repository's central package management, and every
                    PackageReference with a Version would fail with NU1008, as DiffView's CI did. The flag set
@@ -1025,12 +1051,31 @@ static class Shields
     }
 }
 
+/// <summary>Windows' long-path setting, which every tool but git needs to read a deep checkout.</summary>
+static class LongPaths
+{
+    private const string Key = @"SYSTEM\CurrentControlSet\Control\FileSystem";
+
+    public const string Problem =
+        "Windows' LongPathsEnabled is not 1, so tools other than git cannot read a checkout's paths past 260 characters, " +
+        "and an upstream's test files in a deep work tree pass that. An administrator sets it, in PowerShell: " +
+        @"New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled -Value 1 -PropertyType DWord -Force";
+
+    /// <summary>Whether HKLM\SYSTEM\CurrentControlSet\Control\FileSystem holds LongPathsEnabled as 1.</summary>
+    [SupportedOSPlatform("windows")]
+    public static bool Enabled()
+    {
+        using RegistryKey? key = Registry.LocalMachine.OpenSubKey(Key);
+        return key?.GetValue("LongPathsEnabled") is int value && value == 1;
+    }
+}
+
 /// <summary>The repository this script lives in, as git sees it.</summary>
 static class Repository
 {
     /// <summary>
     /// The work tree holding this script, so a run from anywhere finds it, even from inside a checkout
-    /// under reference/; failing that, the one holding the current directory.
+    /// under reference/src/; failing that, the one holding the current directory.
     /// </summary>
     public static string Root()
     {
