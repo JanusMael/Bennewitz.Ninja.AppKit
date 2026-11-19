@@ -5,6 +5,7 @@ using Avalonia.Platform.Storage;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
 using Bennewitz.Ninja.AppServices.Abstractions;
 using Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI;
 
@@ -79,13 +80,7 @@ public sealed class AvaloniaDialogService : IDialogService
             return null;
         }
 
-        FolderPickerOpenOptions options = new()
-        {
-            Title = title ?? "Select Folder",
-            AllowMultiple = false,
-        };
-
-        IReadOnlyList<IStorageFolder> result = await window.StorageProvider.OpenFolderPickerAsync(options);
+        IReadOnlyList<IStorageFolder> result = await window.StorageProvider.OpenFolderPickerAsync(FolderPickerOptions(title));
         return result.Count > 0 ? result[0].TryGetLocalPath() : null;
     }
 
@@ -98,17 +93,7 @@ public sealed class AvaloniaDialogService : IDialogService
             return null;
         }
 
-        FilePickerOpenOptions options = new()
-        {
-            Title = title ?? "Select File",
-            AllowMultiple = false,
-            FileTypeFilter = filters?.Select(f => new FilePickerFileType(f.Name)
-            {
-                Patterns = f.Extensions.Select(e => $"*.{e}").ToList()
-            }).ToList(),
-        };
-
-        IReadOnlyList<IStorageFile> result = await window.StorageProvider.OpenFilePickerAsync(options);
+        IReadOnlyList<IStorageFile> result = await window.StorageProvider.OpenFilePickerAsync(FilePickerOptions(title, filters));
         return result.Count > 0 ? result[0].TryGetLocalPath() : null;
     }
 
@@ -124,20 +109,57 @@ public sealed class AvaloniaDialogService : IDialogService
             return null;
         }
 
-        FilePickerSaveOptions options = new()
-        {
-            Title = title ?? "Save As",
-            SuggestedFileName = defaultFileName,
-            FileTypeChoices = filters?.Select(f => new FilePickerFileType(f.Name)
-            {
-                Patterns = f.Extensions.Select(e => $"*.{e}").ToList(),
-            }).ToList(),
-            ShowOverwritePrompt = true,
-        };
-
-        IStorageFile? result = await window.StorageProvider.SaveFilePickerAsync(options);
+        IStorageFile? result = await window.StorageProvider.SaveFilePickerAsync(SaveFilePickerOptions(title, defaultFileName, filters));
         return result?.TryGetLocalPath();
     }
+
+    // The options each picker opens with are built apart from it, where a test reads them: on the headless
+    // platform a window has no picker of its own, and a test can neither give it one nor implement
+    // IStorageProvider (plans/00008, step 2, measured first).
+
+    /// <summary>
+    /// The options <see cref="PickFolderAsync"/> opens its picker with: <paramref name="title"/>, or
+    /// <see cref="DialogStrings.TitleSelectFolder"/> when it is <see langword="null"/>.
+    /// </summary>
+    internal static FolderPickerOpenOptions FolderPickerOptions(string? title) => new()
+    {
+        Title = title ?? DialogStrings.TitleSelectFolder,
+        AllowMultiple = false,
+    };
+
+    /// <summary>
+    /// The options <see cref="PickFileAsync"/> opens its picker with: <paramref name="title"/>, or
+    /// <see cref="DialogStrings.TitleSelectFile"/> when it is <see langword="null"/>, and a file type for
+    /// each filter.
+    /// </summary>
+    internal static FilePickerOpenOptions FilePickerOptions(string? title, IReadOnlyList<FilePickerFilter>? filters) => new()
+    {
+        Title = title ?? DialogStrings.TitleSelectFile,
+        AllowMultiple = false,
+        FileTypeFilter = filters?.Select(f => new FilePickerFileType(f.Name)
+        {
+            Patterns = f.Extensions.Select(e => $"*.{e}").ToList()
+        }).ToList(),
+    };
+
+    /// <summary>
+    /// The options <see cref="PickSaveFileAsync"/> opens its picker with: <paramref name="title"/>, or
+    /// <see cref="DialogStrings.TitleSaveAs"/> when it is <see langword="null"/>, the suggested name, and a
+    /// file type for each filter.
+    /// </summary>
+    internal static FilePickerSaveOptions SaveFilePickerOptions(
+        string? title,
+        string defaultFileName,
+        IReadOnlyList<FilePickerFilter>? filters) => new()
+    {
+        Title = title ?? DialogStrings.TitleSaveAs,
+        SuggestedFileName = defaultFileName,
+        FileTypeChoices = filters?.Select(f => new FilePickerFileType(f.Name)
+        {
+            Patterns = f.Extensions.Select(e => $"*.{e}").ToList(),
+        }).ToList(),
+        ShowOverwritePrompt = true,
+    };
 
     // -----------------------------------------------------------------------
     // IDialogService — simple dialogs
@@ -195,8 +217,8 @@ public sealed class AvaloniaDialogService : IDialogService
         string title,
         DialogMessage message,
         DialogCategory category = DialogCategory.Confirmation,
-        string confirmLabel = "Confirm",
-        string cancelLabel = "Cancel")
+        string? confirmLabel = null,
+        string? cancelLabel = null)
     {
         Window? window = Window;
         if (window == null)
@@ -204,7 +226,13 @@ public sealed class AvaloniaDialogService : IDialogService
             return null;
         }
 
-        MessageConfirmDialog dialog = new(title, message, category, confirmLabel, cancelLabel, DialogAppIcon);
+        MessageConfirmDialog dialog = new(
+            title,
+            message,
+            category,
+            confirmLabel ?? DialogStrings.LabelConfirm,
+            cancelLabel ?? DialogStrings.LabelCancel,
+            DialogAppIcon);
         await dialog.ShowDialog(window);
         return dialog.Result;
     }
@@ -235,8 +263,8 @@ public sealed class AvaloniaDialogService : IDialogService
 
     /// <inheritdoc />
     public async Task<bool?> ShowConfirmAsync(string title, string message,
-                                              string confirmLabel = "Confirm",
-                                              string cancelLabel = "Cancel")
+                                              string? confirmLabel = null,
+                                              string? cancelLabel = null)
     {
         Window? window = Window;
         if (window == null)
@@ -244,7 +272,8 @@ public sealed class AvaloniaDialogService : IDialogService
             return null;
         }
 
-        ConfirmDialog dialog = new(title, message, confirmLabel, cancelLabel, DialogAppIcon);
+        ConfirmDialog dialog = new(
+            title, message, confirmLabel ?? DialogStrings.LabelConfirm, cancelLabel ?? DialogStrings.LabelCancel, DialogAppIcon);
         await dialog.ShowDialog(window);
         return dialog.Result;
     }

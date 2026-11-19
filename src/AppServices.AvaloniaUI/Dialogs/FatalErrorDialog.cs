@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 using Serilog;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
@@ -27,28 +28,24 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 /// <para>
 /// The window shows:
 /// <list type="bullet">
-///   <item>A header message (caller-supplied).</item>
+///   <item>A header message, the caller's: the dialogs the package opens show
+///         <see cref="DialogStrings.TextFatalError"/>.</item>
 ///   <item>A scrollable, read-only, monospaced <see cref="TextBox"/> containing
 ///         <see cref="Exception.ToString"/>.</item>
-///   <item>A "Copy to Clipboard" button and a "Close" button.</item>
+///   <item>A copy button and a close button, whose words are <see cref="DialogStrings"/>'.</item>
 /// </list>
 /// </para>
 /// </summary>
 public sealed class FatalErrorDialog : Window
 {
-    /// <summary>Default header text when the caller does not supply one.</summary>
-    public const string DefaultMessage =
-        "The application encountered an unexpected error.\n" +
-        "You can copy the details below for bug reporting.";
-
     private readonly string _exceptionText;
 
     /// <summary>
     /// Creates a dialog that displays <paramref name="exception"/> and uses
     /// <paramref name="title"/> as the window title.
     /// </summary>
-    /// <param name="title">Window title. Conventionally
-    /// <c>"Application Error — &lt;AppName&gt;"</c>.</param>
+    /// <param name="title">Window title. The dialogs the package opens take
+    /// <see cref="DialogStrings.TitleFatalError"/>, with the application's name.</param>
     /// <param name="message">Short user-facing header shown above the exception
     /// details.</param>
     /// <param name="exception">The exception whose <see cref="Exception.ToString"/>
@@ -92,13 +89,13 @@ public sealed class FatalErrorDialog : Window
             MinHeight = 320,
         };
         // A control's tooltip tells the person pointing at it what its help text tells a screen
-        // reader, so where it has help text the two are one string. BNXQ1011 cannot see a control
-        // built in code; DialogAccessibilityTests requires the tooltips instead.
-        const string DetailsHelp = "Read-only exception text; Copy to Clipboard copies all of it";
-        AutomationProperties.SetName(exBox, "Error details");
-        AutomationProperties.SetHelpText(exBox, DetailsHelp);
+        // reader, so where it has help text the two are one string, read once. BNXQ1011 cannot see a
+        // control built in code; DialogAccessibilityTests requires the tooltips instead.
+        string detailsHelp = DialogStrings.HelpErrorDetails;
+        AutomationProperties.SetName(exBox, DialogStrings.NameErrorDetails);
+        AutomationProperties.SetHelpText(exBox, detailsHelp);
         AutomationProperties.SetAutomationId(exBox, DialogAutomationIds.Details);
-        ToolTip.SetTip(exBox, DetailsHelp);
+        ToolTip.SetTip(exBox, detailsHelp);
 
         ScrollViewer scroll = new()
         {
@@ -108,28 +105,30 @@ public sealed class FatalErrorDialog : Window
             Margin = new Thickness(16, 0, 16, 8),
         };
 
+        string copyLabel = DialogStrings.LabelCopyToClipboard;
         Button copyBtn = new()
         {
-            Content = "📋 Copy to Clipboard",
+            Content = $"📋 {copyLabel}",
             Margin = new Thickness(0, 0, 8, 0),
         };
-        // The visible label carries a clipboard emoji; the accessible name must not, or a
-        // screen reader reads the glyph name aloud.
-        const string CopyHelp = "Copy the full error details to the clipboard";
-        AutomationProperties.SetName(copyBtn, "Copy to Clipboard");
-        AutomationProperties.SetHelpText(copyBtn, CopyHelp);
+        // The visible label carries the package's clipboard glyph before the words; the accessible name
+        // must not, or a screen reader reads the glyph's name aloud.
+        string copyHelp = DialogStrings.HelpCopyErrorDetails;
+        AutomationProperties.SetName(copyBtn, copyLabel);
+        AutomationProperties.SetHelpText(copyBtn, copyHelp);
         AutomationProperties.SetAutomationId(copyBtn, DialogAutomationIds.Copy);
-        ToolTip.SetTip(copyBtn, CopyHelp);
+        ToolTip.SetTip(copyBtn, copyHelp);
         copyBtn.Click += OnCopyClick;
 
+        string closeLabel = DialogStrings.LabelClose;
         Button closeBtn = new()
         {
-            Content = "Close",
+            Content = closeLabel,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        AutomationProperties.SetName(closeBtn, "Close");
+        AutomationProperties.SetName(closeBtn, closeLabel);
         AutomationProperties.SetAutomationId(closeBtn, DialogAutomationIds.Close);
-        ToolTip.SetTip(closeBtn, "Close this window");
+        ToolTip.SetTip(closeBtn, DialogStrings.TipCloseWindow);
         closeBtn.Click += (_, _) => Close();
 
         DockPanel btnRow = new() { Margin = new Thickness(16, 0, 16, 16) };

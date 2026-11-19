@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 using Serilog;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
@@ -24,9 +25,9 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 /// </para>
 /// <para>
 /// The window shows a wrapped header message, a scrollable read-only monospaced
-/// <see cref="TextBox"/> with the body text, and "Copy to Clipboard" + "Close"
-/// buttons — the same shape as <see cref="FatalErrorDialog"/> minus the exception
-/// semantics.
+/// <see cref="TextBox"/> with the body text, and a copy and a close button, whose words
+/// are <see cref="DialogStrings"/>' — the same shape as <see cref="FatalErrorDialog"/>
+/// minus the exception semantics.
 /// </para>
 /// </summary>
 public sealed class NonFatalNoticeDialog : Window
@@ -74,13 +75,13 @@ public sealed class NonFatalNoticeDialog : Window
             MinHeight = 220,
         };
         // A control's tooltip tells the person pointing at it what its help text tells a screen
-        // reader, so where it has help text the two are one string. BNXQ1011 cannot see a control
-        // built in code; DialogAccessibilityTests requires the tooltips instead.
-        const string DetailsHelp = "Read-only notice text; Copy to Clipboard copies all of it";
-        AutomationProperties.SetName(bodyBox, "Notice details");
-        AutomationProperties.SetHelpText(bodyBox, DetailsHelp);
+        // reader, so where it has help text the two are one string, read once. BNXQ1011 cannot see a
+        // control built in code; DialogAccessibilityTests requires the tooltips instead.
+        string detailsHelp = DialogStrings.HelpNoticeDetails;
+        AutomationProperties.SetName(bodyBox, DialogStrings.NameNoticeDetails);
+        AutomationProperties.SetHelpText(bodyBox, detailsHelp);
         AutomationProperties.SetAutomationId(bodyBox, DialogAutomationIds.Details);
-        ToolTip.SetTip(bodyBox, DetailsHelp);
+        ToolTip.SetTip(bodyBox, detailsHelp);
 
         ScrollViewer scroll = new()
         {
@@ -90,28 +91,30 @@ public sealed class NonFatalNoticeDialog : Window
             Margin = new Thickness(16, 0, 16, 8),
         };
 
+        string copyLabel = DialogStrings.LabelCopyToClipboard;
         Button copyBtn = new()
         {
-            Content = "📋 Copy to Clipboard",
+            Content = $"📋 {copyLabel}",
             Margin = new Thickness(0, 0, 8, 0),
         };
-        // The visible label carries a clipboard emoji; the accessible name must not, or a
-        // screen reader reads the glyph name aloud.
-        const string CopyHelp = "Copy the full notice text to the clipboard";
-        AutomationProperties.SetName(copyBtn, "Copy to Clipboard");
-        AutomationProperties.SetHelpText(copyBtn, CopyHelp);
+        // The visible label carries the package's clipboard glyph before the words; the accessible name
+        // must not, or a screen reader reads the glyph's name aloud.
+        string copyHelp = DialogStrings.HelpCopyNotice;
+        AutomationProperties.SetName(copyBtn, copyLabel);
+        AutomationProperties.SetHelpText(copyBtn, copyHelp);
         AutomationProperties.SetAutomationId(copyBtn, DialogAutomationIds.Copy);
-        ToolTip.SetTip(copyBtn, CopyHelp);
+        ToolTip.SetTip(copyBtn, copyHelp);
         copyBtn.Click += OnCopyClick;
 
+        string closeLabel = DialogStrings.LabelClose;
         Button closeBtn = new()
         {
-            Content = "Close",
+            Content = closeLabel,
             HorizontalAlignment = HorizontalAlignment.Right,
         };
-        AutomationProperties.SetName(closeBtn, "Close");
+        AutomationProperties.SetName(closeBtn, closeLabel);
         AutomationProperties.SetAutomationId(closeBtn, DialogAutomationIds.Close);
-        ToolTip.SetTip(closeBtn, "Close this window");
+        ToolTip.SetTip(closeBtn, DialogStrings.TipCloseWindow);
         closeBtn.Click += (_, _) => Close();
 
         DockPanel btnRow = new() { Margin = new Thickness(16, 0, 16, 16) };

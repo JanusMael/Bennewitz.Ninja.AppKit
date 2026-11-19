@@ -199,6 +199,77 @@ dialog's own styles paint the button's `PART_ContentPresenter` in those two stat
 and Fluent's buttons both name. Under a theme whose button names it otherwise, those two states keep
 the theme's colours. A glyph an emoji font draws in colour, such as 📋 or ⛔, may ignore its brush.
 
+## Dialog strings
+
+Every word the package's windows show that no caller passes comes from `DialogStrings`, in the
+`Bennewitz.Ninja.AppServices.AvaloniaUI.Localization` namespace: the labels, tooltips, names and help
+text of the dialogs `AvaloniaDialogService` shows and of `FatalErrorDialog` and `NonFatalNoticeDialog`,
+the pickers' titles when a caller passes none, and the fatal dialogs' titles and message. A host
+replaces any of them by assigning `DialogStrings.Resolver` once at start-up. The resolver is given a
+key, the name of one of `DialogStrings`' properties, and returns the host's text for it, or the key
+itself for a key the host does not translate, which then shows in English:
+
+```csharp
+DialogStrings.Resolver = key => key switch
+{
+    nameof(DialogStrings.LabelSave) => Strings.Save,
+    nameof(DialogStrings.LabelDontSave) => Strings.DontSave,
+    nameof(DialogStrings.TipCopyPath) => Strings.CopyPath, // "Copy {0}" in English
+    _ => key,
+};
+```
+
+| Key | Where it shows | Default |
+|---|---|---|
+| `LabelOk` | An alert's OK, and the input dialog's | OK |
+| `LabelCancel` | The input dialog's and the unsaved-changes prompt's Cancel, and a confirmation's when its caller passes no label | Cancel |
+| `LabelConfirm` | A confirmation's confirm button when its caller passes no label | Confirm |
+| `LabelSave` | The unsaved-changes prompt's Save | Save |
+| `LabelDontSave` | Its Don't Save | Don't Save |
+| `LabelClose` | The fatal-error and notice dialogs' Close | Close |
+| `LabelCopyToClipboard` | Their copy button, after the 📋 | Copy to Clipboard |
+| `TitleSelectFolder` | The folder picker, when its caller passes no title | Select Folder |
+| `TitleSelectFile` | The file picker, when its caller passes no title | Select File |
+| `TitleSaveAs` | The save picker, when its caller passes no title | Save As |
+| `TitleFatalError` | The fatal-error dialog, `{0}` the application's name | Application Error — {0} |
+| `TitleFatalErrorNoApp` | The fatal-error dialog and the native one, before `ConfigureLogging` names the application | Application Error |
+| `TitleNativeFatalError` | The native fatal-error dialog, `{0}` the application's name | {0} — Critical Error |
+| `TextFatalError` | The fatal-error dialog's message, when the package shows it or a caller passes none | The application encountered an unexpected error. You can copy the details below for bug reporting. |
+| `TipOk` | An alert's OK | Close this message |
+| `TipAccept` | The input dialog's OK | Use the text you typed |
+| `TipConfirm` | A confirmation's confirm button | Do what this dialog asks, and close it |
+| `TipCancel` | A confirmation's Cancel, and the input dialog's | Close this dialog without doing anything |
+| `TipSave` | The unsaved-changes prompt's Save | Save your changes, then close |
+| `TipDontSave` | Its Don't Save | Close without saving your changes |
+| `TipKeepOpen` | Its Cancel | Keep the window open, with your changes unsaved |
+| `TipInput` | The input dialog's text box | Type here; Enter accepts it and Escape cancels |
+| `TipSelectText` | A message's text | Select text here to copy it |
+| `TipSelectCode` | A message's code | Select code here to copy it |
+| `TipCopyPath` | The 📋 after a path, its tooltip and its name, `{0}` the path | Copy {0} |
+| `TipCopied` | That 📋's tooltip once it has copied | Copied! |
+| `TipOpenLink` | The ↗ after a link, its tooltip and its name, `{0}` the link | Open {0} |
+| `TipCloseWindow` | The fatal-error and notice dialogs' Close | Close this window |
+| `NameErrorDetails` | The fatal-error dialog's details box | Error details |
+| `HelpErrorDetails` | Its help text and tooltip | Read-only exception text; Copy to Clipboard copies all of it |
+| `HelpCopyErrorDetails` | The fatal-error dialog's copy button, its help text and tooltip | Copy the full error details to the clipboard |
+| `NameNoticeDetails` | The notice dialog's details box | Notice details |
+| `HelpNoticeDetails` | Its help text and tooltip | Read-only notice text; Copy to Clipboard copies all of it |
+| `HelpCopyNotice` | The notice dialog's copy button, its help text and tooltip | Copy the full notice text to the clipboard |
+
+`TextFatalError`'s two sentences are on two lines. Four keys carry a value as `{0}`, and the package
+puts it in with the current culture: a text without `{0}` shows without the value.
+
+A string is read each time a window is built, so a culture the host changes reaches the next dialog,
+and an open one keeps the words it was built with. The resolver may be called on any thread, the one
+that failed included, since the native fatal dialog's title is read there: it must return at once,
+and never wait on the UI thread. A resolver that throws, or returns null or blank text, or a text
+whose `{0}` cannot be filled, never fails a dialog: that string shows its default, and its first
+failure is logged at Warning.
+
+The package's glyphs, ⚠, ⛔, 📋 and ↗, stay outside the words, and a label, title or message a caller
+passes is shown as given. The button of macOS's native fatal-error dialog reads "OK", whatever the
+host's words.
+
 ## Upgrading from 2026.4.1116
 
 - **A code block's keys take the package's prefix.** A dialog's code block reads
@@ -214,6 +285,17 @@ the theme's colours. A glyph an emoji font draws in colour, such as 📋 or ⛔,
 - **The 📋 after a path and the ↗ after a link are buttons.** Tab reaches each, Enter and Space press
   it, and a screen reader names it by what a press does. Each looks as before, but for the theme's focus
   ring when it has keyboard focus.
+- **`IDialogService.ShowConfirmAsync`'s labels default to null.** Both overloads take
+  `string? confirmLabel = null` and `string? cancelLabel = null`, where they took "Confirm" and "Cancel".
+  Null shows the host's words, `DialogStrings.LabelConfirm` and `DialogStrings.LabelCancel`, and a label
+  given is shown as given. A class that implements `IDialogService`, a test double among them, changes
+  those two parameters to match. A call compiled against an earlier version still passes "Confirm" and
+  "Cancel", which show in English until it is rebuilt.
+- **`FatalErrorDialog.DefaultMessage` is gone.** Pass `DialogStrings.TextFatalError`, which holds the same
+  English and the host's words once the host replaces them, or a message of your own.
+  `AvaloniaDiagnostics.ShowFatalErrorDialog` shows it for a null message, as before.
+- **Every word the dialogs show can be the host's.** `DialogStrings.Resolver` replaces each, under
+  "Dialog strings"; a host that sets none sees the dialogs as before.
 
 ## Upgrading from 2026.4.1113
 

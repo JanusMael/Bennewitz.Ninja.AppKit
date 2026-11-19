@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 
@@ -27,10 +28,10 @@ internal sealed class ConfirmDialog : Window
     {
         ConfirmButton = new Button { Content = confirmLabel, IsDefault = false, MinWidth = 70 };
         AutomationProperties.SetAutomationId(ConfirmButton, DialogAutomationIds.Confirm);
-        ToolTip.SetTip(ConfirmButton, DialogTips.Confirm);
+        ToolTip.SetTip(ConfirmButton, DialogStrings.TipConfirm);
         CancelButton = new Button { Content = cancelLabel, IsCancel = true, MinWidth = 70 };
         AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
-        ToolTip.SetTip(CancelButton, DialogTips.Cancel);
+        ToolTip.SetTip(CancelButton, DialogStrings.TipCancel);
 
         StackPanel buttonRow = new()
         {

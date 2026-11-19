@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Bennewitz.Ninja.AppServices.Abstractions;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
+using Bennewitz.Ninja.AppServices.AvaloniaUI.Localization;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 
@@ -27,19 +28,19 @@ internal sealed class UnsavedChangesDialog : Window
     {
         // Save is the safe default (Enter triggers it): users who reflexively
         // hit Enter after clicking close should save, not lose work.
-        SaveButton = new Button { Content = "Save", IsDefault = true, MinWidth = 90 };
+        SaveButton = new Button { Content = DialogStrings.LabelSave, IsDefault = true, MinWidth = 90 };
         AutomationProperties.SetAutomationId(SaveButton, DialogAutomationIds.Save);
-        ToolTip.SetTip(SaveButton, DialogTips.Save);
+        ToolTip.SetTip(SaveButton, DialogStrings.TipSave);
         // Don't Save is destructive — explicitly NOT default so Enter doesn't
         // accidentally discard work.  No special key binding.
-        DontSaveButton = new Button { Content = "Don't Save", MinWidth = 90 };
+        DontSaveButton = new Button { Content = DialogStrings.LabelDontSave, MinWidth = 90 };
         DialogChrome.ApplyDestructiveStyle(this, DontSaveButton, DialogCategory.Destructive);
         AutomationProperties.SetAutomationId(DontSaveButton, DialogAutomationIds.DontSave);
-        ToolTip.SetTip(DontSaveButton, DialogTips.DontSave);
+        ToolTip.SetTip(DontSaveButton, DialogStrings.TipDontSave);
         // Cancel keeps the window open.  IsCancel = true wires Escape.
-        CancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 90 };
+        CancelButton = new Button { Content = DialogStrings.LabelCancel, IsCancel = true, MinWidth = 90 };
         AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
-        ToolTip.SetTip(CancelButton, DialogTips.KeepOpen);
+        ToolTip.SetTip(CancelButton, DialogStrings.TipKeepOpen);
 
         StackPanel buttonRow = new()
         {
