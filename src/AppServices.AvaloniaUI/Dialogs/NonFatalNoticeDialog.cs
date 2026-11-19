@@ -79,6 +79,7 @@ public sealed class NonFatalNoticeDialog : Window
         const string DetailsHelp = "Read-only notice text; Copy to Clipboard copies all of it";
         AutomationProperties.SetName(bodyBox, "Notice details");
         AutomationProperties.SetHelpText(bodyBox, DetailsHelp);
+        AutomationProperties.SetAutomationId(bodyBox, DialogAutomationIds.Details);
         ToolTip.SetTip(bodyBox, DetailsHelp);
 
         ScrollViewer scroll = new()
@@ -99,6 +100,7 @@ public sealed class NonFatalNoticeDialog : Window
         const string CopyHelp = "Copy the full notice text to the clipboard";
         AutomationProperties.SetName(copyBtn, "Copy to Clipboard");
         AutomationProperties.SetHelpText(copyBtn, CopyHelp);
+        AutomationProperties.SetAutomationId(copyBtn, DialogAutomationIds.Copy);
         ToolTip.SetTip(copyBtn, CopyHelp);
         copyBtn.Click += OnCopyClick;
 
@@ -108,6 +110,7 @@ public sealed class NonFatalNoticeDialog : Window
             HorizontalAlignment = HorizontalAlignment.Right,
         };
         AutomationProperties.SetName(closeBtn, "Close");
+        AutomationProperties.SetAutomationId(closeBtn, DialogAutomationIds.Close);
         ToolTip.SetTip(closeBtn, "Close this window");
         closeBtn.Click += (_, _) => Close();
 

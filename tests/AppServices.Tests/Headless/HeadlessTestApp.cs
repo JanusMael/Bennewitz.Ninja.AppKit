@@ -11,8 +11,9 @@ namespace AppServices.Tests.Headless;
 /// no rendering, and no theme.
 /// </summary>
 /// <remarks>
-/// ⓘ No theme, unlike ScopedEditors' test app. The dialogs here are walked as built and never
-/// shown, so no control template is applied and a theme would change nothing that is asserted.
+/// ⓘ No theme, unlike ScopedEditors' test app. Avalonia 12.1.3 gives every <c>ContentControl</c> a
+/// default template, so a dialog a test shows works without one (<c>Dialogs/DialogInput.cs</c>). A test
+/// that measures under a theme adds Semi to its own application's styles, which reach no other test.
 /// </remarks>
 public sealed class HeadlessTestApp : Application
 {

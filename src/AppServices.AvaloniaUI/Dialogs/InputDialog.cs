@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -31,9 +32,17 @@ internal sealed class InputDialog : Window
             PlaceholderText = placeholder,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
+        // The box is named by the prompt above it, which is what the user is asked to type.
+        AutomationProperties.SetName(InputBox, prompt);
+        AutomationProperties.SetAutomationId(InputBox, DialogAutomationIds.Input);
+        ToolTip.SetTip(InputBox, DialogTips.Input);
 
         OkButton = new Button { Content = "OK", IsDefault = true, MinWidth = 70 };
+        AutomationProperties.SetAutomationId(OkButton, DialogAutomationIds.Ok);
+        ToolTip.SetTip(OkButton, DialogTips.Accept);
         CancelButton = new Button { Content = "Cancel", IsCancel = true, MinWidth = 70 };
+        AutomationProperties.SetAutomationId(CancelButton, DialogAutomationIds.Cancel);
+        ToolTip.SetTip(CancelButton, DialogTips.Cancel);
 
         StackPanel buttonRow = new()
         {
