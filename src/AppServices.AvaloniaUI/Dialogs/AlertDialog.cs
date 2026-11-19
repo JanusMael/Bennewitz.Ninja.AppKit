@@ -80,7 +80,7 @@ internal sealed class AlertDialog : Window
             {
                 Text = "⚠",
                 FontSize = 18,
-                Foreground = new SolidColorBrush(Color.Parse("#C62828")),
+                [!TextBlock.ForegroundProperty] = DialogColors.Brush(DialogColors.ErrorBrush),
                 VerticalAlignment = VerticalAlignment.Center,
             });
             header.Children.Add(new TextBlock

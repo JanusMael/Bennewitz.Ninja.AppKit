@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
 
 namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
@@ -11,11 +14,24 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 /// above the message, and the filled style of a destructive button.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Moved out of <see cref="AvaloniaDialogService"/> with the dialogs that take a category
-/// (<c>plans/00007</c>, decision 1); what it builds is unchanged.
+/// (<c>plans/00007</c>, decision 1). Its colours are <see cref="DialogColors"/>' keys (decision 6).
+/// </para>
+/// <para>
+/// A theme repaints a button's <c>PART_ContentPresenter</c> when it is pointed at and pressed, whatever the
+/// button's own fill: under Semi in Light a destructive button's white label all but vanishes then, and
+/// Fluent paints the label dark. So the window carries styles of its own for those two states, which paint
+/// the presenter's fill and label from the destructive keys. They win over the theme's, since a window's
+/// styles are applied after the application's; a theme whose button names its presenter otherwise keeps its
+/// own colours there.
+/// </para>
 /// </remarks>
 internal static class DialogChrome
 {
+    /// <summary>The class of a destructive button, which its window's styles paint pointed at and pressed.</summary>
+    internal const string DestructiveButtonClass = "dialog-destructive";
+
     /// <summary>
     /// Prepend the title with a category-appropriate glyph for the window
     /// chrome.  Returns the title unchanged for neutral categories.
@@ -42,12 +58,9 @@ internal static class DialogChrome
             return;
         }
 
-        (string glyph, string color) = category switch
-        {
-            DialogCategory.Destructive => ("⚠", "#C77700"),
-            DialogCategory.Error => ("⛔", "#C62828"),
-            var _ => ("", "#888888"),
-        };
+        (string glyph, string colour) = category == DialogCategory.Error
+            ? ("⛔", DialogColors.ErrorBrush)
+            : ("⚠", DialogColors.WarningBrush);
 
         StackPanel header = new()
         {
@@ -61,7 +74,7 @@ internal static class DialogChrome
         {
             Text = glyph,
             FontSize = 18,
-            Foreground = new SolidColorBrush(Color.Parse(color)),
+            [!TextBlock.ForegroundProperty] = DialogColors.Brush(colour),
             VerticalAlignment = VerticalAlignment.Center,
         });
         header.Children.Add(new TextBlock
@@ -79,19 +92,44 @@ internal static class DialogChrome
     }
 
     /// <summary>
-    /// Apply danger styling to the confirm button when the category is
-    /// <see cref="DialogCategory.Destructive"/>.  Other categories leave the
-    /// button at the default style.
+    /// Fill <paramref name="confirmButton"/> red behind a white label when the category is
+    /// <see cref="DialogCategory.Destructive"/>, and add to <paramref name="dialogWindow"/> the styles that
+    /// keep it so pointed at and pressed. Other categories leave the button at the theme's style.
     /// </summary>
-    internal static void ApplyDestructiveStyle(Button confirmButton, DialogCategory category)
+    internal static void ApplyDestructiveStyle(Window dialogWindow, Button confirmButton, DialogCategory category)
     {
         if (category != DialogCategory.Destructive)
         {
             return;
         }
 
-        confirmButton.Background = new SolidColorBrush(Color.Parse("#C62828"));
-        confirmButton.Foreground = Brushes.White;
+        confirmButton[!TemplatedControl.BackgroundProperty] = DialogColors.Brush(DialogColors.DestructiveBackgroundBrush);
+        confirmButton[!TemplatedControl.ForegroundProperty] = DialogColors.Brush(DialogColors.DestructiveForegroundBrush);
         confirmButton.FontWeight = FontWeight.SemiBold;
+        confirmButton.Classes.Add(DestructiveButtonClass);
+
+        // Pointed at, then pressed: a press by the mouse is pointed at as well, and of two styles that both
+        // match, the later wins.
+        dialogWindow.Styles.Add(PaintedWhen(":pointerover", DialogColors.DestructivePointerOverBackgroundBrush));
+        dialogWindow.Styles.Add(PaintedWhen(":pressed", DialogColors.DestructivePressedBackgroundBrush));
+    }
+
+    /// <summary>
+    /// A style that paints a destructive button's presenter with <paramref name="fill"/> and the destructive
+    /// label in <paramref name="pseudoClass"/>.
+    /// </summary>
+    private static Style PaintedWhen(string pseudoClass, string fill)
+    {
+        Style style = new(selector => selector
+            .OfType<Button>()
+            .Class(DestructiveButtonClass)
+            .Class(pseudoClass)
+            .Template()
+            .OfType<ContentPresenter>()
+            .Name("PART_ContentPresenter"));
+        style.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, DialogColors.Brush(fill)));
+        style.Setters.Add(new Setter(
+            ContentPresenter.ForegroundProperty, DialogColors.Brush(DialogColors.DestructiveForegroundBrush)));
+        return style;
     }
 }

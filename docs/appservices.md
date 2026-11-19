@@ -148,6 +148,73 @@ throws counts as not benign, and its throw is logged beside the exception. The f
 whichever thread raised the exception, the UI thread or the finalizer thread, so it must be quick
 and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
 
+## Dialog colours
+
+The dialogs `AvaloniaDialogService` shows take every colour from a key the package declares for Light
+and for Dark, and an open dialog follows a change of theme. The first dialog that reads a key merges
+the package's dictionary into the application's resources, first among its merged dictionaries, so
+nothing needs adding at start-up. `FatalErrorDialog` and `NonFatalNoticeDialog` read no key.
+
+| Key | What it paints | Light | Dark |
+|---|---|---|---|
+| `AppServices.ErrorBrush` | The glyph in an error's header | `#C62828` | `#F85149` |
+| `AppServices.WarningBrush` | The ⚠ in a destructive action's header | `#C77700` | `#D29922` |
+| `AppServices.LinkBrush` | A path, a link, and the ↗ after a link | `#1F6FEB` | `#58A6FF` |
+| `AppServices.SubtleBrush` | The 📋 after a path | `#888888` | `#8B949E` |
+| `AppServices.DestructiveBackgroundBrush` | A destructive button's fill | `#C62828` | `#C62828` |
+| `AppServices.DestructivePointerOverBackgroundBrush` | Its fill while pointed at | `#B71C1C` | `#B71C1C` |
+| `AppServices.DestructivePressedBackgroundBrush` | Its fill while pressed | `#8E1B1B` | `#8E1B1B` |
+| `AppServices.DestructiveForegroundBrush` | Its label | `#FFFFFF` | `#FFFFFF` |
+| `AppServices.CodeBlockBackgroundBrush` | A code block's fill | `#F4F4F4` | `#1F1F1F` |
+| `AppServices.CodeBlockBorderBrush` | A code block's border | `#D0D0D0` | `#3A3A3A` |
+
+Against a white window, and a `#1F1F1F` one in Dark, a colour that paints text reads at 4.5:1 or
+more, and one that paints a glyph at 3:1 or more; a destructive button's label reads at 4.5:1 or more
+on each of its fills. A theme variant that inherits neither Light nor Dark takes the Light values.
+
+A host overrides a key by declaring it in `Application.Resources`: among its own entries, in its theme
+dictionaries, or in a dictionary it merges, before or after a dialog has merged the package's.
+
+```xml
+<Application.Resources>
+  <ResourceDictionary>
+    <ResourceDictionary.ThemeDictionaries>
+      <ResourceDictionary x:Key="Light">
+        <SolidColorBrush x:Key="AppServices.CodeBlockBackgroundBrush" Color="#F6F8FA" />
+      </ResourceDictionary>
+      <ResourceDictionary x:Key="Dark">
+        <SolidColorBrush x:Key="AppServices.CodeBlockBackgroundBrush" Color="#161B22" />
+      </ResourceDictionary>
+    </ResourceDictionary.ThemeDictionaries>
+  </ResourceDictionary>
+</Application.Resources>
+```
+
+A key declared in a style's resources, under `Application.Styles`, is found after the package's, since
+an application reads its resources before its styles. Once a dialog has merged the package's
+dictionary, each dictionary the host merged sits one place later among the merged dictionaries.
+
+A destructive button keeps its fill and its white label when it is pointed at and pressed: the
+dialog's own styles paint the button's `PART_ContentPresenter` in those two states, the part Semi's
+and Fluent's buttons both name. Under a theme whose button names it otherwise, those two states keep
+the theme's colours. A glyph an emoji font draws in colour, such as 📋 or ⛔, may ignore its brush.
+
+## Upgrading from 2026.4.1116
+
+- **A code block's keys take the package's prefix.** A dialog's code block reads
+  `AppServices.CodeBlockBackgroundBrush` and `AppServices.CodeBlockBorderBrush`, and no longer
+  `AppCodeBlockBackgroundBrush` or `AppCodeBlockBorderBrush`. An app that declared its own values
+  under the old keys declares them under the new ones; until it does, its code blocks take the
+  package's, `#F4F4F4` and `#D0D0D0` in Light and `#1F1F1F` and `#3A3A3A` in Dark. An app that declared
+  those same values can drop them, and one that declared neither key sees its code blocks filled and
+  framed, where they were not before.
+- **The dialogs' colours follow a dark theme.** A path, a link, the 📋 and the glyph in an error's or a
+  destructive action's header take lighter colours in Dark, from the keys under "Dialog colours", and an
+  open dialog follows a change of theme. In Light they look as before.
+- **The 📋 after a path and the ↗ after a link are buttons.** Tab reaches each, Enter and Space press
+  it, and a screen reader names it by what a press does. Each looks as before, but for the theme's focus
+  ring when it has keyboard focus.
+
 ## Upgrading from 2026.4.1113
 
 - **A smoke run can fail on a task exception nobody observed.** `FailOnUnobservedTaskExceptions`, off

@@ -33,7 +33,7 @@ internal sealed class UnsavedChangesDialog : Window
         // Don't Save is destructive — explicitly NOT default so Enter doesn't
         // accidentally discard work.  No special key binding.
         DontSaveButton = new Button { Content = "Don't Save", MinWidth = 90 };
-        DialogChrome.ApplyDestructiveStyle(DontSaveButton, DialogCategory.Destructive);
+        DialogChrome.ApplyDestructiveStyle(this, DontSaveButton, DialogCategory.Destructive);
         AutomationProperties.SetAutomationId(DontSaveButton, DialogAutomationIds.DontSave);
         ToolTip.SetTip(DontSaveButton, DialogTips.DontSave);
         // Cancel keeps the window open.  IsCancel = true wires Escape.

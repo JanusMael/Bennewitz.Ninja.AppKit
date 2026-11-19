@@ -4,11 +4,11 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Bennewitz.Ninja.AppServices.Abstractions.Dialogs;
@@ -33,6 +33,12 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Dialogs;
 /// no padding and no minimum size, its fill is transparent, and the window's styles keep the theme from
 /// filling its <c>PART_ContentPresenter</c> when it is pointed at or pressed. Keyboard focus still draws
 /// the theme's ring.
+/// </para>
+/// <para>
+/// A path, a link and its ↗ take <see cref="DialogColors.LinkBrush"/>, the 📋
+/// <see cref="DialogColors.SubtleBrush"/>, and a code pane <see cref="DialogColors.CodeBlockBackgroundBrush"/>
+/// and <see cref="DialogColors.CodeBlockBorderBrush"/>, each read through <see cref="DialogColors.Brush"/>, so
+/// an open dialog follows a change of theme (decision 6).
 /// </para>
 /// <para>
 /// ⚠ The fill is transparent, never null: a null fill takes no pointer, and on the headless platform
@@ -127,7 +133,7 @@ internal static class DialogMessageContent
     /// <summary>
     /// Build dialog content where consecutive <see cref="DialogSegmentKind.Code"/>
     /// segments render inside a framed bordered pane (theme-aware bg via
-    /// <c>AppCodeBlockBackgroundBrush</c> / <c>AppCodeBlockBorderBrush</c>) and
+    /// <c>AppServices.CodeBlockBackgroundBrush</c> / <c>AppServices.CodeBlockBorderBrush</c>) and
     /// all other segments stay as plain inline runs.  Two cases:
     /// <list type="bullet">
     ///   <item>Message has NO Code segments → returns a single
@@ -233,10 +239,11 @@ internal static class DialogMessageContent
     }
 
     /// <summary>
-    /// Build the framed Border that wraps a Code-segment group.  Uses
-    /// <c>AppCodeBlockBackgroundBrush</c> / <c>AppCodeBlockBorderBrush</c> via
-    /// <see cref="DynamicResourceExtension"/> so the pane re-themes when the
-    /// user toggles light / dark.
+    /// Build the framed Border that wraps a Code-segment group.  Its fill and border are
+    /// <see cref="DialogColors.CodeBlockBackgroundBrush"/> and <see cref="DialogColors.CodeBlockBorderBrush"/>,
+    /// read through <see cref="DialogColors.Brush"/>, so the pane re-themes when the user toggles light /
+    /// dark. The keys before them, <c>AppCodeBlockBackgroundBrush</c> and <c>AppCodeBlockBorderBrush</c>,
+    /// are no longer read.
     /// </summary>
     private static Border BuildCodePane(List<DialogSegment> segs, Window dialogWindow, DialogAutomationIds.Sequence ids)
     {
@@ -247,8 +254,8 @@ internal static class DialogMessageContent
             CornerRadius = new CornerRadius(3),
             Padding = new Thickness(10, 8),
         };
-        pane[!Border.BackgroundProperty] = new DynamicResourceExtension("AppCodeBlockBackgroundBrush");
-        pane[!Border.BorderBrushProperty] = new DynamicResourceExtension("AppCodeBlockBorderBrush");
+        pane[!Border.BackgroundProperty] = DialogColors.Brush(DialogColors.CodeBlockBackgroundBrush);
+        pane[!Border.BorderBrushProperty] = DialogColors.Brush(DialogColors.CodeBlockBorderBrush);
         return pane;
     }
 
@@ -264,13 +271,13 @@ internal static class DialogMessageContent
         Run pathRun = new(path)
         {
             FontFamily = new FontFamily("Consolas,Menlo,monospace"),
-            Foreground = new SolidColorBrush(Color.Parse("#1F6FEB")),
+            [!TextElement.ForegroundProperty] = DialogColors.Brush(DialogColors.LinkBrush),
             FontWeight = FontWeight.SemiBold,
         };
         tb.Inlines!.Add(pathRun);
 
         Button copyButton = GlyphButton(
-            "📋", 12, new SolidColorBrush(Color.Parse("#888888")), DialogTips.CopyPath(path), ids.Next(DialogAutomationIds.CopyPath));
+            "📋", 12, DialogColors.SubtleBrush, DialogTips.CopyPath(path), ids.Next(DialogAutomationIds.CopyPath));
         copyButton.Click += OnCopyClick;
 
         // Async void, as an event handler has to be, so the whole body is guarded: a throw escaping
@@ -315,13 +322,13 @@ internal static class DialogMessageContent
     {
         Run linkRun = new(label)
         {
-            Foreground = new SolidColorBrush(Color.Parse("#1F6FEB")),
+            [!TextElement.ForegroundProperty] = DialogColors.Brush(DialogColors.LinkBrush),
             TextDecorations = TextDecorations.Underline,
         };
         tb.Inlines!.Add(linkRun);
 
         Button openButton = GlyphButton(
-            "↗", 11, new SolidColorBrush(Color.Parse("#1F6FEB")), DialogTips.OpenLink(url), ids.Next(DialogAutomationIds.OpenLink));
+            "↗", 11, DialogColors.LinkBrush, DialogTips.OpenLink(url), ids.Next(DialogAutomationIds.OpenLink));
         openButton.Click += (_, _) =>
         {
             if (string.IsNullOrEmpty(url))
@@ -336,10 +343,10 @@ internal static class DialogMessageContent
     }
 
     /// <summary>
-    /// A 📋 or ↗ button, sized and coloured as the text glyph it replaced, named, and with a tooltip that
-    /// says what a press does.
+    /// A 📋 or ↗ button, sized as the text glyph it replaced and coloured from <paramref name="colour"/>, one
+    /// of <see cref="DialogColors"/>' keys, named, and with a tooltip that says what a press does.
     /// </summary>
-    private static Button GlyphButton(string glyph, double fontSize, IBrush foreground, string name, string automationId)
+    private static Button GlyphButton(string glyph, double fontSize, string colour, string name, string automationId)
     {
         Button button = new()
         {
@@ -352,9 +359,9 @@ internal static class DialogMessageContent
             BorderThickness = new Thickness(0),
             MinWidth = 0,
             MinHeight = 0,
-            Background = Brushes.Transparent,
+            Background = DialogColors.NoFill,
             Cursor = new Cursor(StandardCursorType.Hand),
-            Foreground = foreground,
+            [!TemplatedControl.ForegroundProperty] = DialogColors.Brush(colour),
             VerticalAlignment = VerticalAlignment.Center,
         };
         button.Classes.Add(GlyphButtonClass);
@@ -390,8 +397,8 @@ internal static class DialogMessageContent
             .Template()
             .OfType<ContentPresenter>()
             .Name("PART_ContentPresenter"));
-        style.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.Transparent));
-        style.Setters.Add(new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent));
+        style.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, DialogColors.NoFill));
+        style.Setters.Add(new Setter(ContentPresenter.BorderBrushProperty, DialogColors.NoFill));
         return style;
     }
 
