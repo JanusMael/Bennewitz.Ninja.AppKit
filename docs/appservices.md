@@ -148,6 +148,42 @@ throws counts as not benign, and its throw is logged beside the exception. The f
 whichever thread raised the exception, the UI thread or the finalizer thread, so it must be quick
 and thread-safe. Until `ConfigureLogging` has run, nothing is benign.
 
+## Dialog names and ids
+
+Every control a person can reach in the package's windows, the dialogs `AvaloniaDialogService` shows,
+`FatalErrorDialog` and `NonFatalNoticeDialog`, has a name a screen reader reads, a tooltip, and an
+automation id unique in its window. A UI test or a harness finds a control by its id, whatever label a
+caller passed:
+
+| Id | The control |
+|---|---|
+| `DialogOk` | An alert's OK, and the input dialog's |
+| `DialogConfirm` | A confirmation's confirm button, whatever its label |
+| `DialogCancel` | A confirmation's cancel button, the input dialog's Cancel, and the unsaved-changes prompt's |
+| `DialogSave` | The unsaved-changes prompt's Save |
+| `DialogDontSave` | Its Don't Save |
+| `DialogInput` | The input dialog's text box |
+| `DialogText` | An alert's message, and each block of a `DialogMessage`'s text |
+| `DialogCode` | A `DialogMessage`'s code |
+| `DialogCopyPath` | The 📋 after a path |
+| `DialogOpenLink` | The ↗ after a link |
+| `DialogDetails` | The fatal-error and notice dialogs' details box |
+| `DialogCopy` | Their copy button |
+| `DialogClose` | Their Close |
+
+A role that repeats in one window is numbered from its second: a message with two paths shows
+`DialogCopyPath` and `DialogCopyPath2`.
+
+A button is named by its label, and the input dialog's text box by its prompt. The 📋 is named by
+`TipCopyPath`, "Copy" and its path, and the ↗ by `TipOpenLink`, "Open" and its link, each of which is
+its tooltip too. A block of text is named by its text, and a window by its title, so a screen reader
+reads the ⚠ or ⛔ the package puts before the title of a destructive or an error dialog. A label, a path
+or a link a caller passes goes into a name as given, symbol and all. Every other name and tooltip is
+the package's, in the words under "Dialog strings".
+
+Tab reaches the 📋 and the ↗, and Enter and Space press them, as UI Automation's invoke does. While one
+of them has keyboard focus, Enter presses it, not the dialog's default button.
+
 ## Dialog colours
 
 The dialogs `AvaloniaDialogService` shows take every colour from a key the package declares for Light
@@ -194,10 +230,14 @@ A key declared in a style's resources, under `Application.Styles`, is found afte
 an application reads its resources before its styles. Once a dialog has merged the package's
 dictionary, each dictionary the host merged sits one place later among the merged dictionaries.
 
-A destructive button keeps its fill and its white label when it is pointed at and pressed: the
-dialog's own styles paint the button's `PART_ContentPresenter` in those two states, the part Semi's
-and Fluent's buttons both name. Under a theme whose button names it otherwise, those two states keep
-the theme's colours. A glyph an emoji font draws in colour, such as 📋 or ⛔, may ignore its brush.
+A destructive button keeps its fill and its white label when it is pointed at and pressed, and the 📋
+and the ↗ stay unfilled: the dialog's own styles paint each button's `PART_ContentPresenter` in those
+two states, the part Semi's and Fluent's buttons both name. Under a theme whose button names it
+otherwise, those two states keep the theme's colours and fills. A glyph an emoji font draws in colour,
+such as 📋 or ⛔, may ignore its brush.
+
+A dialog takes the application's theme, whatever its owner's: a window given a theme of its own shows
+its dialogs in the application's.
 
 ## Dialog strings
 
@@ -257,7 +297,8 @@ DialogStrings.Resolver = key => key switch
 | `HelpCopyNotice` | The notice dialog's copy button, its help text and tooltip | Copy the full notice text to the clipboard |
 
 `TextFatalError`'s two sentences are on two lines. Four keys carry a value as `{0}`, and the package
-puts it in with the current culture: a text without `{0}` shows without the value.
+puts it in with the current culture: a text without `{0}` shows without the value, so two 📋 in one
+window would share a name, though never an id.
 
 A string is read each time a window is built, so a culture the host changes reaches the next dialog,
 and an open one keeps the words it was built with. The resolver may be called on any thread, the one
@@ -267,8 +308,13 @@ whose `{0}` cannot be filled, never fails a dialog: that string shows its defaul
 failure is logged at Warning.
 
 The package's glyphs, ⚠, ⛔, 📋 and ↗, stay outside the words, and a label, title or message a caller
-passes is shown as given. The button of macOS's native fatal-error dialog reads "OK", whatever the
-host's words.
+passes is shown as given. A host's words go into names as given too, symbol and all. The windows lay
+out left to right whatever the language, and the button of macOS's native fatal-error dialog reads
+"OK", whatever the host's words.
+
+Every key is public and permanent: a string the package stops showing keeps its key, and no key is
+renamed, so a resolver written for one version keeps working with every later one. A key a later
+version adds shows its default until the resolver maps it.
 
 ## Upgrading from 2026.4.1116
 
@@ -285,6 +331,8 @@ host's words.
 - **The 📋 after a path and the ↗ after a link are buttons.** Tab reaches each, Enter and Space press
   it, and a screen reader names it by what a press does. Each looks as before, but for the theme's focus
   ring when it has keyboard focus.
+- **Every control in the dialogs has a name, a tooltip and an automation id.** A UI test finds each by
+  its id, under "Dialog names and ids", whatever label a caller passed.
 - **`IDialogService.ShowConfirmAsync`'s labels default to null.** Both overloads take
   `string? confirmLabel = null` and `string? cancelLabel = null`, where they took "Confirm" and "Cancel".
   Null shows the host's words, `DialogStrings.LabelConfirm` and `DialogStrings.LabelCancel`, and a label
