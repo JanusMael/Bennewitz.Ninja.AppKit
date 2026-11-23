@@ -52,7 +52,7 @@ name, and fetches each source at the commit its packages' nuspecs record for the
 ClaudeForge's idea. `reference/sources.json` lists Avalonia 12.1.3 (`src` and `tests`),
 Avalonia.Controls.DataGrid 12.1.2 and Semi.Avalonia 12.1.0 (`src`). The script, its manifest, the
 README, `AGENTS.md` and three MSBuild shields are tracked; `.gitignore` ignores the checkouts, through
-`/reference/*/` then and `/reference/src` since 2026-11-19 (below), and the script fetches nothing until
+`/reference/*/` then and `/reference/src` since 2026-11-23 (below), and the script fetches nothing until
 git ignores each one. It builds under the shields with
 the settings its `#:property` lines state, so it builds alike in any repository that keeps it.
 Verified on Windows:
@@ -81,10 +81,10 @@ are enabled. JanusMael/Bennewitz.Ninja.Templates#109, merged on 2026-11-19, make
 `repo-conventions check --repo` require that line of a repository that keeps the kit, and Templates
 released it in its `2026.4.1119` the same day.
 
-**This repository took that layout on 2026-11-19**, by the maintainer's choice of 2026-11-17, in a pull
-request of its own and one change. Before it, Templates' `check --repo` reported three findings here:
-`drift` on `scripts/repo-conventions.cs` and on `reference/fetch-reference.cs`, and `reference` for the
-missing line.
+**This repository took that layout on 2026-11-23**, by the maintainer's choice of 2026-11-17, in a pull
+request of its own and one change, JanusMael/Bennewitz.Ninja.AppKit#51. Before it, Templates'
+`check --repo` reported three findings here: `drift` on `scripts/repo-conventions.cs` and on
+`reference/fetch-reference.cs`, and `reference` for the missing line.
 - `reference/fetch-reference.cs`, its three shields and `scripts/repo-conventions.cs` are Templates'
   `v2026.4.1119` copies, byte for byte. This repository's own `check` fails without the last.
 - `.gitignore` holds `/reference/src` in place of `/reference/*/`, each `dir` in `sources.json` is under
@@ -93,7 +93,9 @@ missing line.
   and the shields, beside this repository's own sources, and the root `AGENTS.md` names the folder.
 - **Verified on Windows.** `check` conforms. It fails on `reference` with the ignore line removed, and
   takes `/reference/*/` in a checkout, where git is asked and ignores the folder: only an API read, as
-  `check --repo` makes, needs the line itself. `LongPathsEnabled` was already 1 here.
+  `check --repo` makes, needs the line itself. `LongPathsEnabled` was already 1 here. Once the change
+  merged, `check --repo JanusMael/Bennewitz.Ninja.AppKit`, which reads GitHub, conformed, and Templates
+  was told.
 
 Three repositories took the script from here before Templates became its home:
 - DiffView (JanusMael/Bennewitz.Ninja.DiffView#59), whose CI ran it on Linux, macOS and Windows, where
@@ -456,22 +458,37 @@ break things lets do them all at once".
 - **Verified on Windows.** Build with warnings as errors, 955 tests (940 passed, 15 skipped as before),
   and `check`, which conforms.
 
+**`plans/00007` step 6 and `plans/00008` step 3: the docs, ahead of `plans/00007` step 5.**
+- **`docs/appservices.md`**, every AppServices package's README, gains "Dialog names and ids": the
+  automation id of every control in the eight windows, how a role a window repeats is numbered, what
+  names each control, and that Enter on a focused 📋 or ↗ presses it. "Dialog colours" and "Dialog
+  strings" gain the limits the plans give that a host meets: a dialog takes the application's theme,
+  whatever its owner's; the 📋 and ↗ take the theme's fills where its button names its presenter
+  otherwise; a host's words go into names as given; the windows lay out left to right; and every key is
+  permanent. "Upgrading from 2026.4.1116" gains the names, tooltips and ids.
+- **The root `AGENTS.md`** holds the windows' colours and their strings as AppServices invariants, each
+  with the tests that guard it, and its account of the Avalonia package names both plans.
+- **Unchanged surface.** Package validation against `2026.4.1116`, run again on `a0f43fe`, reports
+  `CP0002` for the removed `FatalErrorDialog.DefaultMessage` in `.Avalonia` and nothing else, and nothing
+  in `.Abstractions`, as at step 2.
+- **Verified on Windows.** Build with warnings as errors, `check`, which conforms, and
+  `PackageMetadataTests`, which read the packed README, 6 passed.
+
 **Next, in order:**
 1. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
-   it, and add `src/AGENTS.md`'s rule for windows. The Inspections session plans the reader, its number and
-   its order the maintainer's to set there, and tells this repository its version and API on release.
-2. **`plans/00007` step 6 and `plans/00008` step 3**, the docs: the root `AGENTS.md`'s invariants on the
-   windows' colours and strings, and what `docs/appservices.md` still lacks.
-3. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
+   it, and add `src/AGENTS.md`'s rule for windows. The reader is Inspections' `plans/00011` (Drift from
+   `plans/00007`); the Inspections session tells this repository its version and API on release, in a
+   message the maintainer approves.
+2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
    ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
    XamlQuality gets the Avalonia findings.
-4. **`plans/00006`** is revised to build on both, then put to the maintainer.
-5. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
+3. **`plans/00006`** is revised to build on both, then put to the maintainer.
+4. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
    2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-6. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
+5. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
    when the family next changes. The policy names this repository and covers all eight ids, each pushed
    at `2026.4.1116`.
 
@@ -708,6 +725,22 @@ break things lets do them all at once".
   AssemblyQuality, to plan it there for his approval, with step 5's four cases as its first consumer:
   windows, colours, lookups and keys. Step 5 raises the pin and builds the sweeps on it once it is released,
   and `plans/00008` step 2 came first.
+- **The reader is Inspections' `plans/00011`**, approved there and merged as
+  JanusMael/Bennewitz.Ninja.Inspections#151 on 2026-11-23. It gives AssemblyQuality two rules on
+  ICSharpCode.Decompiler 11.2.0.10050: `BNAQ1010`, uses confined to named types or methods, and
+  `BNAQ1011`, keys passed to a marked helper, each with a reading through which a consumer asserts its
+  positive controls. Decision 8's keys are followed through an attribute the code carries, by the
+  maintainer's decision of 2026-11-19 there, which decision 8 does not name: step 5 declares
+  `Bennewitz.Ninja.ResourceKeyAttribute` internal in the Avalonia project, and marks `DialogColors.Brush`'s
+  key with `[ResourceKey(typeof(DialogColors))]`. A literal equal to a key's value reads as the key, so
+  that one defect cannot be planted.
+- **Step 6 came before step 5**, which waits for the reader. Step 5 writes `src/AGENTS.md`'s rule for
+  windows with its sweeps.
+- **The root `AGENTS.md` holds the colours as an invariant too.** The plan names its row on names,
+  tooltips and ids alone; the colours' row stands beside the strings', which `plans/00008` names.
+- **Package validation against `2026.4.1116` reports one break, not none**: `CP0002` for
+  `FatalErrorDialog.DefaultMessage`, which `plans/00008` removes by its decision 8 as approved, in the same
+  release. The commit that removed it is marked `!`, as is the one that stopped reading the old keys.
 
 ## Drift from `plans/00008`
 
