@@ -887,6 +887,11 @@ published packages at `2026.4.1116` and Avalonia 12.1.3 (measured 2026-11-24):
   line as it is under `{Message:lj}`.
 - **The Serilog.Extensions packages were measured at 10.0.0**, pinned in neither repository, as decision
   5 has it.
+- **Templates measured the Trace sink's default** on 2026-11-24, for its `plans/00014` step 1:
+  Serilog.Sinks.Trace 4.0.0 renders `{Message}`, so a hand-quoted value prints with its quotes doubled,
+  which is why decision 7 gives that sink a template that renders `{Message:lj}`. It also measured that an
+  enum hole carrying `:l` writes no line at all through a Serilog sink; neither of the packages' two `:l`
+  templates takes an enum.
 
 ## What the merge changed for consumers
 
