@@ -474,21 +474,96 @@ break things lets do them all at once".
 - **Verified on Windows.** Build with warnings as errors, `check`, which conforms, and
   `PackageMetadataTests`, which read the packed README, 6 passed.
 
+**`plans/00009`, log lines in the family's form, approved 2026-11-24.**
+- **What it answers.** Bennewitz.Ninja.Templates' `plans/00014`, approved by the maintainer on 2026-11-23,
+  gives every line the family logs one form: an `[Area.Kind]` tag and then camelCase pairs, free text
+  quoted by hand, an enum passed as its name, no `:l`, every sink rendering `{Message:lj}`, and no secret
+  or document text in a value. Its decisions 5, 6 and 8 ask this repository for a start and an exit line
+  from `AppServices.EntryPoint`, one redaction helper in `AppServices.Abstractions`, and its own lines in
+  the form before the CodeQuality rule that will hold it reaches this build.
+- **The maintainer's choices**, each recorded in the plan with its date:
+  - no setup call for apps without Avalonia, for now (2026-11-23);
+  - Templates' `bbconsole`, `bbweb` and `bbapi` set Serilog up in `Main`, before `AppMain` (2026-11-23);
+  - the exit line is written in `AppMain`'s own `finally`, on a log the host does not own (2026-11-23);
+  - `ShellLauncher`'s sentence to a `DiagnosticSink` takes the form, and `DefaultShareService`'s messages
+    to `Trace` do not (2026-11-24);
+  - the writer is a named delegate, `LogLineWriter` (2026-11-24).
+- **Committed on its own**, as `ca2b531` (#53), before any of it is built. Templates was told its API the
+  same day.
+
+**`plans/00009` step 2: measured first.** In scratch, under the build settings and analysers of Templates'
+`bbweb`, with Serilog 4.3.1, Serilog.Extensions.Logging and Serilog.Extensions.Hosting 10.0.0, the
+published packages at `2026.4.1116` and Avalonia 12.1.3 (measured 2026-11-24):
+- **The two lines.** Through Serilog under `{Message:lj}`, and through an `ILogger` over
+  Serilog.Extensions.Logging, each writes the same text, every value bare as its template has it:
+  `[App.Start] app=ScratchApp version=2026.4.1124 pid=42224` and `[App.Exit] code=130 elapsedMs=9876543210`,
+  the `int` and the `long` as numbers, each kept as a property of its own type; the `ILogger` adds
+  `SourceContext`. A quoted hole such as `path="{Path}"` gets one pair of quotes there, and a second under
+  `{Message}` and through `RenderMessage()`.
+- **The writer.** `Log.Information` binds to `LogLineWriter` as Serilog's non-generic
+  `Information(string, params object[])`, and `logger.LogInformation` as
+  `LoggerExtensions.LogInformation(ILogger, string, params object[])`, closed over the logger. Under
+  `bbweb`'s analysers both build with no warning, and the build's SARIF log holds no CA2254 at any level,
+  nor with CA2254 raised to a warning. `Console.Out.WriteLine` binds too, and throws `FormatException` on
+  the named holes, as the plan's Limits say.
+- **A web app's log.** A web app run by `RunHostAsync` whose work builds, starts, stops and disposes its
+  host, as `bbweb`'s does: a line written in `AppMain`'s `finally` after that, where the exit line goes,
+  reaches the static logger's sink under `AddSerilog()` and `UseSerilog()`, and is lost under either with
+  `dispose: true`, which has left `Log.Logger` silent by then.
+- **`ShellLauncher`'s line through a sink.** A `DiagnosticSink` calling `Log.Write(level, exception, line)`
+  and one calling `ILogger.Log(level, default, line, exception, (s, _) => s)` each write
+  `[Shell.Launch] action=terminal reason=NotFound` as it is, at its level and with its exception, and
+  neither shows CA2254.
+- **Avalonia's text.** On the headless platform, each value rendered as its own text, as decision 8 has
+  it, Avalonia's lines read as Avalonia wrote them, such as
+  `[Avalonia.Log] area=Property text="Set DataContext to Vm with priority LocalValue"`, where
+  `{Message:lj}` writes `"LocalValue"` today.
+- **What the tests reach.** A test reaches 16 of the 25 lines in its own process: `AvaloniaDiagnostics`
+  459, 499, 513, 516, 535 and 594, `DialogStrings` 292, `UiThreadExceptions` 169, 172, 309, 339, 342, 401
+  and 436, `BucketedRollingFileSink` 196, and `ShellLauncher` 247, on Windows only. None reaches the other
+  nine:
+  - `AvaloniaDiagnostics` 292, whose logger exists only with `EnableEventLogFile`, which no test sets;
+  - the binding validation logger's 106 and 120, which no test installs;
+  - `SerilogAvaloniaSink`'s 91 and 115, since every test configures logging with `BridgeAvaloniaLogger`
+    off; `DesktopProbe` keeps it on in its child process, whose log no test reads;
+  - the three clipboard failures, since the headless clipboard never fails;
+  - `UiThreadExceptions` 189, since no post to the dispatcher fails.
+
+  Measured by a coverage run of `AppServices.Tests` (678 tests: 663 passed, 15 skipped) and read from the
+  tests.
+- **Tests over every event.** One test asserts over every event of an `AppMain` run:
+  `UiThreadExceptionHandlerTests.Every_row_abandoned_in_a_task_is_logged_shown_and_written_on_stderr_as_its_verdict_says`,
+  32 cases, which takes every event but the one it expects and finds one or none (484 to 491). Eleven more,
+  in `AvaloniaDiagnosticsHookTests`, `AvaloniaDiagnosticsEntryPointTests` and
+  `UiThreadExceptionHandlerTests`, assert over every event they capture but run no `AppMain`, so the two
+  lines reach them only if a held start line outlives `ResetForTests`. The entry point's own tests run
+  `AppMain` without `EntryPointOptions()`, and read its streams, not a log.
+- **One measurement went back to the maintainer before step 3**, as the step asks: Avalonia's own binding
+  warning can carry text a person typed. By his choice of 2026-11-24, the Avalonia line leaves it out
+  (Drift from `plans/00009`).
+
 **Next, in order:**
-1. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
+1. **`plans/00009` steps 3 to 6**: the entry point's two lines, the packages' own lines with the Avalonia
+   line leaving a failed conversion's value out, `LogRedaction`, then the docs.
+2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
    it, and add `src/AGENTS.md`'s rule for windows. The reader is Inspections' `plans/00011` (Drift from
    `plans/00007`); the Inspections session tells this repository its version and API on release, in a
    message the maintainer approves.
-2. **AppServices' next release carries both plans**, on the maintainer's word. The day it is published,
-   ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008` step 5), and
-   XamlQuality gets the Avalonia findings.
-3. **`plans/00006`** is revised to build on both, then put to the maintainer.
-4. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
+3. **AppServices' next release carries all three plans**, on the maintainer's word. The day it is
+   published, ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008`
+   step 5), XamlQuality gets the Avalonia findings, and Templates gets the version and the API
+   (`plans/00009` step 8).
+4. **`plans/00006`** is revised once `plans/00009` is built, the maintainer's choice of 2026-11-23, to
+   build on all three, then put to the maintainer. Inspections measured on 2026-11-24 what its
+   `plans/00011` will report in ScopedEditors: markup's `{DynamicResource}` compiles to
+   `new DynamicResourceExtension`, `ScopeToBrushConverter.Convert` calls `IResourceNode.TryGetResource`
+   itself, and `TipCell`'s static constructor reads `Brushes.Transparent`.
+5. **ClaudeForge's change is its own** (`plans/00002` step 6 and `plans/00003` step 5, told on
    2026-11-12 and 2026-11-13): in one commit, take `2026.4.1113`, set its classifier as
    `IsBenignException`, and delete its UI-thread handler, its unobserved handler and its rebuilt
    options; it needs no unobserved handler of its own. OpenForge2k's copy of ClaudeForge holds
    `2026.3.924` until it can make the same change.
-5. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
+6. **ScopedEditors' next release** is a family release, `scopededitors/v…`, on the maintainer's word
    when the family next changes. The policy names this repository and covers all eight ids, each pushed
    at `2026.4.1116`.
 
@@ -773,6 +848,45 @@ break things lets do them all at once".
     📋's "Copied!" is read when its window is built;
   - step 3's `DialogTips` went into `DialogStrings`, and `DialogWindows` names each string its rows pass,
     listed as `Given`.
+
+## Drift from `plans/00009`
+
+- **Avalonia's own text can carry what a person typed, which decision 8 did not foresee.**
+  - **What Avalonia writes.** A binding whose converter throws in `ConvertBack`, as a
+    `FuncValueConverter` given no way back does, makes Avalonia 12.1.3 log a Warning in its `Binding`
+    area. Its message holds the text it could not convert twice, once in Avalonia's words and once in the
+    converter's: "Could not convert 'typed-text-2' (System.String) to 'System.Double' using
+    'ParseConverter': The input string 'typed-text-2' was not in a correct format." Measured 2026-11-24
+    (`UntypedBindingExpressionBase.cs`, 351 to 358; 309 to 316 for `Convert`).
+  - **Why it went back to the maintainer.** Forwarded as decision 8 has it, the text lands in
+    `[Avalonia.Log] area=Binding text="…"`, which `plans/00014`'s decision 6 bars, and which decision 7
+    already keeps out of the binding validation line.
+  - **What he chose**, on 2026-11-24: the line leaves the value out. For a `Binding` line that reports a
+    failed conversion, the package writes Avalonia's text up to the conversion message, which holds the
+    value and the converter's own message; a test pins 12.1.3's wording.
+  - **What logs nothing.** The same text typed with no converter, or bound through a `StringFormat`.
+    Avalonia's `Property` area also writes every value set, typed text included, at Verbose, which
+    `SerilogAvaloniaSink` mutes below Warning unless a host passes its own areas.
+- **No test reaches nine of the 25 lines, where What exists names five.** It leaves out the event file's
+  line, `SerilogAvaloniaSink`'s two writes, and `UiThreadExceptions` 189. 189 is behind `Write`, so step 4
+  gives it a test, as that step's verification asks; step 4 pins an Avalonia line already.
+- **Nine places read the old text or properties, not eight**: `LaunchResultTests` 120 also reads
+  `ShellLauncher`'s sentence, "opening a file in the default editor", which its new text replaces.
+- **CA2254 is a suggestion under the templates' analysers**, so the lambdas a method group replaces build
+  clean too. It reports one over `LogInformation`, and one over `ILogger.Log` given the line as its message,
+  as a suggestion, and as an error only where it is raised; it reads no Serilog call. Decision 1's method
+  groups show nothing at either level. Until the CodeQuality rule arrives, nothing in a build tells the
+  two apart.
+- **`{Message:lj}` quotes a `TimeSpan` too**, beside the enum, the date and the guid decision 8 names:
+  Avalonia's "Layout pass finished in {Time}" reads `"00:00:00.0022525"` today, and the package's own
+  rendering writes it bare.
+- **Avalonia's templates use more of Serilog's syntax than named holes**: `{$Value}`, positional `{0}`,
+  and an exception passed as a value, whose own text spans lines. Step 4 parses them as Serilog does.
+- **Through an `ILogger`, a sink's line is not its own template**: Serilog.Extensions.Logging writes it as
+  `{State:l}` with the line as its `State`, where `Log.Write` makes the line the template. Both render the
+  line as it is under `{Message:lj}`.
+- **The Serilog.Extensions packages were measured at 10.0.0**, pinned in neither repository, as decision
+  5 has it.
 
 ## What the merge changed for consumers
 
