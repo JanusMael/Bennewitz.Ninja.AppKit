@@ -344,6 +344,16 @@ version adds shows its default until the resolver maps it.
   `AvaloniaDiagnostics.ShowFatalErrorDialog` shows it for a null message, as before.
 - **Every word the dialogs show can be the host's.** `DialogStrings.Resolver` replaces each, under
   "Dialog strings"; a host that sets none sees the dialogs as before.
+- **The packages' own log lines take the family's form**, an `[Area.Kind]` tag and then camelCase pairs,
+  where each was a sentence. A host that searched its log for a line's old text searches for its tag, such
+  as `[UiThread.Exception]` or `[Failure.Repeat]`, and one that read a line's properties by name reads the
+  new names: `Count` for `UnobservedCount` and `RepeatCount`; `Type`, `Message` and `Site` for
+  `ExceptionType`, `ExceptionMessage` and `ThrowSite`; `Key` and `Reason` for `DialogStringKey` and
+  `Failure`. The fatal line no longer names the app. Avalonia's messages read
+  `[Avalonia.Log] area=… text="…"`, a binding's failed conversion without the value it could not
+  convert; the binding validation line carries the exception's type and a stack, never its message, and
+  a text box's text as its length. A `DiagnosticSink` passed to `ShellLauncher` is handed
+  `[Shell.Launch] action=… reason=…`, and the Trace sink renders each message as the rolling file does.
 
 ## Upgrading from 2026.4.1113
 

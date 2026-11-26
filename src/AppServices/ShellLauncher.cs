@@ -41,11 +41,21 @@ public sealed class ShellLauncher : IShellLauncher
 
     /// <summary>Create a launcher that also narrates to <paramref name="diagnostics"/>.</summary>
     /// <param name="diagnostics">
-    /// Receives detail a result cannot carry. ⚠ Treated as untrusted: it runs on the calling thread
-    /// and anything it throws is swallowed, because a diagnostic must never be the reason a launch
-    /// fails.
+    /// Receives detail a result cannot carry: for an operation that failed, one line in the family's form,
+    /// whole, such as <c>[Shell.Launch] action=terminal reason=NotFound</c>, with the exception
+    /// (<c>plans/00009</c>, decision 7). <c>action</c> is <c>terminal</c>, <c>reveal</c>, <c>editor</c> or
+    /// <c>url</c>, and <c>reason</c> the result's <see cref="LaunchStatus"/>, by its name. ⚠ Treated as
+    /// untrusted: it runs on the calling thread and anything it throws is swallowed, because a diagnostic
+    /// must never be the reason a launch fails.
     /// </param>
     public ShellLauncher(DiagnosticSink? diagnostics) => _diagnostics = diagnostics;
+
+    /// <summary>
+    /// Starts each process the launcher starts: <see cref="Process.Start(ProcessStartInfo)"/> unless a test
+    /// replaces it, so that every operation can fail as a test says, on every platform, and launch nothing.
+    /// A test that replaces it puts it back.
+    /// </summary>
+    internal static Func<ProcessStartInfo, Process?> StartProcess { get; set; } = Process.Start;
 
     // -----------------------------------------------------------------------
     // IShellLauncher — public surface
@@ -85,7 +95,7 @@ public sealed class ShellLauncher : IShellLauncher
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(Classify(ex, "launching a terminal"));
+            return ValueTask.FromResult(Classify(ex, "terminal"));
         }
     }
 
@@ -118,7 +128,7 @@ public sealed class ShellLauncher : IShellLauncher
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(Classify(ex, "revealing a file"));
+            return ValueTask.FromResult(Classify(ex, "reveal"));
         }
     }
 
@@ -143,7 +153,7 @@ public sealed class ShellLauncher : IShellLauncher
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                using Process? _ = Process.Start(new ProcessStartInfo
+                using Process? _ = StartProcess(new ProcessStartInfo
                 {
                     FileName = filePath,
                     UseShellExecute = true,
@@ -154,20 +164,20 @@ public sealed class ShellLauncher : IShellLauncher
                 ProcessStartInfo psi = new() { FileName = "open", UseShellExecute = false };
                 psi.ArgumentList.Add("-t");
                 psi.ArgumentList.Add(filePath);
-                using Process? _ = Process.Start(psi);
+                using Process? _ = StartProcess(psi);
             }
             else
             {
                 ProcessStartInfo psi = new() { FileName = "xdg-open", UseShellExecute = false };
                 psi.ArgumentList.Add(filePath);
-                using Process? _ = Process.Start(psi);
+                using Process? _ = StartProcess(psi);
             }
 
             return ValueTask.FromResult(LaunchResult.Ok());
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(Classify(ex, "opening a file in the default editor"));
+            return ValueTask.FromResult(Classify(ex, "editor"));
         }
     }
 
@@ -193,18 +203,18 @@ public sealed class ShellLauncher : IShellLauncher
             // handle is not held until GC.
             using Process? _ =
                 RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-                    ? Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true })
+                    ? StartProcess(new ProcessStartInfo { FileName = url, UseShellExecute = true })
                     : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                        ? Process.Start(new ProcessStartInfo
+                        ? StartProcess(new ProcessStartInfo
                             { FileName = "open", ArgumentList = { url }, UseShellExecute = false })
-                        : Process.Start(new ProcessStartInfo
+                        : StartProcess(new ProcessStartInfo
                             { FileName = "xdg-open", ArgumentList = { url }, UseShellExecute = false });
 
             return ValueTask.FromResult(LaunchResult.Ok());
         }
         catch (Exception ex)
         {
-            return ValueTask.FromResult(Classify(ex, "opening a url"));
+            return ValueTask.FromResult(Classify(ex, "url"));
         }
     }
 
@@ -215,13 +225,16 @@ public sealed class ShellLauncher : IShellLauncher
     /// <summary>
     /// Turn an exception into the status a caller can act on, and narrate it to the sink.
     /// </summary>
+    /// <param name="ex">What the operation threw.</param>
+    /// <param name="action">The operation, as its line names it: <c>terminal</c>, <c>reveal</c>,
+    /// <c>editor</c> or <c>url</c>.</param>
     /// <remarks>
     /// ⛔ <b>The Win32 error codes are the load-bearing part.</b> <see cref="Win32Exception"/> is
     /// what <see cref="Process.Start(ProcessStartInfo)"/> throws for almost everything, so without
     /// reading <see cref="Win32Exception.NativeErrorCode"/> a missing program and a refused one
     /// arrive identically — which is the collapse this whole type exists to undo.
     /// </remarks>
-    private LaunchResult Classify(Exception ex, string what)
+    private LaunchResult Classify(Exception ex, string action)
     {
         const int ErrorFileNotFound = 2;
         const int ErrorPathNotFound = 3;
@@ -244,9 +257,11 @@ public sealed class ShellLauncher : IShellLauncher
             _ => LaunchResult.Failed(ex.Message),
         };
 
+        // ⭐ A line in the family's form, its values in its text, since a sink takes text (plans/00009,
+        // decision 7): a sink writes it as a line of its own, never as a template.
         Report(
             result.Status == LaunchStatus.Unsupported ? DiagnosticLevel.Information : DiagnosticLevel.Warning,
-            $"{what} ended as {result.Status}",
+            $"[Shell.Launch] action={action} reason={result.Status}",
             ex);
 
         return result;
@@ -305,11 +320,11 @@ public sealed class ShellLauncher : IShellLauncher
         string? wtExe = IsWindowsTerminalDefault() ? FindWindowsTerminalExecutable() : null;
         if (wtExe != null)
         {
-            Process.Start(BuildWindowsTerminalPsi(wtExe, psExe, encoded));
+            StartProcess(BuildWindowsTerminalPsi(wtExe, psExe, encoded));
         }
         else
         {
-            Process.Start(BuildDirectPowerShellPsi(psExe, encoded));
+            StartProcess(BuildDirectPowerShellPsi(psExe, encoded));
         }
     }
 
@@ -340,7 +355,7 @@ public sealed class ShellLauncher : IShellLauncher
         };
         psi.ArgumentList.Add("-e");
         psi.ArgumentList.Add(script);
-        Process.Start(psi);
+        StartProcess(psi);
     }
 
     // -----------------------------------------------------------------------
@@ -374,7 +389,7 @@ public sealed class ShellLauncher : IShellLauncher
                 psi.ArgumentList.Add("bash");
                 psi.ArgumentList.Add("-c");
                 psi.ArgumentList.Add(bashCmd);
-                Process.Start(psi);
+                StartProcess(psi);
                 return true;
             }
             catch (Exception ex) when (ex is Win32Exception
@@ -409,7 +424,7 @@ public sealed class ShellLauncher : IShellLauncher
                 psi.ArgumentList.Add("bash");
                 psi.ArgumentList.Add("-c");
                 psi.ArgumentList.Add(bashCmd);
-                Process.Start(psi);
+                StartProcess(psi);
                 return true;
             }
             catch (Exception ex) when (ex is Win32Exception
@@ -443,7 +458,7 @@ public sealed class ShellLauncher : IShellLauncher
         // Note: the comma directly follows /select — no space.
         // UseShellExecute = false lets explorer.exe parse /select correctly without
         // the shell tokenising the path first, which is required for paths with spaces.
-        Process.Start(new ProcessStartInfo
+        StartProcess(new ProcessStartInfo
         {
             FileName = "explorer.exe",
             Arguments = $"/select,\"{filePath}\"",
@@ -461,7 +476,7 @@ public sealed class ShellLauncher : IShellLauncher
         ProcessStartInfo psi = new() { FileName = "open", UseShellExecute = false };
         psi.ArgumentList.Add("-R");
         psi.ArgumentList.Add(filePath);
-        Process.Start(psi);
+        StartProcess(psi);
     }
 
     // -----------------------------------------------------------------------
@@ -499,7 +514,7 @@ public sealed class ShellLauncher : IShellLauncher
                 }
 
                 psi.ArgumentList.Add(target);
-                Process.Start(psi);
+                StartProcess(psi);
                 return;
             }
             catch (Exception ex) when (ex is Win32Exception

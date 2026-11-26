@@ -160,7 +160,7 @@ public sealed class FatalErrorDialog : Window
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Copying the error details to the clipboard failed");
+            Log.Warning(ex, "[Dialog.Copy] reason=clipboardFailed what=errorDetails");
         }
     }
 

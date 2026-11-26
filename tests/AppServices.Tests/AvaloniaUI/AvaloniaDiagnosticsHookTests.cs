@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using Bennewitz.Ninja.AppServices.AvaloniaUI;
 using Serilog;
 using Serilog.Core;
@@ -96,6 +98,29 @@ public sealed class AvaloniaDiagnosticsHookTests : IDisposable
     }
 
     [Fact]
+    public void The_Trace_sink_writes_a_value_quoted_by_hand_with_one_pair_of_quotes_as_the_rolling_file_does()
+    {
+        // plans/00009, decision 7: Serilog.Sinks.Trace 4.0.0's default renders {Message}, which quotes a string
+        // itself, so the package gives the sink a template that renders {Message:lj}, as the rolling file's.
+        RecordingListener listener = new();
+        Trace.Listeners.Add(listener);
+        try
+        {
+            AvaloniaDiagnostics.ConfigureLogging(Options(trace: true));
+            Log.Warning("[Dialog.Copy] reason=clipboardFailed path=\"{Path}\"", @"C:\logs\a b.txt");
+        }
+        finally
+        {
+            Trace.Listeners.Remove(listener);
+        }
+
+        string line = Assert.Single(listener.Lines(), each => each.Contains("[Dialog.Copy]", StringComparison.Ordinal));
+        Assert.EndsWith(@"[Warning] [Dialog.Copy] reason=clipboardFailed path=""C:\logs\a b.txt""", line, StringComparison.Ordinal);
+        Assert.Equal(AvaloniaDiagnostics.TraceOutputTemplate.Replace("{Message:lj}", "{Message}", StringComparison.Ordinal),
+            TraceDefaultOutputTemplate());
+    }
+
+    [Fact]
     public void The_listener_receives_every_enqueued_event_even_without_the_event_file()
     {
         List<string> seen = [];
@@ -126,22 +151,48 @@ public sealed class AvaloniaDiagnosticsHookTests : IDisposable
 
     private AvaloniaDiagnosticsOptions Options(
         Action<LoggerConfiguration>? configure = null,
-        Action<string>? listener = null) =>
+        Action<string>? listener = null,
+        bool trace = false) =>
         new()
         {
             AppName = "hook-tests",
             LogsDirectory = _logs,
-            EnableTraceSink = false,
+            EnableTraceSink = trace,
             // Avalonia's logger sink is process-wide and not the subject here.
             BridgeAvaloniaLogger = false,
             ConfigureLogger = configure,
             EventListener = listener,
         };
 
+    /// <summary>
+    /// The output template Serilog.Sinks.Trace gives its sink by default, read from the pinned package, so
+    /// that the package's own differs from it in the message alone.
+    /// </summary>
+    private static string TraceDefaultOutputTemplate() =>
+        (string)typeof(TraceLoggerConfigurationExtensions)
+            .GetMethods()
+            .Single(method => method.Name == nameof(TraceLoggerConfigurationExtensions.Trace)
+                              && method.GetParameters().Any(parameter => parameter.Name == "outputTemplate"))
+            .GetParameters()
+            .Single(parameter => parameter.Name == "outputTemplate")
+            .DefaultValue!;
+
     private sealed class CollectingSink : ILogEventSink
     {
         public List<LogEvent> Events { get; } = [];
 
         public void Emit(LogEvent logEvent) => Events.Add(logEvent);
+    }
+
+    /// <summary>Keeps everything written to <see cref="Trace"/> while it is listening.</summary>
+    private sealed class RecordingListener : TraceListener
+    {
+        private readonly StringBuilder _written = new();
+
+        public string[] Lines() => _written.ToString().Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+
+        public override void Write(string? message) => _written.Append(message);
+
+        public override void WriteLine(string? message) => _written.Append(message).Append('\n');
     }
 }

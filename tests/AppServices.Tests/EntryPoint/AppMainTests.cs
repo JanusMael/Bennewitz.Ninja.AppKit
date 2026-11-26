@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
 using AppServices.Tests.BenignExceptions;
+using AppServices.Tests.Logging;
 using Bennewitz.Ninja.AppServices.EntryPoint;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -674,11 +675,22 @@ public sealed class AppMainTests : IDisposable
         Assert.NotNull(throughAnILogger);
         Assert.Equal([StartLine, ExitedWithCode], sink.Events.Select(logEvent => logEvent.MessageTemplate.Text));
         Assert.All(sink.Events, logEvent => Assert.Equal(LogEventLevel.Information, logEvent.Level));
+        Assert.All(sink.Events, LogLineForm.Holds);
         Assert.Equal("AppServices.Tests", ValueOf(sink.Events[0], "App"));
         Assert.Equal(PublicVersionOf(Versioned), ValueOf(sink.Events[0], "Version"));
         Assert.Equal(Environment.ProcessId, ValueOf(sink.Events[0], "Pid"));
         Assert.Equal(7, ValueOf(sink.Events[1], "Code"));
         Assert.IsType<long>(ValueOf(sink.Events[1], "ElapsedMs"));
+    }
+
+    public static TheoryData<string> EntryPointLines =>
+        new(StartLine, ExitedWithCode, EndedBySigterm, EndedByUnhandledException, StoppedByDesignTimeTool);
+
+    [Theory]
+    [MemberData(nameof(EntryPointLines))]
+    public void Each_of_the_entry_point_s_lines_holds_the_family_s_form(string template)
+    {
+        LogLineForm.Holds(template);
     }
 
     [Fact]

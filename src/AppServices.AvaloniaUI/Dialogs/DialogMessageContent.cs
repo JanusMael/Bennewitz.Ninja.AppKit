@@ -298,7 +298,7 @@ internal static class DialogMessageContent
             }
             catch (Exception ex)
             {
-                Log.Warning(ex, "Copying {Path} to the clipboard failed", path);
+                Log.Warning(ex, "[Dialog.Copy] reason=clipboardFailed path=\"{Path}\"", path);
             }
         }
 

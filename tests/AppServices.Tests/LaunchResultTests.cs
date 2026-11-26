@@ -1,3 +1,4 @@
+using AppServices.Tests.Logging;
 using Bennewitz.Ninja.AppServices;
 using Bennewitz.Ninja.AppServices.Abstractions;
 
@@ -117,8 +118,8 @@ public sealed class LaunchResultTests
 
         (DiagnosticLevel Level, string Message, Exception? Error) entry = Assert.Single(seen);
         Assert.Equal(DiagnosticLevel.Warning, entry.Level);
-        Assert.Contains("opening a file in the default editor", entry.Message);
-        Assert.Contains("NotFound", entry.Message);
+        Assert.Equal("[Shell.Launch] action=editor reason=NotFound", entry.Message);
+        LogLineForm.Holds(entry.Message);
         Assert.NotNull(entry.Error);
     }
 }

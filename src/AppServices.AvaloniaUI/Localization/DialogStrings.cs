@@ -247,13 +247,13 @@ public static class DialogStrings
 
         if (text is null)
         {
-            Warn(key, "gave null", null);
+            Warn(key, "gaveNull", null);
             return fallback;
         }
 
         if (string.IsNullOrWhiteSpace(text))
         {
-            Warn(key, "gave blank text", null);
+            Warn(key, "gaveBlank", null);
             return fallback;
         }
 
@@ -274,13 +274,19 @@ public static class DialogStrings
         }
         catch (FormatException exception)
         {
-            Warn(key, "gave text whose placeholder cannot be filled", exception);
+            Warn(key, "badPlaceholder", exception);
             return string.Format(CultureInfo.CurrentCulture, DefaultResolver(key), value);
         }
     }
 
-    /// <summary>Logs the first failure of <paramref name="key"/> at Warning, and nothing for the next.</summary>
-    private static void Warn(string key, string failure, Exception? exception)
+    /// <summary>
+    /// Logs the first failure of <paramref name="key"/> at Warning, and nothing for the next: the resolver
+    /// gave no text the key can show, so its default is shown (<c>plans/00009</c>, decision 7).
+    /// </summary>
+    /// <param name="key">The key whose text failed.</param>
+    /// <param name="reason">How it failed: <c>threw</c>, <c>gaveNull</c>, <c>gaveBlank</c> or <c>badPlaceholder</c>.</param>
+    /// <param name="exception">What the resolver, or the text's format, threw, if anything.</param>
+    private static void Warn(string key, string reason, Exception? exception)
     {
         if (!_warned.TryAdd(key, 0))
         {
@@ -289,8 +295,7 @@ public static class DialogStrings
 
         try
         {
-            Log.Write(LogEventLevel.Warning, exception,
-                "DialogStrings.Resolver {Failure} for {DialogStringKey}, so its default is shown", failure, key);
+            Log.Write(LogEventLevel.Warning, exception, "[Dialog.Strings] key={Key} reason={Reason}", key, reason);
         }
         catch (Exception)
         {
