@@ -7,11 +7,11 @@ completing the same way whether or not anything did.
 
 | Package | What it is |
 |---|---|
-| `Bennewitz.Ninja.AppServices.Abstractions` | The contracts and the dialog vocabulary: shell launching, environment, sharing, dialogs and pickers. Framework-free. |
+| `Bennewitz.Ninja.AppServices.Abstractions` | The contracts and the dialog vocabulary: shell launching, environment, sharing, dialogs and pickers; and `LogRedaction`, which keeps a secret out of a log line. Framework-free. |
 | `Bennewitz.Ninja.AppServices` | Default implementations: shell launching, environment probing, sharing and a native error dialog. Needs an operating system, not a UI framework, so it works from a CLI, a service or a test. |
 | `Bennewitz.Ninja.AppServices.Logging` | Serilog sinks for desktop applications, starting with a bucketed rolling file sink that keeps a bounded number of files per bucket. |
 | `Bennewitz.Ninja.AppServices.Avalonia` | Avalonia implementations — dialog service, file pickers, fatal and non-fatal dialogs — the bridge that routes Avalonia's logger and its binding errors into Serilog, and a handler for the exceptions the UI thread lets escape. Its `EntryPointOptions` gives an Avalonia app's entry point the fatal dialog, a dialog for a task exception nobody observed, and the log. |
-| `Bennewitz.Ninja.AppServices.EntryPoint` | One entry point for console, web and desktop apps: exit codes a script can read, a fatal report on stderr, Ctrl+C, `--version`, and the app's log flushed on every exit. References nothing but the framework, and is native AOT compatible. |
+| `Bennewitz.Ninja.AppServices.EntryPoint` | One entry point for console, web and desktop apps: exit codes a script can read, a fatal report on stderr, Ctrl+C, `--version`, a start and an exit line in the app's log, and the log flushed on every exit. References nothing but the framework, and is native AOT compatible. |
 
 ## Install
 
@@ -52,12 +52,13 @@ return AppMain.RunDesktop(typeof(Program).Assembly, args, Run, AvaloniaDiagnosti
 
 `--version`, as the only argument, prints the app's `[AssemblyMetadata("PublicVersion")]` before the
 work runs. The fatal report is written to stderr before any callback, so it needs no logger, and
-`FlushLog` flushes the app's own log on every exit. On SIGTERM, a console or desktop app flushes as
-the signal arrives and then ends; a web app's host, once it is running, shuts down and ends the run,
-which flushes. A run flushes only once, so an app that handles SIGTERM itself, with a generic host
-for one, belongs in `RunHostAsync`. An exception on another thread is reported and flushed too, but
-the process then ends with the runtime's own exit code. A `HostAbortedException`, which design-time
-tools such as `dotnet ef` throw to stop an app, passes through untouched.
+`FlushLog` flushes the app's own log on every exit. `WriteLogLine` writes a start line and an exit line
+to that log, under "Log lines". On SIGTERM, a console or desktop app flushes as the signal arrives and
+then ends; a web app's host, once it is running, shuts down and ends the run, which flushes. A run
+flushes only once, so an app that handles SIGTERM itself, with a generic host for one, belongs in
+`RunHostAsync`. An exception on another thread is reported and flushed too, but the process then ends
+with the runtime's own exit code. A `HostAbortedException`, which design-time tools such as `dotnet ef`
+throw to stop an app, passes through untouched.
 
 A task exception nobody observed does not end the run: it is reported on stderr with `warning:`,
 then passed to `OnUnobservedTaskException`. `IsBenignException` marks the exceptions an app knows to
@@ -65,15 +66,159 @@ be harmless, and one it calls benign is kept off stderr and still passed to the 
 that throws counts as not benign, and its throw is reported on stderr beside the exception. A failure
 that ends the run is reported whatever the filter says.
 
-`AppMainOptions` is a record, so an app changes one member and keeps the rest:
+`AppMainOptions` is a record, so an app changes one member and keeps the rest. An Avalonia app that
+sets Serilog up in `Main` itself, without `ConfigureLogging`, replaces the writer of the entry point's
+log lines, which would hold the start line for a log `ConfigureLogging` never makes (see "Log lines"):
 
 ```csharp
 AppMainOptions defaults = AvaloniaDiagnostics.EntryPointOptions();
 return AppMain.RunDesktop(typeof(Program).Assembly, args, Run, defaults with
 {
-    FlushLog = () => { Log.Information("Exiting"); defaults.FlushLog?.Invoke(); },
+    WriteLogLine = Log.Information,
 });
 ```
+
+## Log lines
+
+Every line the packages write of their own takes the family's form, so that a line is found by its tag
+and read without parsing a sentence: an `[Area.Kind]` tag, then camelCase `key=value` pairs, free text
+quoted as `key="…"`, an enum by its name, and, but in a line of Avalonia's own, a Warning's, an Error's
+or a Fatal's cause in `reason=`. A value the line carries, such as `count=12`, is a property named for
+its key in PascalCase, `Count`; a word the line always writes, such as `reason=threw`, is part of its
+message template. A value the package cannot read, such as a program's version or a failure's throw
+site, is `unknown`. A quoted value is written as it is: a quote inside it is not escaped, and a stack or
+an exception's text inside it spans lines, of which a search by tag finds the first. The sinks the
+packages configure, the rolling files and the Trace sink, render `{Message:lj}`, and a sink an app adds
+should render it too: under `{Message}`, Serilog quotes a string itself, so a value the line quotes is
+quoted twice.
+
+### The entry point's two lines
+
+`AppMainOptions.WriteLogLine` writes two lines to the app's log, at Information:
+
+| Line | When |
+|---|---|
+| `[App.Start] app=MyApp version=2026.4.1201 pid=4242` | Just before the work runs: the program assembly's name, its `PublicVersion` as `--version` prints it, or `unknown`, and the process's id |
+| `[App.Exit] code=0 elapsedMs=1520` | When the work returns or throws, with the code `AppMain` returns; when the process exits before the run ends, as `Environment.Exit` makes it, with `Environment.ExitCode` |
+| `[App.Exit] signal=SIGTERM elapsedMs=1520` | On SIGTERM in a console or desktop app, which the signal then ends |
+| `[App.Exit] reason=unhandledException elapsedMs=1520` | When the runtime is ending the process on another thread's exception, after `OnFatal` |
+| `[App.Exit] reason=hostAborted elapsedMs=1520` | When a design-time tool stops the host, whose `HostAbortedException` passes through |
+
+A run offers its start line once, and writes one exit line, at the first of its ends and before
+`FlushLog`; `elapsedMs` counts the whole milliseconds since `AppMain` was called. A run that answers
+`--version` writes neither.
+
+`WriteLogLine` is a `LogLineWriter`, a delegate that takes a message template and then its values in
+order, as a logger's methods do, so the writer is a logger's method passed as it is: `Log.Information`
+in a Serilog app, and `logger.LogInformation` in one with an `ILogger`. Serilog keeps the values as
+properties, `Code` and `ElapsedMs` as numbers, and so does an `ILogger` over Serilog.Extensions.Logging.
+A lambda around `logger.LogInformation` would hand it a template that is not a constant, which CA2254
+flags as a suggestion; a method group is no call, so nothing does. A writer that formats a string, such
+as `Console.Out.WriteLine`, binds too, and throws on the named holes; `AppMain` reports the throw on
+stderr, as it reports any callback's.
+
+```csharp
+// Serilog, its logger set up in Main before AppMain
+return await AppMain.RunConsoleAsync(typeof(Program).Assembly, args, RunAsync, new()
+{
+    Usage = Usage,
+    WriteLogLine = Log.Information,
+    FlushLog = Log.CloseAndFlush,
+});
+
+// An ILogger, from a factory made in Main before AppMain, which FlushLog disposes
+ILoggerFactory factory = LoggerFactory.Create(builder => builder.AddConsole());
+ILogger logger = factory.CreateLogger("MyApp");
+return await AppMain.RunConsoleAsync(typeof(Program).Assembly, args, RunAsync, new()
+{
+    Usage = Usage,
+    WriteLogLine = logger.LogInformation,
+    FlushLog = factory.Dispose,
+});
+```
+
+The start line is offered just before the work, so its log must be set up by then: a writer that
+writes at once to a log the work sets up loses it. An app sets its logger up in `Main`, before
+`AppMain`, as above; a failure setting it up there comes before `AppMain`, so the runtime reports it
+and sets the exit code. An Avalonia app run with `EntryPointOptions()` that calls `ConfigureLogging` in
+its run needs nothing more: the options' writer holds the start line until `ConfigureLogging` has made
+the log, then writes it there as the log's first line, stamped as it is written, and drops it if the
+run ends first, so that a run that never made its log leaves nothing for a later one. Before an exit
+line it writes the repeat counts still pending, which the flush would otherwise write after it. An
+Avalonia app that sets Serilog up in `Main` itself, without `ConfigureLogging`, passes `Log.Information`
+instead, as under "Entry point": the options' writer would hold its start line for a log
+`ConfigureLogging` never makes, and write its exit line alone.
+
+A web app's exit line is written once its work has returned, after the host its work built is
+disposed, so its log must outlive that host. Serilog's static logger does when `AddSerilog()` or
+`UseSerilog()` is called with no logger and no configuration, the logger set up in `Main`, and
+`FlushLog = Log.CloseAndFlush` flushes it after the exit line. An overload that configures the logger
+inline, `AddSerilog(configuration => …)` or `UseSerilog((context, configuration) => …)`, gives the host
+a logger it closes as it is disposed, and so does `dispose: true`: either way the exit line is lost.
+
+### Secrets
+
+A line an app writes with a value under a key that may name a secret passes the value through
+`LogRedaction`, in `Bennewitz.Ninja.AppServices.Abstractions`, which references nothing, so that a
+library that logs only through an `ILogger` can call it too:
+
+```csharp
+Log.Information("[Settings.Change] key={Key} value=\"{Value}\"", key, LogRedaction.Redact(key, value));
+```
+
+`Redact` gives `***`, `LogRedaction.Redacted`, for a sensitive key whatever the value, an empty one or
+null included, so that a line never says whether a secret is set, and any other key's value as it is.
+`IsSensitive` decides by the key alone. A key is sensitive when one of its dot-separated segments is
+`env`, `headers`, `credentials`, `auth` or `authorization`, which makes `env.PATH` as sensitive as
+`env.GITHUB_TOKEN`, or when it holds `token`, `secret`, `password`, `apikey`, `api_key`, `api-key`,
+`bearer`, `private`, `accesskey`, `access_key` or `access-key` anywhere, case ignored in both. A segment
+counts only whole, so `headers.Size` is sensitive and `headerSize` is not, and no key is sensitive for
+merely holding `key`. Only a dot separates segments: `Credentials:User`, a configuration key, and
+`Credentials__User`, an environment variable's name, are not sensitive, where `credentials.user` is. A
+secret under a key that names none is written as it is.
+
+### The packages' own lines
+
+| Line | Level | Written |
+|---|---|---|
+| `[App.Fatal] reason=unhandledException` | Fatal | By `EntryPointOptions()`' `OnFatal`, with the exception that ended the run |
+| `[UiThread.Exception] reason=unhandled benign=false` | Error | By the UI-thread handler, with the exception; one `IsBenignException` calls benign is `[UiThread.Exception] benign=true`, at Debug |
+| `[UiThread.BenignFilter] reason=threw` | Warning | When `IsBenignException` threw on that exception, with its throw |
+| `[Task.Unobserved] reason=notObserved benign=false` | Error, or Warning with `ShowUnobservedTaskExceptions = false` | For a task exception nobody observed, with it; a benign one is `[Task.Unobserved] benign=true`, at Debug |
+| `[Task.BenignFilter] reason=threw` | Warning | When `IsBenignException` threw on that task exception, with its throw |
+| `[Dialog.Fatal] reason=cannotShow` | Error | When a failure's dialog could not be shown, with the exception that stopped it; `reason=cannotPost` when it could not be posted to the UI thread |
+| `[Failure.Repeat] reason=repeated count=12 type="…" message="…" site="…"` | Error | For a failure that repeated, its count since its last count line: when its dialog closes, before the exit line, and when `EntryPointOptions()`' `FlushLog` runs |
+| `[App.Smoke] reason=unobservedTaskExceptions count=2 code=1` | Error | When `FailOnUnobservedTaskExceptions` fails a run |
+| `[App.Smoke] reason=noExitEvent lifetime=…` | Warning | When `FailOnUnobservedTaskExceptions` is set and the app's lifetime raises no `Exit` |
+| `[Dialog.Strings] key=LabelSave reason=threw` | Warning | The first time `DialogStrings.Resolver` fails for a key: `threw`, `gaveNull`, `gaveBlank` or `badPlaceholder` |
+| `[Dialog.Copy] reason=clipboardFailed path="…"` | Warning | When copying to the clipboard failed, with the exception: a path, or `what=errorDetails` or `what=notice` in place of `path` |
+| `[Binding.Validation] reason=exception control="…" dataContext="…" context="…" type="…" stack="…"` | Warning | By the binding validation logger, for a binding's exception: its type and a stack, never its message, which can hold what a person typed, and a text box's text as its length; an error that is no exception is `reason=error`, with `error="…"` |
+| `[Avalonia.Log] area=Binding text="…"` | Avalonia's | For each message of Avalonia's that the bridge passes on, each value written as its own text; a failed conversion's text stops before the value it could not convert |
+
+### A `DiagnosticSink`
+
+For an operation that fails on an exception, `ShellLauncher` hands the `DiagnosticSink` it was given
+one line in the form, with that exception: `[Shell.Launch] action=terminal reason=NotFound`, where
+`action` is `terminal`, `reveal`, `editor` or `url`, and `reason` the result's `LaunchStatus` by its
+name. The line comes at Information when the exception says the platform does not support the
+operation, and at Warning for any other. A failure the launcher decides without an exception, such as an
+empty URL, a relative path or no terminal emulator found, is in its `LaunchResult` alone. The line's
+values are in its text, since a sink takes text, so a structured sink finds no properties in it. A sink
+writes the line as a line of its own, so that its tag stays first:
+
+```csharp
+// Serilog: the line, which holds no hole, is the event's message template
+var launcher = new ShellLauncher((level, line, exception) => Log.Write(ToSerilog(level), exception, line));
+
+// An ILogger: the line is the event's state, which the formatter gives back as it is
+var launcher = new ShellLauncher((level, line, exception) =>
+    logger.Log(ToLogLevel(level), default, line, exception, static (state, _) => state));
+```
+
+`ToSerilog` and `ToLogLevel` stand for the app's own map from `DiagnosticLevel`'s four levels to its
+logger's. Either way, the line renders as it is under `{Message:lj}`. Passed to
+`logger.Log(level, exception, line)` instead, the line is a template that is not a constant, which
+CA2254 flags as a suggestion.
 
 ## Exceptions on the UI thread
 
@@ -354,6 +499,18 @@ version adds shows its default until the resolver maps it.
   convert; the binding validation line carries the exception's type and a stack, never its message, and
   a text box's text as its length. A `DiagnosticSink` passed to `ShellLauncher` is handed
   `[Shell.Launch] action=… reason=…`, and the Trace sink renders each message as the rolling file does.
+- **Each run can log its start and its end.** `AppMainOptions.WriteLogLine`, new, writes
+  `[App.Start] app=… version=… pid=…` just before the work and one `[App.Exit]` line as the run ends,
+  before `FlushLog` (see "Log lines"). It is null by default, so an app that sets nothing logs nothing
+  new. `EntryPointOptions()` sets it, so an Avalonia app that calls `ConfigureLogging` gains both lines
+  with no change of its own: the start line first in the log `ConfigureLogging` makes, and the exit line
+  after the repeat counts still pending. One that sets Serilog up itself, without `ConfigureLogging`,
+  gains the exit line alone until it passes `Log.Information` as the writer. An app that wrapped
+  `FlushLog` to log its own exit can drop that line, and a test that asserts over every event of such a
+  run leaves the two out by their tags.
+- **`LogRedaction` keeps a secret out of a log line**, new in `Bennewitz.Ninja.AppServices.Abstractions`:
+  `LogRedaction.Redact(key, value)` gives `***` for a value under a key that may name a secret, under
+  "Log lines".
 
 ## Upgrading from 2026.4.1113
 

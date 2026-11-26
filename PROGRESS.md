@@ -754,8 +754,93 @@ the maintainer's choice of 2026-11-24 for a failed conversion.
     `2026.4.1116` finds no breaking change.
   - `repo-conventions check` conforms.
 
+**`plans/00009` step 6: the docs**, written 2026-11-26.
+- **`docs/appservices.md`**, the packages' README on nuget.org:
+  - **"Log lines"**, new, after "Entry point":
+    - the family's form: which values are properties and which words of the template, the quoted values
+      neither escaped nor kept to one line, and a sink an app adds rendering `{Message:lj}` as the
+      packages' own do;
+    - the entry point's two lines, a row for each way a run ends;
+    - `LogLineWriter`, wired by a method group for Serilog, and for an `ILogger` from a factory that
+      `FlushLog` disposes;
+    - the start line, which needs a log set up before the work, a failure there being the runtime's to
+      report, and `EntryPointOptions()`' writer, which holds it;
+    - a web app's log, which must outlive its host, as step 2 and this step measured;
+    - `LogRedaction`, which an app calls, its rule and the separators it does not split on;
+    - the packages' own lines, a row for each tag with its level;
+    - a `DiagnosticSink` writing `ShellLauncher`'s line as a line of its own, through `Log.Write` and
+      through `ILogger.Log` with a formatter, the two sinks step 2 measured, and which failures write no
+      line.
+  - **"Upgrading from 2026.4.1116"** gains the two lines, which an Avalonia app that calls
+    `ConfigureLogging` now writes with no change of its own, and `LogRedaction`, beside step 4's note on the
+    packages' own lines.
+  - **Beyond the plan's list:**
+    - "Entry point"'s example of `with` wrapped `FlushLog` to log `Exiting`, a line out of the form that
+      the exit line would now come before. It sets `WriteLogLine = Log.Information` instead, for an
+      Avalonia app that sets Serilog up without `ConfigureLogging`, whose start line the options' writer
+      would hold for a log `ConfigureLogging` never makes, as `EntryPointOptions()`' remarks say.
+    - The section names the two lines, and the package table names `LogRedaction` and the two lines.
+- **`ShellLauncher`'s doc comment**, beyond the plan's list. It said a sink is handed a line for an
+  operation that failed, where only a failure on an exception reaches the sink. A failure decided without
+  one, such as an empty URL, a relative path or no terminal emulator found, is in its result alone.
+- **`src/AGENTS.md`:**
+  - `LogRedaction` and `LogLineWriter` in their projects' rows;
+  - rows for the entry point's two lines, for `EntryPointOptions()`' writer, for the form of the packages'
+    lines, and for what the binding lines keep out of the log;
+  - beyond the plan's list, a row for `LogRedaction`'s lists and its name, the name held by the row alone.
+- **The root `AGENTS.md`:** AppServices' invariant on the two lines, beside the one on the flush.
+- **`tests/AGENTS.md`:**
+  - the rule that a test reads a line by its template and its values, never through `RenderMessage()`,
+    review being its only guard;
+  - the rule for a test over every event of a run;
+  - the folder table gains `LogLineForm`, `LogLineFormTests`, `PackageLogLines`, `LogRedactionTests`,
+    `BindingValidationErrorLoggerTests` and `ShellLauncherDiagnosticsTests`, with `Logging/` and
+    `AvaloniaUI/` a row each, and its rows name what each covers of the lines.
+- **An independent review**, by a subagent given the code and the plan but not this step's reasoning, read
+  each claim the docs made against the code and the records of steps 2 to 5.
+  - Each of its fourteen findings held, two by its own account as wording. All are fixed here:
+    - a word of the template read as a property;
+    - the inline Serilog.Extensions.Hosting overloads, which this step then measured;
+    - a line claimed for every failed launch;
+    - advice to a sink of the app's own worded as fact;
+    - the upgrade note's claim for every Avalonia app;
+    - Avalonia's lines, which carry no `reason=`;
+    - CA2254, which flags as a suggestion;
+    - `LogRedaction`, which reads as automatic;
+    - quoted values, neither escaped nor kept to one line;
+    - a failure setting the log up in `Main`;
+    - the lines that are not the packages' own;
+    - `unknown`;
+    - the bridge, the held line's timestamp and an `ILogger`'s properties;
+    - two `AGENTS.md` rows that claimed more than their tests hold.
+  - Two are recorded under Drift as well: the inline overloads, and an assembly name with a space.
+  - Its inference that an `ILogger` provider writing on a queue loses the exit line without a flush did not
+    reproduce. Microsoft.Extensions.Logging's console wrote both lines in 3 runs of 3 with `FlushLog` unset,
+    and in 3 of 3 with it disposing the factory, so the docs pair the factory's disposal with the writer and
+    claim no loss.
+- **Verified.**
+  - The six C# snippets the README adds were lifted from it by a script, each wrapped in a method of its own,
+    and compiled against this branch's projects in a scratch app.
+  - A script reads the docs against the code:
+    - each of the 27 tests named in the new rows of the three `AGENTS.md` files exists, in its class where
+      one is named;
+    - each of the 21 lines "Log lines" quotes matches a template the packages hold, key for key, and each
+      level its table gives is the source's;
+    - every table row has its header's cells, and every fence closes.
+
+    It reported each of three planted defects: a wrong level, a wrong key and a misnamed test. The files
+    were restored after, their hashes checked.
+  - `repo-conventions check` conforms; the Release build with warnings as errors, 0 warnings, the rebuilt XML
+    doc carrying `ShellLauncher`'s comment; and `PackageMetadataTests` pass, the packed README's
+    placeholder check among them.
+
 **Next, in order:**
-1. **`plans/00009` step 6**: the docs.
+1. **The events file's line, a question for the maintainer.** The Inspections session said on 2026-11-26
+   that he chose on 2026-11-24, in that session, to write the text a host hands `EnqueueEvent` in the form,
+   as the value of a line such as `[Avalonia.Event] text="{EventLine}"`, and to keep a suppression of the
+   CodeQuality rule for the form, which it names `BNCQ1012`, for the rolling file's rendered line alone
+   (`BucketedRollingFileSink.cs` 196). `plans/00009`'s decision 8 writes both as they came and suppresses
+   the rule at both. Nothing here changes until he says so in this session.
 2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
    it, and add `src/AGENTS.md`'s rule for windows. The reader is Inspections' `plans/00011` (Drift from
    `plans/00007`); the Inspections session tells this repository its version and API on release, in a
@@ -764,7 +849,7 @@ the maintainer's choice of 2026-11-24 for a failed conversion.
    published, ClaudeForge's session is told and takes it at once (`plans/00007` step 8, `plans/00008`
    step 5), XamlQuality gets the Avalonia findings, and Templates gets the version and the API
    (`plans/00009` step 8).
-4. **`plans/00006`** is revised once `plans/00009` is built, the maintainer's choice of 2026-11-23, to
+4. **`plans/00006`** is revised now that `plans/00009` is built, the maintainer's choice of 2026-11-23, to
    build on all three, then put to the maintainer. Inspections measured on 2026-11-24 what its
    `plans/00011` will report in ScopedEditors: markup's `{DynamicResource}` compiles to
    `new DynamicResourceExtension`, `ScopeToBrushConverter.Convert` calls `IResourceNode.TryGetResource`
@@ -1120,6 +1205,20 @@ the maintainer's choice of 2026-11-24 for a failed conversion.
   `SerilogAvaloniaSink` it reaches an Avalonia app's log as an `[Avalonia.Log]` line in the form, the
   exception's whole text in its text, so nothing in ScopedEditors changes. Found 2026-11-26, by step 4's
   search for the packages' old text.
+- **Serilog.Extensions.Hosting's inline overloads close the logger with the host**, beside the
+  `dispose: true` step 2 measured. In step 2's web app, `AddSerilog(configuration => …)` and
+  `UseSerilog((context, configuration) => …)` each left `Log.Logger` silent by the time `AppMain`'s
+  `finally` wrote the exit line, which was lost, where `AddSerilog()` and `UseSerilog()` with no arguments
+  kept it; the package's own doc says the inline `UseSerilog`'s logger "will be shut down when application
+  services are disposed". Measured 2026-11-26 at 10.0.0. They are Serilog's usual ASP.NET Core setups, so
+  Templates' `bbweb` and `bbapi`, which take Serilog.Extensions.Hosting under its `plans/00014` decision 2a,
+  keep their exit line only with the logger set up in `Main` and wired with no arguments.
+  `docs/appservices.md` says so.
+- **An assembly name with a space breaks the start line's form**, which no step foresaw. `app={App}` is a
+  bare hole (`EntryRun.cs` 58), so a program whose assembly name holds a space, as a project file named
+  with one gives it, writes `app=My App`, whose second word runs into the next pair. `LogLineForm` refuses
+  such a value, but no test runs such a program. The line is `plans/00014`'s, decision 5, so quoting the
+  hole, `app="{App}"`, is the family's to agree, through Templates. Found 2026-11-26 by step 6's review.
 
 ## What the merge changed for consumers
 
