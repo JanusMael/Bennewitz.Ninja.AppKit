@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using AppServices.Tests.BenignExceptions;
+using AppServices.Tests.Logging;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -102,7 +103,7 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         Throw(thrown);
 
         Assert.Equal([true], handled);
-        Assert.Same(thrown, Assert.Single(_sink.At(LogEventLevel.Error)).Exception);
+        LogLineForm.Is(Assert.Single(_sink.At(LogEventLevel.Error)), LogEventLevel.Error, PackageLogLines.UiThreadUnhandled, thrown);
         Assert.Same(thrown, Assert.Single(_dialogs.Requests).Exception);
     }, CancellationToken.None);
 
@@ -116,7 +117,7 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         Throw(thrown);
 
         Assert.Equal([true], handled);
-        Assert.Same(thrown, Assert.Single(_sink.At(LogEventLevel.Debug)).Exception);
+        LogLineForm.Is(Assert.Single(_sink.At(LogEventLevel.Debug)), LogEventLevel.Debug, PackageLogLines.UiThreadBenign, thrown);
         Assert.Empty(_sink.At(LogEventLevel.Error));
         Assert.Empty(_dialogs.Requests);
     }, CancellationToken.None);
@@ -135,13 +136,13 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         Assert.Equal([true], handled);
         if (expected.Benign)
         {
-            Assert.Same(thrown, Assert.Single(_sink.At(LogEventLevel.Debug)).Exception);
+            LogLineForm.Is(Assert.Single(_sink.At(LogEventLevel.Debug)), LogEventLevel.Debug, PackageLogLines.UiThreadBenign, thrown);
             Assert.Empty(_sink.At(LogEventLevel.Error));
             Assert.Empty(_dialogs.Requests);
         }
         else
         {
-            Assert.Same(thrown, Assert.Single(_sink.At(LogEventLevel.Error)).Exception);
+            LogLineForm.Is(Assert.Single(_sink.At(LogEventLevel.Error)), LogEventLevel.Error, PackageLogLines.UiThreadUnhandled, thrown);
             Assert.Same(thrown, Assert.Single(_dialogs.Requests).Exception);
         }
 
@@ -149,7 +150,10 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         LogEvent[] warnings = _sink.At(LogEventLevel.Warning);
         if (expected.FilterThrows)
         {
-            Assert.Equal(BenignExceptionTable.FilterBug, Assert.Single(warnings).Exception?.Message);
+            LogEvent filterThrew = Assert.Single(warnings);
+            Assert.Equal(PackageLogLines.UiThreadBenignFilterThrew, filterThrew.MessageTemplate.Text);
+            Assert.Equal(BenignExceptionTable.FilterBug, filterThrew.Exception?.Message);
+            LogLineForm.Holds(filterThrew);
         }
         else
         {
@@ -190,7 +194,8 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         Throw(second);
 
         Assert.Equal<Exception>([first, second], _dialogs.Requests.Select(request => request.Exception));
-        Assert.Contains(_sink.At(LogEventLevel.Error), e => e.Exception is FakeDialogs.CannotShow);
+        LogEvent cannotShow = Assert.Single(_sink.At(LogEventLevel.Error), e => e.Exception is FakeDialogs.CannotShow);
+        LogLineForm.Is(cannotShow, LogEventLevel.Error, PackageLogLines.DialogCannotShow, cannotShow.Exception);
     }, CancellationToken.None);
 
     [Fact]
@@ -255,9 +260,11 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
             _dialogs.Requests[0].Close();
 
             LogEvent count = Assert.Single(RepeatLines());
+            LogLineForm.Is(count, LogEventLevel.Error, PackageLogLines.FailureRepeat, null);
             Assert.Equal(2L, RepeatCount(count));
-            Assert.Contains("System.InvalidOperationException: " + RepeatMessage, count.RenderMessage());
-            Assert.Contains("thrown at ", count.RenderMessage());
+            Assert.Equal("System.InvalidOperationException", LogLineForm.ValueOf(count, "Type"));
+            Assert.Equal(RepeatMessage, LogLineForm.ValueOf(count, "Message"));
+            Assert.StartsWith("at ", Assert.IsType<string>(LogLineForm.ValueOf(count, "Site")), StringComparison.Ordinal);
 
             // With its dialog closed, a repeat is still only counted: the gate is open, but it is never
             // shown again, and never logged in full again.
@@ -312,8 +319,10 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         Throw(thrown);
 
         Assert.Equal([true], handled);
-        Assert.Same(thrown, Assert.Single(_sink.At(LogEventLevel.Error)).Exception);
-        Assert.Equal(BenignExceptionTable.FilterBug, Assert.Single(_sink.At(LogEventLevel.Warning)).Exception?.Message);
+        LogLineForm.Is(Assert.Single(_sink.At(LogEventLevel.Error)), LogEventLevel.Error, PackageLogLines.UiThreadUnhandled, thrown);
+        LogEvent filterThrew = Assert.Single(_sink.At(LogEventLevel.Warning));
+        LogLineForm.Is(filterThrew, LogEventLevel.Warning, PackageLogLines.UiThreadBenignFilterThrew, filterThrew.Exception);
+        Assert.Equal(BenignExceptionTable.FilterBug, filterThrew.Exception?.Message);
         Assert.Same(thrown, Assert.Single(_dialogs.Requests).Exception);
     }, CancellationToken.None);
 
@@ -459,13 +468,13 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         LogEvent logged = Assert.Single(_sink.Events, e => ReferenceEquals(e.Exception, wrapped));
         if (expected.BenignUnobserved)
         {
-            Assert.Equal(LogEventLevel.Debug, logged.Level);
+            LogLineForm.Is(logged, LogEventLevel.Debug, PackageLogLines.TaskUnobservedBenign, wrapped);
             Assert.Empty(_dialogs.Requests);
             Assert.Equal("", stderr);
         }
         else
         {
-            Assert.Equal(show ? LogEventLevel.Error : LogEventLevel.Warning, logged.Level);
+            LogLineForm.Is(logged, show ? LogEventLevel.Error : LogEventLevel.Warning, PackageLogLines.TaskUnobserved, wrapped);
             Assert.StartsWith("warning: AppServices.Tests had a task exception nobody observed", stderr);
             if (show)
             {
@@ -480,17 +489,45 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
             }
         }
 
-        // A filter that throws is logged beside the exception, which counts as not benign.
-        LogEvent[] others = [.. _sink.Events.Where(e => !ReferenceEquals(e, logged))];
+        // The run's log opens with the entry point's start line, held until the work made the log, and
+        // closes with its exit line (plans/00009, decision 3).
+        Assert.Equal(PackageLogLines.AppStart, _sink.Events[0].MessageTemplate.Text);
+        Assert.Equal(PackageLogLines.AppExitWithCode, _sink.Events[^1].MessageTemplate.Text);
+
+        // A filter that throws is logged beside the exception, which counts as not benign. The entry point's
+        // two lines are left out by their tags, as every test over a run's events leaves them.
+        LogEvent[] others = [.. _sink.Events.Where(e => !ReferenceEquals(e, logged) && !IsEntryPointLine(e))];
         if (expected.FilterThrows)
         {
-            Assert.Equal(BenignExceptionTable.FilterBug, Assert.Single(others).Exception?.Message);
+            LogEvent filterThrew = Assert.Single(others);
+            Assert.Equal(PackageLogLines.TaskBenignFilterThrew, filterThrew.MessageTemplate.Text);
+            Assert.Equal(BenignExceptionTable.FilterBug, filterThrew.Exception?.Message);
+            LogLineForm.Holds(filterThrew);
         }
         else
         {
             Assert.Empty(others);
         }
     }
+
+    [Fact]
+    public Task A_task_exception_whose_dialog_cannot_be_posted_is_logged_and_so_is_the_post_that_failed() =>
+        Session.Dispatch(() =>
+        {
+            Install();
+            InvalidOperationException cannotPost = new("the dispatcher would not take the dialog");
+            UiThreadExceptions.Post = (_, _) => throw cannotPost;
+            AggregateException wrapped = new(Unobserved());
+
+            AvaloniaDiagnostics.EntryPointOptions().OnUnobservedTaskException!(wrapped);
+            Dispatcher.UIThread.RunJobs();
+
+            LogEvent[] errors = _sink.At(LogEventLevel.Error);
+            Assert.Equal(2, errors.Length);
+            LogLineForm.Is(errors[0], LogEventLevel.Error, PackageLogLines.TaskUnobserved, wrapped);
+            LogLineForm.Is(errors[1], LogEventLevel.Error, PackageLogLines.DialogCannotPost, cannotPost);
+            Assert.Empty(_dialogs.Requests);
+        }, CancellationToken.None);
 
     [Fact]
     public Task One_gate_for_both_paths_and_an_unobserved_failure_not_shown_then_is_shown_at_its_first_repeat() =>
@@ -580,9 +617,7 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
         AvaloniaDiagnostics.EntryPointOptions().OnUnobservedTaskException!(wrapped);
         Dispatcher.UIThread.RunJobs();
 
-        LogEvent logged = Assert.Single(_sink.Events);
-        Assert.Equal(LogEventLevel.Error, logged.Level);
-        Assert.Same(wrapped, logged.Exception);
+        LogLineForm.Is(Assert.Single(_sink.Events), LogEventLevel.Error, PackageLogLines.TaskUnobserved, wrapped);
         Assert.Empty(_dialogs.Requests);
     }, CancellationToken.None);
 
@@ -861,10 +896,15 @@ public sealed class UiThreadExceptionHandlerTests : IDisposable
 
     /// <summary>The lines that give a failure's count of repeats.</summary>
     private LogEvent[] RepeatLines() =>
-        [.. _sink.Events.Where(e => e.MessageTemplate.Text.StartsWith("An exception repeated", StringComparison.Ordinal))];
+        [.. _sink.Events.Where(e => e.MessageTemplate.Text == PackageLogLines.FailureRepeat)];
 
     private static long RepeatCount(LogEvent line) =>
-        Assert.IsType<long>(Assert.IsType<ScalarValue>(line.Properties["RepeatCount"]).Value);
+        Assert.IsType<long>(Assert.IsType<ScalarValue>(line.Properties["Count"]).Value);
+
+    /// <summary>Whether <paramref name="logEvent"/> is one of the entry point's two lines, by its tag.</summary>
+    private static bool IsEntryPointLine(LogEvent logEvent) =>
+        logEvent.MessageTemplate.Text.StartsWith("[App.Start]", StringComparison.Ordinal)
+        || logEvent.MessageTemplate.Text.StartsWith("[App.Exit]", StringComparison.Ordinal);
 
     private sealed class CollectingSink : ILogEventSink
     {

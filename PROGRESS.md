@@ -618,9 +618,95 @@ published packages at `2026.4.1116` and Avalonia 12.1.3 (measured 2026-11-24):
   - On Linux, in WSL's Ubuntu 26.04 with SDK 10.0.401: the three classes, 100 cases, 90 passed and the
     10 native ones skipped, SIGINT and SIGTERM among the passes.
 
+**`plans/00009` step 4: the packages' own lines**, built 2026-11-26 as decisions 3, 7 and 8 give them, with
+the maintainer's choice of 2026-11-24 for a failed conversion.
+- **`EntryPointOptions()` passes `WriteLogLine`**, which writes each of the entry point's lines at Information
+  once `ConfigureLogging` has made the log. Until then it holds the start line, which `ConfigureLogging`
+  writes as that log's first line, after `Log.Logger` is the new logger and before Avalonia's bridge; the
+  run's exit line drops it, so a run that never made its log leaves nothing for a later one, and
+  `ResetForTests` drops it too. Before an `[App.Exit]` line it writes the repeat counts still pending,
+  which the flush after it would otherwise write after it. A line with neither tag is written at once, so
+  that a line a later entry point adds is never held as a start line. One lock covers the held line and
+  whether the log is made, and the held line is written inside it, so an exit line waiting on it follows.
+  The held line's timestamp is the moment `ConfigureLogging` wrote it.
+- **The 24 lines take the form**, each as "The lines" gives it, its level and its exception kept, the
+  binding validation line's exception dropped:
+  - `[App.Fatal] reason=unhandledException`, `[Task.Unobserved]` with `benign=true` or
+    `reason=notObserved benign=false`, `[Task.BenignFilter]`, `[UiThread.Exception]`,
+    `[UiThread.BenignFilter]`, `[Dialog.Fatal]` with `reason=cannotPost` or `reason=cannotShow`,
+    `[Failure.Repeat]`, `[Dialog.Copy]`, `[Dialog.Strings]` and `[App.Smoke]`;
+  - the properties renamed are `UnobservedCount` and `RepeatCount` to `Count`, `ExceptionType` to `Type`,
+    `ExceptionMessage` to `Message`, `ThrowSite` to `Site`, `Failure` to `Reason` and `DialogStringKey` to
+    `Key`, and the fatal line no longer carries `AppName`;
+  - a failure with no throw site, as one never thrown has none, writes `site="unknown"`; `lifetime=none`
+    and `dataContext="(null)"` stay as they were, each a value the package has, no lifetime and no data
+    context, not one it lacks;
+  - the binding validation line carries the exception's type and a stack, its own when it was thrown and
+    the one at the handler when Avalonia built it and never threw it, and a text box's text as
+    `TextLength=…`;
+  - `ShellLauncher` hands its sink `[Shell.Launch] action={terminal|reveal|editor|url} reason={LaunchStatus}`,
+    whole.
+- **Avalonia's line** is `[Avalonia.Log] area={Area} text="{Text}"`. The text is Avalonia's template parsed by
+  Serilog's parser and bound as Serilog binds one, named holes in order and positional ones by number when
+  all are positional, each value as its own text: a string as it is, an enum by its name, an exception as its
+  whole text, which spans lines as Serilog's capture of it did, and the rest in the invariant culture with
+  the hole's format. A hole without a value keeps its own text, a message without values is Avalonia's text
+  as it is, and a value whose text cannot be read is written as its type; nothing the sink does escapes into
+  Avalonia. In the `Binding` area, a text holding Avalonia's conversion message is cut where it begins, so a
+  converter's failure on `typed-secret-7` reads `An error occurred binding Text to Number`.
+- **The Trace sink** gets `{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message:lj}{NewLine}{Exception}`,
+  Serilog.Sinks.Trace 4.0.0's own default but for the message, read from the pinned package.
+- **Test seams, internal**: `UiThreadExceptions.Post`, since a post to a dispatcher that has shut down
+  aborts without a throw; `ShellLauncher.StartProcess`, so that each operation fails as a test says on every
+  platform and launches nothing; and `BindingValidationErrorLogger.ResetForTests`, which takes its
+  process-wide class handler off and which `AvaloniaDiagnostics.ResetForTests` now calls.
+- **The tests**, 75 cases more:
+  - `LogLineForm` holds the form over a template, and over an event its reason at Warning and above, but for
+    Avalonia's line, and each hole's value: text, a number or a `bool`, never `null`, an enum, a date, a
+    time span or a guid, and a bare one with no space or quote. `LogLineFormTests` holds it to 17 templates
+    and 12 events it must refuse, and `PackageLogLines`, the table of the 18 templates the tests compare
+    against, to the form, its count pinned.
+  - Each line a test reaches is read by its template, level and exception through `LogLineForm`, and the
+    nine places that read the old text or properties read the new, none through `RenderMessage()`.
+    `UiThreadExceptionHandlerTests`' test over every event of an `AppMain` run leaves the entry point's two
+    lines out by their tags, and reads its log opening with the start line and closing with the exit line.
+  - `AvaloniaDiagnosticsEntryPointTests`: a run whose work makes its log reads start, its lines, the repeat
+    count, exit; the held line written once and first; never written into a later log; dropped by
+    `ResetForTests`; written at once after the log is made, the exit line after the counts.
+  - `SerilogAvaloniaSinkTests`: each rule of the rendering, and Avalonia 12.1.3's own warning for a converter
+    that threw, on the headless platform, pinned exactly, the typed text in none of the run's events.
+  - `BindingValidationErrorLoggerTests`: a real coercion failure, its typed text in nothing the line
+    carries, and an error that is no exception. `ShellLauncherDiagnosticsTests`: each of the four
+    operations' lines, and an unsupported one at Information. `AvaloniaDiagnosticsHookTests`: the Trace
+    sink writes a value quoted by hand with one pair of quotes. `UiThreadExceptionHandlerTests`: a dialog
+    that cannot be posted. `AppMainTests`: the entry point's five templates hold the form.
+  - Tests now reach 21 of the 25 lines. The three clipboard failures stay out of reach, since the headless
+    clipboard never fails, and so does the event file's line, written as it came, since no test sets
+    `EnableEventLogFile`.
+- **Each planted break seen red**, the ten classes run on each and every file restored after, its hash
+  checked, 35 in all:
+  - every line a test reaches put back to its old text, one at a time, but the rolling file's, which is
+    unchanged: 19 breaks, Avalonia's two writes sharing one template; and the Trace sink back to its
+    default template;
+  - a held line dropped, written twice, written into a later run, kept by `ResetForTests`, and written
+    before the log is made; a repeat count after the exit line;
+  - a failed conversion written whole, Avalonia's values in the current culture, positional holes bound in
+    order, and a value whose text cannot be read costing the line;
+  - the binding stack carrying the exception's message, a text box's text in the context, and the binding
+    exception passed as the line's exception;
+  - the dialog posted around the seam, and a missing throw site written empty.
+- **Verified.**
+  - On Windows: the build with warnings as errors, 0 warnings; 1066 tests, 1050 passed and 16 skipped, as
+    before.
+  - On Linux, in WSL's Ubuntu 26.04: all of `AppServices.Tests`, 789 cases, 774 passed and 15 skipped.
+  - The public surface of `AppServices` and `AppServices.AvaloniaUI`, listed by reflection, is main's but
+    for AutoVersioning's build stamp. Package validation against `2026.4.1116` finds nothing new:
+    `AppServices` passes, and `AppServices.AvaloniaUI` reports only `FatalErrorDialog.DefaultMessage`, which
+    `plans/00008` removed.
+  - `repo-conventions check` conforms.
+
 **Next, in order:**
-1. **`plans/00009` steps 4 to 6**: the packages' own lines, `EntryPointOptions()`' held start line and
-   the Avalonia line leaving a failed conversion's value out among them, `LogRedaction`, then the docs.
+1. **`plans/00009` steps 5 and 6**: `LogRedaction`, then the docs.
 2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
    it, and add `src/AGENTS.md`'s rule for windows. The reader is Inspections' `plans/00011` (Drift from
    `plans/00007`); the Inspections session tells this repository its version and API on release, in a
@@ -979,6 +1065,12 @@ published packages at `2026.4.1116` and Avalonia 12.1.3 (measured 2026-11-24):
   - **What holds it.**
     `AppMainTests.An_exception_whose_text_cannot_be_read_is_reported_by_its_type_and_its_run_exits_1_with_its_code`,
     which went red with the guard taken out.
+- **ScopedEditors writes one line, through Avalonia's logger**, where the plan's Scope says it writes
+  none: `DataGridCopyValueBehavior.cs` 120 and 121 log a Warning in Avalonia's `Control` area when copying a
+  cell's value fails, as `Copying a cell's value to the clipboard failed: {Exception}`. Through
+  `SerilogAvaloniaSink` it reaches an Avalonia app's log as an `[Avalonia.Log]` line in the form, the
+  exception's whole text in its text, so nothing in ScopedEditors changes. Found 2026-11-26, by step 4's
+  search for the packages' old text.
 
 ## What the merge changed for consumers
 

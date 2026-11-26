@@ -70,6 +70,25 @@ public static class AvaloniaDiagnostics
     // it is subscribed once, and ResetForTests can take it off.
     private static IControlledApplicationLifetime? _exitHookedOn;
 
+    // The family's tags for the entry point's two lines, which the callback EntryPointOptions() passes as
+    // WriteLogLine reads (plans/00009, decision 3).
+    private const string StartTag = "[App.Start]";
+    private const string ExitTag = "[App.Exit]";
+
+    // The entry point's start line, held until ConfigureLogging has made the log, and whether it has. One
+    // lock for both, so that no line the callback writes at once comes before the held one.
+    private static readonly Lock _entryLines = new();
+    private static bool _logMade;
+    private static HeldLine? _heldStartLine;
+
+    /// <summary>
+    /// The template the package gives Serilog's Trace sink: Serilog.Sinks.Trace 4.0.0's own, with its message
+    /// rendered <c>{Message:lj}</c>, as every sink the package configures renders it (<c>plans/00009</c>,
+    /// decision 7). Its default renders <c>{Message}</c>, which doubles the quotes of a value quoted by hand.
+    /// </summary>
+    internal const string TraceOutputTemplate =
+        "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level}] {Message:lj}{NewLine}{Exception}";
+
     /// <summary>
     /// Application name supplied via
     /// <see cref="AvaloniaDiagnosticsOptions.AppName"/>. Exposed so host code
@@ -141,6 +160,11 @@ public static class AvaloniaDiagnostics
     /// logger, and <c>AvaloniaLogger.Sink</c> is a static that any later
     /// framework code may read once and cache.
     /// </para>
+    /// <para>
+    /// ⭐ The first line of the log it makes is the entry point's start line, when the run that called it
+    /// passed <see cref="EntryPointOptions"/>: until the log is made, their <c>WriteLogLine</c> holds that
+    /// line (<c>plans/00009</c>, decision 3).
+    /// </para>
     /// </summary>
     /// <param name="options">Configuration. At minimum
     /// <see cref="AvaloniaDiagnosticsOptions.AppName"/> and
@@ -189,7 +213,7 @@ public static class AvaloniaDiagnostics
 
         if (options.EnableTraceSink)
         {
-            config = config.WriteTo.Trace();
+            config = config.WriteTo.Trace(outputTemplate: TraceOutputTemplate);
         }
 
         // The consumer's extension point: after the built-in sinks, before the logger exists.
@@ -197,6 +221,9 @@ public static class AvaloniaDiagnostics
         options.ConfigureLogger?.Invoke(config);
 
         Log.Logger = config.CreateLogger();
+
+        // Before Avalonia's bridge, so that the held start line is the log's first.
+        WriteHeldStartLine();
 
         if (options.BridgeAvaloniaLogger)
         {
@@ -310,7 +337,9 @@ public static class AvaloniaDiagnostics
     /// Returns this static bootstrap to its unconfigured state, so a test can call
     /// <see cref="ConfigureLogging"/> again. Disposes the file sinks it created, takes the
     /// UI-thread handler off the dispatcher it was installed on, with its gate and counts reset, takes
-    /// the exit handler off the lifetime it was subscribed to, and forgets the task exceptions counted.
+    /// the exit handler off the lifetime it was subscribed to, takes the binding validation logger's
+    /// class handler off, forgets the task exceptions counted, and drops the entry point's start line
+    /// held for a log not yet made.
     /// </summary>
     /// <remarks>
     /// ⚠ Test-only. It does not restore <see cref="Log.Logger"/> or Avalonia's logger sink, which
@@ -319,9 +348,16 @@ public static class AvaloniaDiagnostics
     internal static void ResetForTests()
     {
         UiThreadExceptions.ResetForTests();
+        BindingValidationErrorLogger.ResetForTests();
         if (Interlocked.Exchange(ref _exitHookedOn, null) is { } lifetime)
         {
             lifetime.Exit -= OnLifetimeExit;
+        }
+
+        lock (_entryLines)
+        {
+            _heldStartLine = null;
+            _logMade = false;
         }
 
         Interlocked.Exchange(ref _unobservedFailures, 0);
@@ -389,14 +425,26 @@ public static class AvaloniaDiagnostics
     /// Debug when it is benign, and otherwise at Error and shown in a <see cref="FatalErrorDialog"/>, or
     /// at Warning and not shown when <see cref="AvaloniaDiagnosticsOptions.ShowUnobservedTaskExceptions"/>
     /// is off, unless it is Avalonia's second report of an exception the UI thread let escape, which is
-    /// neither logged, shown nor written on stderr; and on every exit the pending repeat counts are
-    /// written, then the log is closed and flushed. Each task exception nobody observed that is not benign
-    /// is counted, for <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>.
+    /// neither logged, shown nor written on stderr; the entry point's start and exit lines are written to
+    /// the log; and on every exit the pending repeat counts are written, then the log is closed and flushed.
+    /// Each task exception nobody observed that is not benign is counted, for
+    /// <see cref="AvaloniaDiagnosticsOptions.FailOnUnobservedTaskExceptions"/>.
     /// </summary>
     /// <remarks>
     /// <para>
     /// ⭐ <b>The wiring lives here so that a package bump fixes it in every app.</b> Written into each
     /// app's <c>Program.cs</c> instead, it would be copied from the template once and never updated.
+    /// </para>
+    /// <para>
+    /// ⭐ <b>The entry point's two lines reach the log the app makes in its run</b> (<c>plans/00009</c>,
+    /// decision 3). The options' <c>WriteLogLine</c> writes each at Information once
+    /// <see cref="ConfigureLogging"/> has run. Until then it holds the start line, which
+    /// <see cref="ConfigureLogging"/> writes as the log's first line, and drops it when the run's exit line
+    /// comes first, so that a run that never made its log leaves nothing for a later one. Before an
+    /// <c>[App.Exit]</c> line it writes the repeat counts still pending, which the flush after the line would
+    /// otherwise write after it. An app that makes its log before <see cref="AppMain"/> without
+    /// <see cref="ConfigureLogging"/> passes <c>Log.Information</c> itself, with <c>with</c>, since the
+    /// options would hold its start line to the end.
     /// </para>
     /// <para>
     /// ⭐ <b>The host's one filter is passed on.</b> The options' <c>IsBenignException</c> reads
@@ -456,10 +504,11 @@ public static class AvaloniaDiagnostics
     {
         OnFatal = exception =>
         {
-            Log.Fatal(exception, "{AppName} stopped on an unhandled exception", AppName ?? "The application");
+            Log.Fatal(exception, "[App.Fatal] reason=unhandledException");
             ShowNativeFatalError(exception.ToString());
         },
         OnUnobservedTaskException = LogUnobservedTaskException,
+        WriteLogLine = WriteEntryPointLine,
         FlushLog = () =>
         {
             try
@@ -483,6 +532,54 @@ public static class AvaloniaDiagnostics
         || exception is OperationCanceledException
         || (BenignExceptionFilter is { } filter && filter(exception));
 
+    // The writer the options pass on (plans/00009, decision 3): at once, after ConfigureLogging; before it,
+    // the start line is held for it to write, and dropped by an exit line, whose run has ended. An exit line
+    // follows the repeat counts pending then, which the flush after it would otherwise write after it. Any
+    // other line is written at once, so that a line a later entry point adds is never held as a start line.
+    private static void WriteEntryPointLine(string messageTemplate, params object?[] propertyValues)
+    {
+        bool exitLine = messageTemplate.StartsWith(ExitTag, StringComparison.Ordinal);
+        lock (_entryLines)
+        {
+            if (!_logMade)
+            {
+                if (messageTemplate.StartsWith(StartTag, StringComparison.Ordinal))
+                {
+                    _heldStartLine = new HeldLine(messageTemplate, propertyValues);
+                    return;
+                }
+
+                if (exitLine)
+                {
+                    // ⛔ Held any longer, the line of a run that has ended would open a later run's log.
+                    _heldStartLine = null;
+                }
+            }
+        }
+
+        if (exitLine)
+        {
+            UiThreadExceptions.WritePendingRepeats();
+        }
+
+        Log.Information(messageTemplate, propertyValues);
+    }
+
+    // ConfigureLogging's, once Log.Logger is the log it made: the held start line is that log's first.
+    // Written inside the lock, so that an exit line waiting on it follows the start line.
+    private static void WriteHeldStartLine()
+    {
+        lock (_entryLines)
+        {
+            _logMade = true;
+            if (_heldStartLine is { } held)
+            {
+                _heldStartLine = null;
+                Log.Information(held.MessageTemplate, held.PropertyValues);
+            }
+        }
+    }
+
     // The callback is given the exception without the entry point's verdict, so it applies the rule
     // again, with the same filter, to choose what to do. Avalonia's second report of an exception the UI
     // thread let escape is neither logged nor shown: the report on the UI thread was the only one due.
@@ -496,7 +593,7 @@ public static class AvaloniaDiagnostics
         bool benign = BenignExceptionRule.IsBenign(IsBenignUnobserved, exception, out Exception? filterFailure);
         if (benign)
         {
-            Log.Debug(exception, "A benign task exception nobody observed");
+            Log.Debug(exception, "[Task.Unobserved] benign=true");
             return;
         }
 
@@ -510,11 +607,10 @@ public static class AvaloniaDiagnostics
             return;
         }
 
-        Log.Warning(exception, "A task exception nobody observed");
+        Log.Warning(exception, "[Task.Unobserved] reason=notObserved benign=false");
         if (filterFailure is not null)
         {
-            Log.Warning(filterFailure,
-                "The IsBenignException filter threw on the task exception above, so that exception counts as not benign");
+            Log.Warning(filterFailure, "[Task.BenignFilter] reason=threw");
         }
     }
 
@@ -532,9 +628,9 @@ public static class AvaloniaDiagnostics
     {
         if (lifetime is not IControlledApplicationLifetime controlled)
         {
-            Log.Warning(
-                "FailOnUnobservedTaskExceptions is set, but the app's lifetime, {Lifetime:l}, raises no Exit, so a task exception nobody observed leaves the exit code alone",
-                lifetime?.GetType().Name ?? "none");
+            // FailOnUnobservedTaskExceptions is set, and a task exception nobody observed leaves the exit
+            // code alone: the lifetime, a single view's or none, raises no Exit.
+            Log.Warning("[App.Smoke] reason=noExitEvent lifetime={Lifetime}", lifetime?.GetType().Name ?? "none");
             return;
         }
 
@@ -591,13 +687,16 @@ public static class AvaloniaDiagnostics
         e.ApplicationExitCode = 1;
         try
         {
-            Log.Error(
-                "Task exceptions nobody observed were reported during the run, {UnobservedCount} of them, so FailOnUnobservedTaskExceptions makes its exit code 1",
-                reported);
+            // The task exceptions nobody observed that were reported during the run, which
+            // FailOnUnobservedTaskExceptions makes the reason its exit code is 1.
+            Log.Error("[App.Smoke] reason=unobservedTaskExceptions count={Count} code=1", reported);
         }
         catch (Exception)
         {
             // ⛔ Raised inside Avalonia's shutdown: a logger's throw must not take the exit code with it.
         }
     }
+
+    /// <summary>A line the entry point offered, held until the log is made: its template and its values.</summary>
+    private sealed record HeldLine(string MessageTemplate, object?[] PropertyValues);
 }

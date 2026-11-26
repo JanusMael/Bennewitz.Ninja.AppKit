@@ -146,7 +146,7 @@ public sealed class NonFatalNoticeDialog : Window
         }
         catch (Exception ex)
         {
-            Log.Warning(ex, "Copying the notice text to the clipboard failed");
+            Log.Warning(ex, "[Dialog.Copy] reason=clipboardFailed what=notice");
         }
     }
 

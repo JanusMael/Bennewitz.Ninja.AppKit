@@ -94,6 +94,17 @@ internal static class UiThreadExceptions
     internal static Action<Exception, Action> OpenDialog { get; set; } = OpenFatalErrorDialog;
 
     /// <summary>
+    /// Posts a job to a dispatcher, as <see cref="ReportUnobserved"/> posts a dialog. A seam for tests,
+    /// since Avalonia 12.1.3 aborts a post to a dispatcher that has shut down without a throw, so no real
+    /// dispatcher reaches the line for a dialog that could not be posted: <see cref="PostToDispatcher"/>
+    /// unless a test replaces it, and <see cref="ResetForTests"/> puts it back.
+    /// </summary>
+    internal static Action<Dispatcher, Action> Post { get; set; } = PostToDispatcher;
+
+    /// <summary>Posts <paramref name="job"/> to <paramref name="dispatcher"/>, at its default priority.</summary>
+    internal static void PostToDispatcher(Dispatcher dispatcher, Action job) => dispatcher.Post(job);
+
+    /// <summary>
     /// Subscribes the handler to <paramref name="dispatcher"/>, once however often it is called, and
     /// records it for the dialogs <see cref="ReportUnobserved"/> posts.
     /// </summary>
@@ -166,11 +177,10 @@ internal static class UiThreadExceptions
 
         if (!repeat)
         {
-            Write(LogEventLevel.Error, raised, "A task exception nobody observed");
+            Write(LogEventLevel.Error, raised, "[Task.Unobserved] reason=notObserved benign=false");
             if (filterFailure is not null)
             {
-                Write(LogEventLevel.Warning, filterFailure,
-                    "The IsBenignException filter threw on the task exception above, so that exception counts as not benign");
+                Write(LogEventLevel.Warning, filterFailure, "[Task.BenignFilter] reason=threw");
             }
         }
 
@@ -182,11 +192,12 @@ internal static class UiThreadExceptions
         try
         {
             // ⛔ Posted, never waited for: every finalizer in the process would wait for the user.
-            dispatcher.Post(() => ShowPosted(failure, exception));
+            Post(dispatcher, () => ShowPosted(failure, exception));
         }
         catch (Exception cannotPost)
         {
-            Write(LogEventLevel.Error, cannotPost, "The dialog for the task exception above could not be shown");
+            // The dialog for the task exception above could not be posted, so it is never shown.
+            Write(LogEventLevel.Error, cannotPost, "[Dialog.Fatal] reason=cannotPost");
         }
     }
 
@@ -228,7 +239,7 @@ internal static class UiThreadExceptions
 
     /// <summary>
     /// Leaves the dispatcher the handler was installed on, reopens the gate, forgets every failure, count
-    /// and exception seen, and puts <see cref="OpenDialog"/> back. Test-only.
+    /// and exception seen, and puts <see cref="OpenDialog"/> and <see cref="Post"/> back. Test-only.
     /// </summary>
     /// <remarks>
     /// ⛔ It leaves the dispatcher recorded at install, never <see cref="Dispatcher.UIThread"/>: read where
@@ -254,6 +265,7 @@ internal static class UiThreadExceptions
         }
 
         OpenDialog = OpenFatalErrorDialog;
+        Post = PostToDispatcher;
     }
 
     private static void OnUnhandledException(object? sender, DispatcherUnhandledExceptionEventArgs e)
@@ -306,7 +318,7 @@ internal static class UiThreadExceptions
             AvaloniaDiagnostics.BenignExceptionFilter, exception, out Exception? filterFailure);
         if (benign)
         {
-            Write(LogEventLevel.Debug, exception, "A benign exception on the UI thread, ignored");
+            Write(LogEventLevel.Debug, exception, "[UiThread.Exception] benign=true");
             return;
         }
 
@@ -336,11 +348,12 @@ internal static class UiThreadExceptions
 
         if (!repeat)
         {
-            Write(LogEventLevel.Error, exception, "An exception on the UI thread that nothing handled; the app keeps running");
+            // Nothing on the UI thread handled it, and the app keeps running.
+            Write(LogEventLevel.Error, exception, "[UiThread.Exception] reason=unhandled benign=false");
             if (filterFailure is not null)
             {
-                Write(LogEventLevel.Warning, filterFailure,
-                    "The IsBenignException filter threw on the exception above, so that exception counts as not benign");
+                // The host's filter threw on that exception, which so counts as not benign.
+                Write(LogEventLevel.Warning, filterFailure, "[UiThread.BenignFilter] reason=threw");
             }
         }
 
@@ -398,7 +411,7 @@ internal static class UiThreadExceptions
                 }
             }
 
-            Write(LogEventLevel.Error, cannotShow, "The dialog for the exception above could not be shown");
+            Write(LogEventLevel.Error, cannotShow, "[Dialog.Fatal] reason=cannotShow");
         }
     }
 
@@ -432,10 +445,12 @@ internal static class UiThreadExceptions
         }
     }
 
+    // A repeat may come by either path, so its line is the failure's, not the UI thread's. A throw site the
+    // failure has none of, as an exception never thrown has none, is unknown.
     private static void WriteRepeats(Failure failure, long count) =>
         Write(LogEventLevel.Error, null,
-            "An exception repeated {RepeatCount} more times: {ExceptionType:l}: {ExceptionMessage:l}, thrown {ThrowSite:l}",
-            count, failure.Type, failure.Message, failure.ThrowSite);
+            "[Failure.Repeat] reason=repeated count={Count} type=\"{Type}\" message=\"{Message}\" site=\"{Site}\"",
+            count, failure.Type, failure.Message, failure.ThrowSite.Length == 0 ? "unknown" : failure.ThrowSite);
 
     private static void Write(LogEventLevel level, Exception? exception, string template, params object?[] values)
     {

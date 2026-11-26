@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text;
+using AppServices.Tests.Logging;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
@@ -456,10 +457,16 @@ public sealed class DialogStringsTests : IDisposable
             Assert.Equal(
                 new[] { "LabelCancel", "LabelOk", "TipAccept", "TipCancel", "TipInput" },
                 warnings.Select(KeyOf).Order(StringComparer.Ordinal));
+            string reason = failure switch
+            {
+                "throws" => "threw",
+                "gives null" => "gaveNull",
+                _ => "gaveBlank",
+            };
             Assert.All(warnings, warning =>
             {
-                Assert.Equal(failure == "throws" ? "threw" : failure.Replace("gives", "gave", StringComparison.Ordinal),
-                    (warning.Properties["Failure"] as ScalarValue)?.Value);
+                LogLineForm.Is(warning, LogEventLevel.Warning, PackageLogLines.DialogStrings, warning.Exception);
+                Assert.Equal(reason, LogLineForm.ValueOf(warning, "Reason"));
                 Assert.Equal(failure == "throws", warning.Exception is InvalidOperationException);
             });
         }, CancellationToken.None);
@@ -481,7 +488,9 @@ public sealed class DialogStringsTests : IDisposable
             Assert.Equal($"Copy {DialogWindows.SecondPath}", ToolTip.GetTip(WithId(dialog, "DialogCopyPath2")));
             Assert.Equal("Öffnen", ToolTip.GetTip(WithId(dialog, "DialogOpenLink")));
             LogEvent warning = Assert.Single(Warnings());
+            LogLineForm.Is(warning, LogEventLevel.Warning, PackageLogLines.DialogStrings, warning.Exception);
             Assert.Equal(nameof(DialogStrings.TipCopyPath), KeyOf(warning));
+            Assert.Equal("badPlaceholder", LogLineForm.ValueOf(warning, "Reason"));
             Assert.IsType<FormatException>(warning.Exception);
         }, CancellationToken.None);
 
@@ -671,7 +680,7 @@ public sealed class DialogStringsTests : IDisposable
 
     private static string? KeyOf(LogEvent logEvent)
     {
-        return logEvent.Properties.TryGetValue("DialogStringKey", out LogEventPropertyValue? value)
+        return logEvent.Properties.TryGetValue("Key", out LogEventPropertyValue? value)
                && value is ScalarValue { Value: string key }
             ? key
             : null;

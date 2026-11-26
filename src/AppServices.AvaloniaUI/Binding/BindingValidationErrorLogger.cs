@@ -28,13 +28,23 @@ namespace Bennewitz.Ninja.AppServices.AvaloniaUI.Binding;
 /// <para>
 /// <see cref="Install"/> hooks the <see cref="DataValidationErrors.ErrorsProperty"/>
 /// attached-property change pipeline with a class handler so every
-/// <c>Set</c>/<c>Add</c> of an error produces a structured log entry with the
-/// full exception text (stack trace + inner exceptions).
+/// <c>Set</c>/<c>Add</c> of an error produces one Warning in the family's form
+/// (<c>plans/00009</c>, decision 7): <c>[Binding.Validation] reason=exception</c> with the control, its
+/// data context, what identifies it, the exception's type and a stack, or
+/// <c>[Binding.Validation] reason=error</c> with the error the app gave.
+/// </para>
+/// <para>
+/// ⛔ <strong>Never the exception's message, nor the exception itself.</strong> Avalonia 12.1.3 builds the
+/// exception for a value it cannot convert with that value, whole, in its message, as
+/// <c>Could not convert '…'</c>, so the line carries neither, and a text box's text is given as its length.
+/// The stack is the exception's own when it was thrown, and the stack at the handler when Avalonia built it
+/// and never threw it.
 /// </para>
 /// </summary>
 public static class BindingValidationErrorLogger
 {
-    private static bool _installed;
+    private static readonly Lock _gate = new();
+    private static IDisposable? _subscription;
 
     /// <summary>
     /// Registers the class handler exactly once. Safe to call multiple times;
@@ -43,22 +53,37 @@ public static class BindingValidationErrorLogger
     /// </summary>
     public static void Install()
     {
-        if (_installed)
+        lock (_gate)
         {
-            return;
+            if (_subscription is not null)
+            {
+                return;
+            }
+
+            // Class-level handler fires for every Control instance's
+            // DataValidationErrors.ErrorsProperty transition — including the
+            // coercion path in BindingExpression that bypasses IDataValidationPlugin.
+            //
+            // Both generic arguments are specified explicitly to select the typed
+            // overload: AddClassHandler<TTarget, TValue>(...) rather than the
+            // untyped AddClassHandler<TTarget>(...) the compiler would otherwise
+            // pick by inference.
+            _subscription = DataValidationErrors.ErrorsProperty.Changed
+                .AddClassHandler<Control, IEnumerable<object>?>(OnErrorsChanged);
         }
+    }
 
-        _installed = true;
-
-        // Class-level handler fires for every Control instance's
-        // DataValidationErrors.ErrorsProperty transition — including the
-        // coercion path in BindingExpression that bypasses IDataValidationPlugin.
-        //
-        // Both generic arguments are specified explicitly to select the typed
-        // overload: AddClassHandler<TTarget, TValue>(...) rather than the
-        // untyped AddClassHandler<TTarget>(...) the compiler would otherwise
-        // pick by inference.
-        DataValidationErrors.ErrorsProperty.Changed.AddClassHandler<Control, IEnumerable<object>?>(OnErrorsChanged);
+    /// <summary>
+    /// Takes the class handler off, so that the next <see cref="Install"/> registers it again. Test-only:
+    /// the handler is process-wide, and a test that installs it must not leave it to the tests after it.
+    /// </summary>
+    internal static void ResetForTests()
+    {
+        lock (_gate)
+        {
+            _subscription?.Dispose();
+            _subscription = null;
+        }
     }
 
     private static void OnErrorsChanged(Control control, AvaloniaPropertyChangedEventArgs<IEnumerable<object>?> e)
@@ -99,31 +124,24 @@ public static class BindingValidationErrorLogger
                 // the handler fires; it shows the Avalonia + app frames that led
                 // to the error (layout/render/user-interaction path), which is
                 // the only stack information that exists for this class of error.
-                string liveStack = ex.StackTrace is null
-                    ? new StackTrace(fNeedFileInfo: true).ToString()
-                    : ex.ToString();
+                // The stack goes last, since it spans lines.
+                string stack = ex.StackTrace ?? new StackTrace(fNeedFileInfo: true).ToString();
 
                 Log.Warning(
-                    "[BindingValidation] {Control} (DataContext={DataContext}){NewLine}  {ContextDetails}{NewLine}  {ExceptionType}: {ExceptionMessage}{NewLine}{Details}",
+                    "[Binding.Validation] reason=exception control=\"{Control}\" dataContext=\"{DataContext}\" context=\"{Context}\" type=\"{Type}\" stack=\"{Stack}\"",
                     controlLabel,
                     dataContext,
-                    Environment.NewLine,
                     contextDetails,
-                    Environment.NewLine,
-                    ex.GetType().FullName,
-                    ex.Message,
-                    Environment.NewLine,
-                    liveStack);
+                    ex.GetType().FullName ?? ex.GetType().Name,
+                    stack);
             }
             else
             {
                 Log.Warning(
-                    "[BindingValidation] {Control} (DataContext={DataContext}){NewLine}  {ContextDetails}{NewLine}  {Error}",
+                    "[Binding.Validation] reason=error control=\"{Control}\" dataContext=\"{DataContext}\" context=\"{Context}\" error=\"{Error}\"",
                     controlLabel,
                     dataContext,
-                    Environment.NewLine,
                     contextDetails,
-                    Environment.NewLine,
                     error);
             }
         }
@@ -215,6 +233,8 @@ public static class BindingValidationErrorLogger
     /// Appends a short state summary for selector / input controls — whichever
     /// piece of runtime state is most likely to pinpoint the bad value that
     /// triggered the binding error. Silent for control types we don't recognise.
+    /// A text box's text is given as its length alone (<c>plans/00009</c>, decision 7): it is what a
+    /// person typed, which the line never carries.
     /// </summary>
     private static string? BuildControlStateSummary(Control control)
     {
@@ -222,7 +242,7 @@ public static class BindingValidationErrorLogger
         {
             ComboBox cb => $"SelectedIndex={cb.SelectedIndex}, SelectedItem={Describe(cb.SelectedItem)}",
             ListBox lb => $"SelectedIndex={lb.SelectedIndex}, SelectedItem={Describe(lb.SelectedItem)}",
-            TextBox tb => $"Text={Describe(tb.Text)}",
+            TextBox tb => $"TextLength={tb.Text?.Length ?? 0}",
             TabItem ti => $"Header={Describe(ti.Header)}",
             TreeViewItem t => $"Header={Describe(t.Header)}",
             var _ => null,
@@ -236,17 +256,8 @@ public static class BindingValidationErrorLogger
             }
 
             string text = value.ToString() ?? "(null)";
-            // reduced cap from 80 → 30 chars.  This is the
-            // last leg of a binding-validation error log line that fires
-            // when a user types into a TextBox / ComboBox bound to a
-            // typed property and Avalonia's coercion rejects the input.
-            // The cap reduces the size of any incidental leak (e.g. the
-            // user pasting a secret-bearing string into a number-only
-            // NumericUpDown, which would otherwise dump up to 80 chars
-            // of that string into the rolling log).  Even at 30 chars
-            // the diagnostic stays useful — enough to recognise common
-            // bad-input shapes ("Bash(*)", "32k", "true/false typo"),
-            // which is what this logger exists for.
+            // Capped at 30 characters: enough to recognise an item or a header, and little of whatever
+            // else its text holds.
             return text.Length > 30 ? text[..30] + "…" : text;
         }
     }

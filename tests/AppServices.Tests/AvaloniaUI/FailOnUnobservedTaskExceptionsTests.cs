@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using AppServices.Tests.BenignExceptions;
+using AppServices.Tests.Logging;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Headless;
 using Avalonia.Threading;
@@ -282,13 +283,12 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
             AvaloniaDiagnostics.InstallAvaloniaHooks();
 
             LogEvent[] warnings =
-            [
-                .. _sink.Events.Where(e => e.Level == LogEventLevel.Warning
-                    && e.MessageTemplate.Text.StartsWith("FailOnUnobservedTaskExceptions is set", StringComparison.Ordinal)),
-            ];
+                [.. _sink.Events.Where(e => e.MessageTemplate.Text == PackageLogLines.SmokeNoExitEvent)];
             if (fail)
             {
-                Assert.Equal("none", Assert.IsType<ScalarValue>(Assert.Single(warnings).Properties["Lifetime"]).Value);
+                LogEvent warning = Assert.Single(warnings);
+                LogLineForm.Is(warning, LogEventLevel.Warning, PackageLogLines.SmokeNoExitEvent, null);
+                Assert.Equal("none", LogLineForm.ValueOf(warning, "Lifetime"));
             }
             else
             {
@@ -477,12 +477,19 @@ public sealed class FailOnUnobservedTaskExceptionsTests : IDisposable
         return false;
     }
 
-    /// <summary>The lines in which the exit handler gives the count it turned into an exit code of 1.</summary>
-    private LogEvent[] CountLines() =>
-        [.. _sink.Events.Where(e => e.Level == LogEventLevel.Error && e.Properties.ContainsKey("UnobservedCount"))];
+    /// <summary>
+    /// The lines in which the exit handler gives the count it turned into an exit code of 1, each held to
+    /// its template, its level and the form.
+    /// </summary>
+    private LogEvent[] CountLines()
+    {
+        LogEvent[] lines = [.. _sink.Events.Where(e => e.MessageTemplate.Text == PackageLogLines.SmokeUnobservedTaskExceptions)];
+        Assert.All(lines, line => LogLineForm.Is(line, LogEventLevel.Error, PackageLogLines.SmokeUnobservedTaskExceptions, null));
+        return lines;
+    }
 
     private static long UnobservedCount(LogEvent line) =>
-        Assert.IsType<long>(Assert.IsType<ScalarValue>(line.Properties["UnobservedCount"]).Value);
+        Assert.IsType<long>(LogLineForm.ValueOf(line, "Count"));
 
     /// <summary>Abandons a faulted task when it is finalized; see <see cref="AbandonAnObjectThatAbandonsAFaultedTaskWhenFinalized"/>.</summary>
     private sealed class AbandonsAFaultedTaskWhenFinalized(Exception thrown)
