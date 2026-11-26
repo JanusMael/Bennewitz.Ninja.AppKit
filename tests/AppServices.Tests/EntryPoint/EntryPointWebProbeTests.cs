@@ -19,27 +19,52 @@ namespace AppServices.Tests.EntryPoint;
 /// <para>
 /// ⚠ The probe's <c>OnFatal</c> writes to stderr, so an empty stderr also shows it never ran.
 /// </para>
+/// <para>
+/// ⭐ The probe records its log lines, its work's return and its flushes in <c>Program.Calls</c>, in
+/// order, so a test sees where each run's exit line falls: after its work has returned, the app the work
+/// built disposed, and before its flush (plans/00009, decision 5). Each test clears it first, and waits
+/// for every run it starts to end, so that no run of one test records into the next one's.
+/// </para>
 /// </remarks>
 public sealed class EntryPointWebProbeTests : IDisposable
 {
+    private const string StartLine = "[App.Start] app={App} version={Version} pid={Pid}";
+    private const string ExitedWithCode = "[App.Exit] code={Code} elapsedMs={ElapsedMs}";
+    private const string StoppedByDesignTimeTool = "[App.Exit] reason=hostAborted elapsedMs={ElapsedMs}";
+
     private readonly TextWriter _originalError = Console.Error;
     private readonly StringWriter _stderr = new();
 
-    public EntryPointWebProbeTests() => Console.SetError(_stderr);
+    public EntryPointWebProbeTests()
+    {
+        Console.SetError(_stderr);
+        Program.Calls.Clear();
+    }
 
     public void Dispose() => Console.SetError(_originalError);
 
     [Fact]
-    public async Task WebApplicationFactory_starts_and_stops_the_app_twice_with_nothing_on_stderr()
+    public async Task WebApplicationFactory_runs_the_app_twice_each_exit_line_after_its_work_returned_with_nothing_on_stderr()
     {
-        for (int run = 0; run < 2; run++)
+        for (int run = 1; run <= 2; run++)
         {
-            await using WebApplicationFactory<Program> factory = new();
-            using HttpClient client = factory.CreateClient();
+            await using (WebApplicationFactory<Program> factory = new())
+            {
+                using HttpClient client = factory.CreateClient();
+                Assert.Equal("ok", await client.GetStringAsync("/", TestContext.Current.CancellationToken));
+            }
 
-            Assert.Equal("ok", await client.GetStringAsync("/", TestContext.Current.CancellationToken));
+            // The factory stops the host and returns; the entry point goes on, on a thread of its own, to
+            // dispose the app, return from its work and end the run.
+            Assert.True(SpinWait.SpinUntil(() => Flushes() == run, TimeSpan.FromMinutes(1)),
+                $"Run {run} of the entry point did not end within a minute of its factory's disposal.");
         }
 
+        (string What, object?[] Values)[] calls = [.. Program.Calls];
+        string[] oneRun = [StartLine, "work returned", ExitedWithCode, "flushed"];
+        Assert.Equal([.. oneRun, .. oneRun], calls.Select(call => call.What));
+        Assert.Equal(0, Assert.IsType<int>(calls[2].Values[0]));
+        Assert.Equal(0, Assert.IsType<int>(calls[6].Values[0]));
         Assert.Equal("", _stderr.ToString());
     }
 
@@ -74,7 +99,12 @@ public sealed class EntryPointWebProbeTests : IDisposable
         Assert.True(thread.Join(TimeSpan.FromMinutes(1)), "The entry point did not stop at HostBuilt.");
         Assert.IsType<Microsoft.Extensions.Hosting.HostAbortedException>(escaped);
         Assert.Equal("", _stderr.ToString());
+
+        // The run ends as a design-time tool's stop, before its flush; its work never returned.
+        Assert.Equal([StartLine, StoppedByDesignTimeTool, "flushed"], Program.Calls.Select(call => call.What));
     }
+
+    private static int Flushes() => Program.Calls.Count(call => call.What == "flushed");
 
     /// <summary>
     /// What <c>HostFactoryResolver</c> does with <c>stopApplication</c>, reduced to the stop: on the

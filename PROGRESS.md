@@ -542,9 +542,85 @@ published packages at `2026.4.1116` and Avalonia 12.1.3 (measured 2026-11-24):
   warning can carry text a person typed. By his choice of 2026-11-24, the Avalonia line leaves it out
   (Drift from `plans/00009`).
 
+**`plans/00009` step 3: the entry point's two lines**, built 2026-11-26 as decisions 1, 2 and 4 give them.
+- **The API.** `LogLineWriter`, a public delegate in `AppServices.EntryPoint`,
+  `void LogLineWriter(string messageTemplate, params object?[] propertyValues)`, and
+  `AppMainOptions.WriteLogLine`, a `LogLineWriter?` with `init`, beside `FlushLog`. Listed by reflection
+  against `2026.4.1116`, the public surface gains those two and nothing else, and package validation
+  against `2026.4.1116` and `2026.4.1110` finds no breaking change.
+- **The start line**, `[App.Start] app={App} version={Version} pid={Pid}`, is offered once per run, just
+  before the work, in each kind: the program's name as the reports on stderr name it, its
+  `PublicVersion` or `unknown`, and `Environment.ProcessId`, an `int`. The version is read inside the
+  writer's guard, so an assembly whose attributes cannot be read costs the line and never the run.
+  `--version` offers none, and so writes no exit line.
+- **The exit line** comes once per run, at the first of its ends and before `FlushLog`, its `elapsedMs` a
+  `long` of whole milliseconds since `AppMain` was called:
+  - `code=` with the code the run returns, from `AppMain`'s `finally`. The work's own code is now decided
+    inside the `try`, where it was decided after the `finally` before; a failure's already was, in the
+    `catch`;
+  - `signal=SIGTERM`, from the SIGTERM registration;
+  - `reason=unhandledException` when the runtime is ending the process on another thread's exception,
+    after `OnFatal`;
+  - `code=` with `Environment.ExitCode`, from `ProcessExit`, as on `Environment.Exit` in the work;
+  - `reason=hostAborted` when the work's `HostAbortedException` passes through: the `finally` knows it as
+    an end with no code decided, since the `catch` takes every other exception and every other way out
+    decides one.
+
+  One counter of how far the run has got replaces the flush's flag, so the end comes once and a start
+  line is never offered after it.
+- **A report cannot throw now**, beyond the plan (Drift from `plans/00009`).
+- **A writer that throws** is reported on stderr, once for each line, and nothing else changes. A format
+  string's writer, `Console.Out.WriteLine`, binds and is one.
+- **The tests**, 36 cases more:
+  - `AppMainTests`, 34 more:
+    - each line's template and values in each kind, and the order start, work, exit, flush, with
+      `elapsedMs` from at least the work's 50 ms to no more than the whole call;
+    - the code for each way the work ends;
+    - SIGTERM, an exit no `finally` sees, another thread's exception and a design-time stop, through
+      `OnSigterm`, `OnProcessExit` and `OnUnhandledException`, which the real registration and events
+      call and a test calls from inside the work;
+    - one exit line and one flush however many ends a run reaches;
+    - neither line for `--version`, and `unknown` for no `PublicVersion`;
+    - a format string's writer, and an exception whose text cannot be read;
+    - Serilog's `Logger.Information` and an `ILogger`'s `LogInformation`, each bound as a writer,
+      Serilog's events keeping `Code` an `int` and `ElapsedMs` a `long`.
+  - `EntryPointProbeTests`: the probe writes each line on stderr after `probe: log`, rendered, and every
+    case reads the start line, its reports, the exit line and the flush in order. A new case ends the
+    work with `Environment.Exit(3)`.
+  - `EntryPointWebProbeTests`: the probe records its lines, its work's return once its app is disposed,
+    and its flushes. The factory's case waits for each run to end, as it must: measured 2026-11-26, in 4
+    of 10 runs the factory's disposal returned before the entry point had ended its run, three times
+    before its work had returned. It is renamed
+    `WebApplicationFactory_runs_the_app_twice_each_exit_line_after_its_work_returned_with_nothing_on_stderr`.
+    The stop at `HostBuilt` writes `reason=hostAborted` before its flush.
+- **Each planted break seen red**, the three classes run on each and every file restored after:
+  - on Windows:
+    - no start line, from `Begin` and from the desktop kind;
+    - the exit line after the flush;
+    - every end writing its line and flushing;
+    - `OnSigterm` without its line;
+    - a design-time stop without its line;
+    - `elapsedMs` since the machine booted, and from the run's end;
+    - a start line before the version check;
+    - the start line's writer unguarded;
+    - the work's code unrecorded;
+    - process exit writing 0;
+    - another thread's exception ending as a design-time stop;
+    - a report reading the exception's text unguarded;
+  - on Linux, the SIGTERM registration ending the run without its line, which only the probe's SIGTERM
+    case catches, and `OnSigterm` without its line, which that case catches too.
+- **Native AOT.** `tests/EntryPointProbe` published for `win-x64` with warnings as errors: no warning,
+  and `EntryPointProbeTests` against the binary pass, its signal cases skipping on Windows. On Linux they
+  run in CI's `aot-linux` job, since WSL has no clang.
+- **Verified.**
+  - On Windows: the build with warnings as errors, and 991 tests, 975 passed and 16 skipped: the 15
+    before, and the new `Environment.Exit` case's native one.
+  - On Linux, in WSL's Ubuntu 26.04 with SDK 10.0.401: the three classes, 100 cases, 90 passed and the
+    10 native ones skipped, SIGINT and SIGTERM among the passes.
+
 **Next, in order:**
-1. **`plans/00009` steps 3 to 6**: the entry point's two lines, the packages' own lines with the Avalonia
-   line leaving a failed conversion's value out, `LogRedaction`, then the docs.
+1. **`plans/00009` steps 4 to 6**: the packages' own lines, `EntryPointOptions()`' held start line and
+   the Avalonia line leaving a failed conversion's value out among them, `LogRedaction`, then the docs.
 2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
    it, and add `src/AGENTS.md`'s rule for windows. The reader is Inspections' `plans/00011` (Drift from
    `plans/00007`); the Inspections session tells this repository its version and API on release, in a
@@ -892,6 +968,17 @@ published packages at `2026.4.1116` and Avalonia 12.1.3 (measured 2026-11-24):
   which is why decision 7 gives that sink a template that renders `{Message:lj}`. It also measured that an
   enum hole carrying `:l` writes no line at all through a Serilog sink; neither of the packages' two `:l`
   templates takes an enum.
+- **A report cannot throw now, which the plan did not name and step 3 needed.**
+  - **Why.** `AppMain`'s `finally` reads a run with no code decided as a design-time stop. The one other
+    way a code went undecided was a report that threw: `Error` read the exception's text outside its own
+    guard, so an exception whose `ToString` throws escaped `AppMain` in place of exiting 1, which the
+    root `AGENTS.md`'s exit-code invariant does not allow. With the exit line, that run would also have
+    ended as `reason=hostAborted`.
+  - **What changed.** The report writes the exception's type when its text cannot be read, so such a run
+    exits 1 and its exit line says `code=1`.
+  - **What holds it.**
+    `AppMainTests.An_exception_whose_text_cannot_be_read_is_reported_by_its_type_and_its_run_exits_1_with_its_code`,
+    which went red with the guard taken out.
 
 ## What the merge changed for consumers
 

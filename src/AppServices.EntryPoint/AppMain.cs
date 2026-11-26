@@ -16,6 +16,12 @@ namespace Bennewitz.Ninja.AppServices.EntryPoint;
 /// on every exit.
 /// </para>
 /// <para>
+/// ⭐ <b>Two log lines, through <see cref="AppMainOptions.WriteLogLine"/>.</b> A start line is offered
+/// just before the work runs, and an exit line is written once the run's exit code is known, before the
+/// log is flushed: once each per run, however the run ends. A run that answers <c>--version</c> writes
+/// neither.
+/// </para>
+/// <para>
 /// ⛔ <b>A <c>HostAbortedException</c> is never caught.</b> A design-time tool, such as <c>dotnet ef</c>,
 /// throws it inside the entry point to stop it once the host is built, and expects it back. It is
 /// recognised by its type's name, as the tool recognises it, since the tool may throw a private type
@@ -46,7 +52,7 @@ public static class AppMain
         ArgumentNullException.ThrowIfNull(run);
         using EntryRun entry = EntryRun.Start(program, AppKind.Console, options);
 
-        int returned;
+        // ⛔ Each way out decides its code before the finally, which ends the run with it.
         try
         {
             if (EntryRun.AsksForVersion(args))
@@ -54,7 +60,8 @@ public static class AppMain
                 return entry.AnswerVersion();
             }
 
-            returned = await run(args, entry.Token).ConfigureAwait(false);
+            entry.Begin();
+            return entry.Completed(await run(args, entry.Token).ConfigureAwait(false));
         }
         catch (Exception exception) when (!EntryRun.IsHostAborted(exception))
         {
@@ -62,10 +69,8 @@ public static class AppMain
         }
         finally
         {
-            entry.Flush();
+            entry.End();
         }
-
-        return entry.Completed(returned);
     }
 
     /// <summary>
@@ -93,7 +98,9 @@ public static class AppMain
                 return entry.AnswerVersion();
             }
 
+            entry.Begin();
             await run(args).ConfigureAwait(false);
+            return entry.Completed(0);
         }
         catch (Exception exception) when (!EntryRun.IsHostAborted(exception))
         {
@@ -101,10 +108,8 @@ public static class AppMain
         }
         finally
         {
-            entry.Flush();
+            entry.End();
         }
-
-        return entry.Completed(0);
     }
 
     /// <summary>
@@ -124,7 +129,6 @@ public static class AppMain
         ArgumentNullException.ThrowIfNull(run);
         using EntryRun entry = EntryRun.Start(program, AppKind.Desktop, options);
 
-        int returned;
         try
         {
             if (EntryRun.AsksForVersion(args))
@@ -132,7 +136,8 @@ public static class AppMain
                 return entry.AnswerVersion();
             }
 
-            returned = run(args);
+            entry.Begin();
+            return entry.Completed(run(args));
         }
         catch (Exception exception) when (!EntryRun.IsHostAborted(exception))
         {
@@ -140,9 +145,7 @@ public static class AppMain
         }
         finally
         {
-            entry.Flush();
+            entry.End();
         }
-
-        return entry.Completed(returned);
     }
 }

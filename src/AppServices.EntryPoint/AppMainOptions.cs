@@ -29,6 +29,48 @@ public sealed record AppMainOptions
     public string? Usage { get; init; }
 
     /// <summary>
+    /// Writes the entry point's two lines to the app's log, at Information: <c>[App.Start]</c> just
+    /// before the work runs, and <c>[App.Exit]</c> once the run's exit code is known, before
+    /// <see cref="FlushLog"/>; once each per run. A run that answers <c>--version</c> writes neither.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// ⭐ <b>A logger's method, passed as it is</b>: <c>Log.Information</c> in a Serilog app,
+    /// <c>logger.LogInformation</c> in one with an <c>ILogger</c> (<see cref="LogLineWriter"/>).
+    /// </para>
+    /// <para>
+    /// The start line is <c>[App.Start] app={App} version={Version} pid={Pid}</c>: the program assembly's
+    /// name, as the reports on stderr name it; its <c>PublicVersion</c>, as <c>--version</c> prints it, or
+    /// <c>unknown</c>; and the process's id. The exit line says how the run ended, then <c>elapsedMs</c>,
+    /// the whole milliseconds since it started, a <see cref="long"/>:
+    /// </para>
+    /// <list type="bullet">
+    /// <item><description><c>[App.Exit] code={Code} elapsedMs={ElapsedMs}</c> when the work returns or
+    /// throws, with the code <see cref="AppMain"/> returns: 0 or the work's own, 1, 2 or 130. An exit that
+    /// ends the process before the run ends, as <see cref="Environment.Exit"/> does, writes the same with
+    /// <see cref="Environment.ExitCode"/>;</description></item>
+    /// <item><description><c>[App.Exit] signal=SIGTERM elapsedMs={ElapsedMs}</c> on SIGTERM in a console
+    /// or desktop run, which the signal then ends;</description></item>
+    /// <item><description><c>[App.Exit] reason=unhandledException elapsedMs={ElapsedMs}</c> when the
+    /// runtime is ending the process on an exception from another thread;</description></item>
+    /// <item><description><c>[App.Exit] reason=hostAborted elapsedMs={ElapsedMs}</c> when a design-time
+    /// tool stops the host, whose <c>HostAbortedException</c> passes through.</description></item>
+    /// </list>
+    /// <para>
+    /// ⚠ <b>The start line needs a log that is set up when it is offered</b>, as it is in an app that sets
+    /// its logger up before calling <see cref="AppMain"/>. A writer that writes at once to a log set up
+    /// later, inside the work, loses the line.
+    /// </para>
+    /// <para>
+    /// ⚠ <b>A web app's exit line needs a log that outlives its host.</b> It is written once the work has
+    /// returned, so after the host the work built is disposed, and a log that host owned takes nothing
+    /// more. Serilog's static logger outlives a host that <c>AddSerilog()</c> or <c>UseSerilog()</c>
+    /// wired as they do by default.
+    /// </para>
+    /// </remarks>
+    public LogLineWriter? WriteLogLine { get; init; }
+
+    /// <summary>
     /// Flushes the app's log. Runs once per run: when the run ends however it ends, when the runtime
     /// is terminating on an exception from another thread, or when the process exits without the run
     /// ending, as on SIGTERM.
