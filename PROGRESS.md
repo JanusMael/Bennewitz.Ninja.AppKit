@@ -705,8 +705,57 @@ the maintainer's choice of 2026-11-24 for a failed conversion.
     `plans/00008` removed.
   - `repo-conventions check` conforms.
 
+**`plans/00009` step 5: `LogRedaction`**, built 2026-11-26 as decision 6 gives it.
+- **`LogRedaction`, a public static class in `AppServices.Abstractions`' root namespace:**
+  - `Redacted`, the constant `***`;
+  - `IsSensitive(string key)`, ClaudeForge's two passes over its two lists, unchanged, read at its
+    `35989a47`, where its SDK is `AgentForge.Sdk` now. A key is sensitive when one of its dot-separated
+    segments is `env`, `headers`, `credentials`, `auth` or `authorization`, or when it holds `token`,
+    `secret`, `password`, `apikey`, `api_key`, `api-key`, `bearer`, `private`, `accesskey`, `access_key` or
+    `access-key` anywhere, case ignored in both, and never for merely holding `key`;
+  - `Redact(string key, string? value)`, `Redacted` for a sensitive key whatever its value, an empty one or
+    `null` included, so that a line never says whether a secret is set, and the value as it is otherwise.
+    Its return carries `[NotNullIfNotNull]`, so that a caller passing a value that is not null gets a string
+    the compiler knows is not null either.
+  - Its doc says that only a dot separates segments: a configuration key's `:` and an environment
+    variable's `__` do not, so `Credentials:User` is not sensitive, where `credentials.user` is.
+  - ClaudeForge's `EnvironmentEditorViewModel.cs` still imports both namespaces and names `SensitiveKeys`
+    bare, at 14, 15 and 375, so the name decision 6 gives stands.
+- **A test seam, internal**: the two lists, read-only, as `LogRedaction.Segments` and `Substrings`.
+- **The tests**, `LogRedactionTests`, 112 cases:
+  - each entry of both lists, from the test's own copy of them: a segment entry sensitive as a whole
+    segment wherever it sits and not inside a longer one, a substring entry sensitive anywhere in a key,
+    and each in upper case and capitalised; and the class held to the two lists, so that an entry it gains
+    without a test fails too;
+  - ClaudeForge's examples, 45 sensitive and 18 harmless, `uniqueKey`, `locKey` and `headerSize` among
+    them, each with the verdict ClaudeForge gives it, by its tests or, for `rsa_private`, `X-Api-Key` and
+    `headerSize`, which none of its tests holds, by the comment that names it; and six keys that hold only a
+    word an entry is made of, `key`, `api`, `access` or `pass`;
+  - only a dot separating segments; `Redact` both ways; the marker pinned; and decision 6's example line,
+    `[Settings.Change] key={Key} value="{Value}"`, written through Serilog, holding the form with `***`
+    where the secret was.
+- **Each planted break seen red**, `LogRedactionTests` run on each and the file restored after, its hash
+  checked, 28 in all:
+  - each of the 16 entries dropped, one at a time, each red in its own entry's tests and in the test that
+    holds the class to the lists;
+  - case honoured in either pass; the segment pass gone; a segment entry matched inside a longer segment;
+    segments split on a colon; a substring entry matched only as a whole segment; `key` counted as an entry;
+    `apikey` shortened to `api`;
+  - `Redact` never hiding, always hiding, or passing a `null` under a sensitive key; and the marker
+    `[redacted]`.
+  - Beside them, `[NotNullIfNotNull]` swapped for `[MaybeNull]`, which fails the tests' build with CS8600 at
+    the one place that takes `Redact`'s result as a `string`.
+- **Verified.**
+  - On Windows: the build with warnings as errors, 0 warnings; 1178 tests, 1162 passed and 16 skipped,
+    step 4's 1066 and these 112, the same 16 skipped.
+  - `LayeringTests`, `AssemblyQualityTests` and `PackageMetadataTests` pass.
+  - The public surface of `AppServices.Abstractions`, listed by reflection, is main's but for
+    AutoVersioning's build stamp, and `LogRedaction` with its three members. Package validation against
+    `2026.4.1116` finds no breaking change.
+  - `repo-conventions check` conforms.
+
 **Next, in order:**
-1. **`plans/00009` steps 5 and 6**: `LogRedaction`, then the docs.
+1. **`plans/00009` step 6**: the docs.
 2. **`plans/00007` step 5**, once AssemblyQuality releases its IL reader: raise its pin, build the sweeps on
    it, and add `src/AGENTS.md`'s rule for windows. The reader is Inspections' `plans/00011` (Drift from
    `plans/00007`); the Inspections session tells this repository its version and API on release, in a
