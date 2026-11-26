@@ -41,12 +41,13 @@ public sealed class ShellLauncher : IShellLauncher
 
     /// <summary>Create a launcher that also narrates to <paramref name="diagnostics"/>.</summary>
     /// <param name="diagnostics">
-    /// Receives detail a result cannot carry: for an operation that failed, one line in the family's form,
-    /// whole, such as <c>[Shell.Launch] action=terminal reason=NotFound</c>, with the exception
-    /// (<c>plans/00009</c>, decision 7). <c>action</c> is <c>terminal</c>, <c>reveal</c>, <c>editor</c> or
-    /// <c>url</c>, and <c>reason</c> the result's <see cref="LaunchStatus"/>, by its name. ⚠ Treated as
-    /// untrusted: it runs on the calling thread and anything it throws is swallowed, because a diagnostic
-    /// must never be the reason a launch fails.
+    /// Receives detail a result cannot carry: for an operation that failed on an exception, one line in the
+    /// family's form, whole, such as <c>[Shell.Launch] action=terminal reason=NotFound</c>, with that exception
+    /// (<c>plans/00009</c>, decision 7). A failure decided without one, such as an empty URL, is in its result
+    /// alone. <c>action</c> is <c>terminal</c>, <c>reveal</c>, <c>editor</c> or <c>url</c>, and <c>reason</c>
+    /// the result's <see cref="LaunchStatus"/>, by its name. ⚠ Treated as untrusted: it runs on the calling
+    /// thread and anything it throws is swallowed, because a diagnostic must never be the reason a launch
+    /// fails.
     /// </param>
     public ShellLauncher(DiagnosticSink? diagnostics) => _diagnostics = diagnostics;
 
