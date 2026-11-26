@@ -1,12 +1,16 @@
+using System.Globalization;
+using System.Text;
 using Bennewitz.Ninja.AppServices.EntryPoint;
 
 // The console probe the entry-point tests run as a child process, and CI's aot jobs publish with
 // native AOT (plans/00001, decision 10). A first argument of `host` or `desktop` picks that AppMain
 // method, so the native binary runs all three; the argument after it picks what the work does.
-// FlushLog and OnFatal write markers to stderr, so a test can see that each ran.
+// WriteLogLine, FlushLog and OnFatal write markers to stderr, so a test can see that each ran and in
+// what order.
 AppMainOptions options = new()
 {
-    Usage = "usage: EntryPointProbe [host|desktop] [ok|fail|wait|background|--version]",
+    Usage = "usage: EntryPointProbe [host|desktop] [ok|fail|wait|background|exit|--version]",
+    WriteLogLine = WriteLogLineOnStderr,
     FlushLog = () => Console.Error.WriteLine("probe: flushed"),
     OnFatal = _ => Console.Error.WriteLine("probe: OnFatal"),
 };
@@ -44,6 +48,12 @@ static async Task<int> ConsoleAsync(string[] args, CancellationToken cancellatio
             await Task.Delay(Timeout.Infinite, cancellationToken);
             return 0;
 
+        case ["exit"]:
+            // An exit no finally sees: the process ends here, and the run ends from ProcessExit, with
+            // the code this sets.
+            Environment.Exit(3);
+            return 0;
+
         default:
             throw new UsageException($"unknown argument: {string.Join(' ', args)}");
     }
@@ -79,4 +89,21 @@ static int Desktop(string[] args)
             Console.Out.WriteLine("ok");
             return 0;
     }
+}
+
+// A LogLineWriter, passed as a method group as an app passes its logger's: writes the line on stderr as
+// a {Message:lj} sink renders it, each named hole in turn filled with its value in the invariant culture.
+static void WriteLogLineOnStderr(string messageTemplate, params object?[] propertyValues)
+{
+    StringBuilder line = new("probe: log ");
+    int at = 0;
+    foreach (object? value in propertyValues)
+    {
+        int open = messageTemplate.IndexOf('{', at);
+        int close = messageTemplate.IndexOf('}', open);
+        line.Append(messageTemplate, at, open - at).Append(Convert.ToString(value, CultureInfo.InvariantCulture));
+        at = close + 1;
+    }
+
+    Console.Error.WriteLine(line.Append(messageTemplate, at, messageTemplate.Length - at).ToString());
 }

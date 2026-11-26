@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 
 namespace AppServices.Tests.EntryPoint;
 
@@ -13,6 +14,12 @@ namespace AppServices.Tests.EntryPoint;
 /// ⭐ Every test runs against the probe's framework-dependent build, and again against its native AOT
 /// binary when <c>ENTRYPOINT_PROBE_NATIVE</c> names one, as CI's aot jobs do. Without it the native
 /// cases skip, visibly.
+/// </para>
+/// <para>
+/// ⭐ The probe writes each log line on stderr as a sink renders it, after <c>probe: log</c>, so a test
+/// reads a run's start line, its reports, its exit line and its flush in the order they came.
+/// <see cref="AppMainTests"/> holds the lines' templates and values; here each exit line says how its
+/// run ended.
 /// </para>
 /// <para>
 /// ⚠ Signals are sent on Linux and macOS only. A console Ctrl+C cannot be sent to a child process
@@ -28,6 +35,7 @@ namespace AppServices.Tests.EntryPoint;
 public sealed class EntryPointProbeTests
 {
     private const string NativeVariable = "ENTRYPOINT_PROBE_NATIVE";
+    private const string Flushed = "probe: flushed";
 
     public static TheoryData<string> Builds => ["framework-dependent", "native"];
 
@@ -39,7 +47,11 @@ public sealed class EntryPointProbeTests
 
         Assert.Equal(0, result.ExitCode);
         Assert.Equal(["ok"], Lines(result.Stdout));
-        Assert.Equal(["probe: flushed"], Lines(result.Stderr));
+        string[] stderr = Lines(result.Stderr);
+        Assert.Equal(3, stderr.Length);
+        Assert.Equal(StartLine(result.Pid), stderr[0]);
+        AssertExitLine("code=0", stderr[1]);
+        Assert.Equal(Flushed, stderr[2]);
     }
 
     [Theory]
@@ -50,10 +62,14 @@ public sealed class EntryPointProbeTests
 
         Assert.Equal(1, result.ExitCode);
         string[] stderr = Lines(result.Stderr);
-        Assert.Equal("fatal: EntryPointProbe stopped on an unhandled exception", stderr[0]);
+        Assert.Equal(StartLine(result.Pid), stderr[0]);
+        Assert.Equal("fatal: EntryPointProbe stopped on an unhandled exception", stderr[1]);
         Assert.Contains("the probe failed on purpose", result.Stderr);
-        Assert.True(Array.IndexOf(stderr, "probe: OnFatal") > 0, "OnFatal ran before the report was written.");
-        Assert.Equal("probe: flushed", stderr[^1]);
+
+        // The report, its exception's text, then OnFatal, then the exit line and the flush.
+        Assert.Equal("probe: OnFatal", stderr[^3]);
+        AssertExitLine("code=1", stderr[^2]);
+        Assert.Equal(Flushed, stderr[^1]);
         Assert.Equal("", result.Stdout);
     }
 
@@ -64,9 +80,13 @@ public sealed class EntryPointProbeTests
         Result result = await RunAsync(Probe(build), "bogus");
 
         Assert.Equal(2, result.ExitCode);
+        string[] stderr = Lines(result.Stderr);
+        Assert.Equal(StartLine(result.Pid), stderr[0]);
         Assert.Equal(
-            ["error: unknown argument: bogus", "", "usage: EntryPointProbe [host|desktop] [ok|fail|wait|background|--version]", "probe: flushed"],
-            Lines(result.Stderr));
+            ["error: unknown argument: bogus", "", "usage: EntryPointProbe [host|desktop] [ok|fail|wait|background|exit|--version]"],
+            stderr[1..^2]);
+        AssertExitLine("code=2", stderr[^2]);
+        Assert.Equal(Flushed, stderr[^1]);
         Assert.Equal("", result.Stdout);
     }
 
@@ -83,6 +103,9 @@ public sealed class EntryPointProbeTests
 
             Assert.Equal(0, result.ExitCode);
             Assert.Equal([expected], Lines(result.Stdout));
+
+            // Neither log line: a run that answers --version still flushes, and writes nothing else.
+            Assert.Equal([Flushed], Lines(result.Stderr));
         }
     }
 
@@ -97,7 +120,11 @@ public sealed class EntryPointProbeTests
             Result result = await RunAsync(probe, kind, "fail");
 
             Assert.Equal(1, result.ExitCode);
-            Assert.StartsWith("fatal: EntryPointProbe stopped on an unhandled exception", result.Stderr);
+            string[] stderr = Lines(result.Stderr);
+            Assert.Equal(StartLine(result.Pid), stderr[0]);
+            Assert.Equal("fatal: EntryPointProbe stopped on an unhandled exception", stderr[1]);
+            AssertExitLine("code=1", stderr[^2]);
+            Assert.Equal(Flushed, stderr[^1]);
         }
     }
 
@@ -121,8 +148,30 @@ public sealed class EntryPointProbeTests
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("fatal: EntryPointProbe stopped on an unhandled exception", result.Stderr);
         Assert.Contains("the probe failed on a background thread", result.Stderr);
-        Assert.Contains("probe: OnFatal", Lines(result.Stderr));
-        Assert.Contains("probe: flushed", Lines(result.Stderr));
+
+        // The runtime writes its own report after the handler returns, so the flush is found, not counted
+        // from the end: OnFatal, then the exit line, then the flush.
+        string[] stderr = Lines(result.Stderr);
+        Assert.Equal(StartLine(result.Pid), stderr[0]);
+        int flushed = Array.IndexOf(stderr, Flushed);
+        Assert.True(flushed > 2, "The log was not flushed after the report.");
+        AssertExitLine("reason=unhandledException", stderr[flushed - 1]);
+        Assert.Equal("probe: OnFatal", stderr[flushed - 2]);
+    }
+
+    [Theory]
+    [MemberData(nameof(Builds))]
+    public async Task Environment_Exit_in_the_work_writes_its_code_before_the_flush(string build)
+    {
+        Result result = await RunAsync(Probe(build), "exit");
+
+        // No finally runs: the run ends from ProcessExit, with the code Environment.Exit set.
+        Assert.Equal(3, result.ExitCode);
+        string[] stderr = Lines(result.Stderr);
+        Assert.Equal(3, stderr.Length);
+        Assert.Equal(StartLine(result.Pid), stderr[0]);
+        AssertExitLine("code=3", stderr[1]);
+        Assert.Equal(Flushed, stderr[2]);
     }
 
     [Theory]
@@ -133,6 +182,7 @@ public sealed class EntryPointProbeTests
             "A console Ctrl+C cannot be sent to a child process reliably on Windows; AppMainTests covers 130 in process.");
 
         using Process process = Start(Probe(build), "wait");
+        int pid = process.Id;
         Task<string> stderr = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
 
         // The probe prints this once its work is waiting on the token.
@@ -143,7 +193,11 @@ public sealed class EntryPointProbeTests
         Assert.Equal(130, process.ExitCode);
 
         // ⛔ The flush is the proof, not the 130: a probe that SIGINT killed outright reads 130 as well.
-        Assert.Equal(["probe: flushed"], Lines(await stderr));
+        string[] lines = Lines(await stderr);
+        Assert.Equal(3, lines.Length);
+        Assert.Equal(StartLine(pid), lines[0]);
+        AssertExitLine("code=130", lines[1]);
+        Assert.Equal(Flushed, lines[2]);
     }
 
     [Theory]
@@ -155,10 +209,11 @@ public sealed class EntryPointProbeTests
 
         string probe = Probe(build);
 
-        // A console run and a desktop run flush on SIGTERM themselves; a web run's host handles it.
+        // A console run and a desktop run end on SIGTERM themselves; a web run's host handles it.
         foreach (string[] args in (string[][])[["wait"], ["desktop", "wait"]])
         {
             using Process process = Start(probe, args);
+            int pid = process.Id;
             Task<string> stderr = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal("waiting", await process.StandardOutput.ReadLineAsync(TestContext.Current.CancellationToken));
@@ -166,9 +221,14 @@ public sealed class EntryPointProbeTests
 
             await WaitAsync(process);
 
-            // 128 + 15: SIGTERM still ended the process, as it would have without the flush.
+            // 128 + 15: SIGTERM still ended the process, as it would have without the flush, and its exit
+            // line came before the flush.
             Assert.Equal(143, process.ExitCode);
-            Assert.Equal(["probe: flushed"], Lines(await stderr));
+            string[] lines = Lines(await stderr);
+            Assert.Equal(3, lines.Length);
+            Assert.Equal(StartLine(pid), lines[0]);
+            AssertExitLine("signal=SIGTERM", lines[1]);
+            Assert.Equal(Flushed, lines[2]);
         }
     }
 
@@ -189,6 +249,17 @@ public sealed class EntryPointProbeTests
         Assert.True(File.Exists(probe), $"{probe} is missing; the solution build builds it.");
         return probe;
     }
+
+    /// <summary>The start line the probe writes on stderr for a run in process <paramref name="pid"/>.</summary>
+    private static string StartLine(int pid) =>
+        $"probe: log [App.Start] app=EntryPointProbe version={FrameworkDependentPublicVersion()} pid={pid.ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>
+    /// Asserts that <paramref name="line"/> is the exit line the probe writes for a run that ended as
+    /// <paramref name="end"/> says, such as <c>code=0</c>, with a whole number of milliseconds.
+    /// </summary>
+    private static void AssertExitLine(string end, string line) =>
+        Assert.Matches($@"^probe: log \[App\.Exit\] {Regex.Escape(end)} elapsedMs=\d+$", line);
 
     /// <summary>
     /// The PublicVersion AutoVersioning stamped on the probe, read from its framework-dependent build.
@@ -214,10 +285,11 @@ public sealed class EntryPointProbeTests
     private static async Task<Result> RunAsync(string probe, params string[] args)
     {
         using Process process = Start(probe, args);
+        int pid = process.Id;
         Task<string> stdout = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
         Task<string> stderr = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
         await WaitAsync(process);
-        return new Result(process.ExitCode, await stdout, await stderr);
+        return new Result(process.ExitCode, await stdout, await stderr, pid);
     }
 
     private static Process Start(string probe, params string[] args)
@@ -278,5 +350,5 @@ public sealed class EntryPointProbeTests
         return directory.FullName;
     }
 
-    private sealed record Result(int ExitCode, string Stdout, string Stderr);
+    private sealed record Result(int ExitCode, string Stdout, string Stderr, int Pid);
 }
